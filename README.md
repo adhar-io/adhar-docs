@@ -88,4 +88,3 @@ Update the configuration [here][browserslist] and check in real-time the **globa
 **\* The more versions to support, larger JS and CSS bundles size will be.**
 
 [Back to:arrow_up:](#astro-vanilla-typescript--template "Back to 'Table of contents' section")
-

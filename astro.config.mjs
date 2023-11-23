@@ -4,8 +4,8 @@ import { VitePWA } from 'vite-plugin-pwa';
 
 // https://astro.build/config
 export default defineConfig({
-	integrations: [tailwind()],
-	vite: {
-		plugins: [VitePWA()],
-	},
+  integrations: [tailwind()],
+  vite: {
+    plugins: [VitePWA()]
+  }
 });
