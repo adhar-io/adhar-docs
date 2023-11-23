@@ -1,8 +1,12 @@
 {
   "name": "adhar-docs",
   "type": "module",
-  "version": "0.0.1",
+  "version": "1.0.0",
+  "license": "Apache-2.0",
   "scripts": {
+    "postinstall": "npx husky install",
+    "lint": "eslint src/**/*.{astro,js,jsx,ts,tsx}",
+    "lint:fix": "eslint --fix",
     "dev": "astro dev",
     "start": "astro dev",
     "build": "astro check && astro build",
@@ -17,7 +21,28 @@
     "workbox-window": "^7.0.0"
   },
   "devDependencies": {
+    "@astrojs/tailwind": "^5.0.2",
+    "@commitlint/cli": "^18.4.2",
+    "@commitlint/config-conventional": "^18.4.2",
+    "@ianvs/prettier-plugin-sort-imports": "^4.1.1",
+    "@typescript-eslint/eslint-plugin": "^6.11.0",
+    "@typescript-eslint/parser": "^6.11.0",
+    "autoprefixer": "^10.4.16",
+    "cssnano": "^6.0.1",
+    "eslint": "^8.54.0",
+    "eslint-config-prettier": "^9.0.0",
+    "eslint-plugin-astro": "^0.29.1",
+    "eslint-plugin-jsx-a11y": "^6.8.0",
+    "eslint-plugin-prettier": "^5.0.1",
+    "eslint-plugin-promise": "^6.1.1",
+    "eslint-plugin-sonarjs": "^0.23.0",
+    "eslint-plugin-unicorn": "^49.0.0",
+    "husky": "^8.0.3",
+    "postcss": "^8.4.31",
     "prettier": "^3.1.0",
-    "prettier-plugin-astro": "^0.12.2"
+    "prettier-plugin-astro": "^0.12.2",
+    "prettier-plugin-tailwindcss": "^0.5.7",
+    "sass": "^1.69.5",
+    "tailwindcss": "^3.3.5"
   }
 }
