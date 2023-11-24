@@ -1,17 +1,23 @@
 /** @type {import('tailwindcss').Config} */
+const defaultTheme = require('tailwindcss/defaultTheme');
+
 module.exports = {
-  content: ['./src/**/*.{astro,html,js,jsx,ts,tsx}'],
+  content: ['./src/**/*.{astro,html,js,jsx,md,mdx,svelte,ts,tsx,vue}'],
+  plugins: [require('@tailwindcss/typography')],
   darkMode: 'class',
   theme: {
     extend: {
       colors: {
-        primary: 'var(--primary)',
-        secondary: 'var(--secondary)',
-        tertiary: 'var(--tertiary)',
-        'color-light': 'var(--color-light)',
-        'color-dark': 'var(--color-dark)',
-        'accent-primary': 'var(--accent-primary)',
-        'accent-primary-state': 'var(--accent-primary-state)'
+        primary: 'var(--aw-color-primary)',
+        secondary: 'var(--aw-color-secondary)',
+        accent: 'var(--aw-color-accent)',
+        default: 'var(--aw-color-text-default)',
+        muted: 'var(--aw-color-text-muted)'
+      },
+      fontFamily: {
+        sans: ['var(--aw-font-sans)', ...defaultTheme.fontFamily.sans],
+        serif: ['var(--aw-font-serif)', ...defaultTheme.fontFamily.serif],
+        heading: ['var(--aw-font-heading)', ...defaultTheme.fontFamily.sans]
       }
     }
   }

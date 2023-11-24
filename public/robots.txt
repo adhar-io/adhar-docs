@@ -1,4 +1,2 @@
 User-agent: *
-Allow: /
-
-Sitemap: https://astro-vanilla-ts.d1a.app/sitemap.xml
+Disallow:

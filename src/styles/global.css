@@ -22,6 +22,6 @@
   }
 
   body {
-    @apply bg-primary text-color-light;
+    @apply text-color-light bg-primary;
   }
 }
