@@ -1,19 +1,18 @@
 ---
-import BlogLatestPosts from '~/components/widgets/BlogLatestPosts.astro';
-import CallToAction from '~/components/widgets/CallToAction.astro';
-import Content from '~/components/widgets/Content.astro';
-import FAQs from '~/components/widgets/FAQs.astro';
-import Features from '~/components/widgets/Features.astro';
-import Features2 from '~/components/widgets/Features2.astro';
-import Hero from '~/components/widgets/Hero.astro';
-import Note from '~/components/widgets/Note.astro';
-import Stats from '~/components/widgets/Stats.astro';
-import Steps from '~/components/widgets/Steps.astro';
-import Layout from '~/layouts/PageLayout.astro';
+import BlogLatestPosts from '@/components/widgets/BlogLatestPosts.astro';
+import CallToAction from '@/components/widgets/CallToAction.astro';
+import Content from '@/components/widgets/Content.astro';
+import FAQs from '@/components/widgets/FAQs.astro';
+import Features from '@/components/widgets/Features.astro';
+import Features2 from '@/components/widgets/Features2.astro';
+import Hero from '@/components/widgets/Hero.astro';
+import Note from '@/components/widgets/Note.astro';
+import Stats from '@/components/widgets/Stats.astro';
+import Steps from '@/components/widgets/Steps.astro';
+import Layout from '@/layouts/PageLayout.astro';
 
 const metadata = {
-  title:
-    'AstroWind — Free template for creating websites with Astro + Tailwind CSS',
+  title: 'Adhar.io - Open Foundation for Modern Businesses',
   ignoreTitleTemplate: true
 };
 ---
@@ -25,33 +24,34 @@ const metadata = {
     actions={[
       {
         variant: 'primary',
-        text: 'Get template',
-        href: 'https://github.com/onwidget/astrowind',
+        text: 'Try Adhar Cloud',
+        href: 'https://console.adhar.io/login',
         target: '_blank',
         icon: 'tabler:download'
       },
-      { text: 'Learn more', href: '#features' }
+      { text: 'Learn more', href: 'https://adhar.io/docs' }
     ]}
-    image={{ src: '~/assets/images/hero.png', alt: 'AstroWind Hero Image' }}
+    image={{ src: '/imgs/hero.png', alt: 'Adhar Hero Image' }}
   >
     <Fragment slot='title'>
-      Free template for <span class='hidden xl:inline'
-        >creating websites with</span
-      >
-      <span class='highlight text-accent dark:text-white'> Astro 3.0</span> +
-      Tailwind CSS
+      Comprehensive All-in-One <span class='hidden xl:inline'>Integrated</span>
+      <span class='highlight text-accent dark:text-white'
+        >Internal Development Platform</span
+      > to build, deploy and manage cloud-native applications
     </Fragment>
 
     <Fragment slot='subtitle'>
       <span class='hidden sm:inline'>
-        <span class='font-semibold'>AstroWind</span> is a free, customizable and
-        production-ready template for Astro 3.0 + Tailwind CSS.</span
+        <span class='font-semibold'>Adhar</span> is a freely available,
+        open-source enterprise platform that empowers modern businesses to
+        prioritize application development instead of dedicating resources to
+        building and maintaining in-house platforms.</span
       >
       <span class='mb-1 block font-bold text-blue-600 sm:hidden'
-        >AstroWind: Production-ready.</span
-      >
-       Suitable for Startups, Small Business, SaaS websites, Professional
-      Portfolios, Marketing websites, Landing Pages & Blogs.
+        >Adhar: Production-ready enterprise platform for modern businesses</span
+      > businesses can effectively focus on their core priorities, accelerate
+      application development, and gain a competitive advantage in today's
+      dynamic marketplace.
     </Fragment>
   </Hero>
 
@@ -94,7 +94,7 @@ const metadata = {
       {
         title: 'Search Engine Optimization (SEO)',
         description:
-          "SEO lies in its ability to enhance a website's visibility, driving organic traffic and enabling it to reach a wider audience.",
+          'SEO lies in its ability to enhance a website\'s visibility, driving organic traffic and enabling it to reach a wider audience.',
         icon: 'tabler:arrows-right-left'
       },
       {
@@ -155,7 +155,8 @@ const metadata = {
     items={[
       {
         title: 'High level of customization',
-        description: `Tailor the template effortlessly to match your brand's identity and requirements, making your website distinct and saving you time.`
+        description:
+          'Tailor the template effortlessly to match your brand\'s identity and requirements, making your website distinct and saving you time.'
       },
       {
         title: 'Multiple layout possibilities',
@@ -165,7 +166,7 @@ const metadata = {
       {
         title: 'Fully responsive design',
         description:
-          "Ensure your website's optimal performance on various devices and screen sizes, providing a consistent and enjoyable user experience."
+          'Ensure your website\'s optimal performance on various devices and screen sizes, providing a consistent and enjoyable user experience.'
       },
       {
         title: 'Integration of media',
@@ -210,7 +211,8 @@ const metadata = {
       },
       {
         title: 'Community support',
-        description: `Join the growing AstroWind community for insights, resources, and assistance, ensuring you're never alone on your web development journey.`
+        description:
+          'Join the growing AstroWind community for insights, resources, and assistance, ensuring you\'re never alone on your web development journey.'
       }
     ]}
     image={{
@@ -233,13 +235,13 @@ const metadata = {
       {
         title: 'Step 1: <span class="font-medium">Download</span>',
         description:
-          "Kickstart with GitHub! Either fork the AstroWind template or simply click 'Use this template'. Your canvas awaits, ready for your digital masterpiece. In just a few clicks, you've already set the foundation.",
+          'Kickstart with GitHub! Either fork the AstroWind template or simply click \'Use this template\'. Your canvas awaits, ready for your digital masterpiece. In just a few clicks, you\'ve already set the foundation.',
         icon: 'tabler:package'
       },
       {
         title: 'Step 2: <span class="font-medium">Add content</em>',
         description:
-          "Pour your vision into it. Add images, text, and all that jazz to breathe life into your digital space. Remember, it's the content that tells your story, so make it captivating.",
+          'Pour your vision into it. Add images, text, and all that jazz to breathe life into your digital space. Remember, it\'s the content that tells your story, so make it captivating.',
         icon: 'tabler:letter-case'
       },
       {
@@ -269,13 +271,13 @@ const metadata = {
       {
         title: 'Headers',
         description:
-          "Ever tried driving without GPS? Boom! That's why websites need headers for direction.",
+          'Ever tried driving without GPS? Boom! That\'s why websites need headers for direction.',
         icon: 'flat-color-icons:template'
       },
       {
         title: 'Heros',
         description:
-          "Picture a superhero landing – epic, right? That's the job of a Hero section, making grand entrances!",
+          'Picture a superhero landing – epic, right? That\'s the job of a Hero section, making grand entrances!',
         icon: 'flat-color-icons:gallery'
       },
       {
@@ -287,7 +289,7 @@ const metadata = {
       {
         title: 'Content',
         description:
-          "Dive into the meat and potatoes of a site; without it, you'd just be window shopping. Content is king.",
+          'Dive into the meat and potatoes of a site; without it, you\'d just be window shopping. Content is king.',
         icon: 'flat-color-icons:document'
       },
       {
@@ -317,7 +319,7 @@ const metadata = {
       {
         title: 'Footers',
         description:
-          "The footer's like the credits of a movie but sprinkled with easter eggs. Time to hunt!",
+          'The footer\'s like the credits of a movie but sprinkled with easter eggs. Time to hunt!',
         icon: 'flat-color-icons:database'
       }
     ]}
@@ -348,7 +350,7 @@ const metadata = {
       {
         title: 'Why AstroWind?',
         description:
-          "Michael Knight a young loner on a crusade to champion the cause of the innocent. The helpless. The powerless in a world of criminals who operate above the law. Here he comes Here comes Speed Racer. He's a demon on wheels."
+          'Michael Knight a young loner on a crusade to champion the cause of the innocent. The helpless. The powerless in a world of criminals who operate above the law. Here he comes Here comes Speed Racer. He\'s a demon on wheels.'
       },
       {
         title: 'What do I need to start?',
@@ -358,23 +360,23 @@ const metadata = {
       {
         title: 'How to install the Astro + Tailwind CSS template?',
         description:
-          "Well, the way they make shows is, they make one show. That show's called a pilot. Then they show that show to the people who make shows, and on the strength of that one show they decide if they're going to make more shows."
+          'Well, the way they make shows is, they make one show. That show\'s called a pilot. Then they show that show to the people who make shows, and on the strength of that one show they decide if they\'re going to make more shows.'
       },
       {
-        title: "What's something that you don't understand?",
+        title: 'What\'s something that you don\'t understand?',
         description:
-          "A flower in my garden, a mystery in my panties. Heart attack never stopped old Big Bear. I didn't even know we were calling him Big Bear."
+          'A flower in my garden, a mystery in my panties. Heart attack never stopped old Big Bear. I didn\'t even know we were calling him Big Bear.'
       },
       {
         title: 'What is something that you would like to try again?',
         description:
-          "A business big enough that it could be listed on the NASDAQ goes belly up. Disappears! It ceases to exist without me. No, you clearly don't know who you're talking to, so let me clue you in."
+          'A business big enough that it could be listed on the NASDAQ goes belly up. Disappears! It ceases to exist without me. No, you clearly don\'t know who you\'re talking to, so let me clue you in.'
       },
       {
         title:
           'If you could only ask one question to each person you meet, what would that question be?',
         description:
-          "This is not about revenge. This is about justice. A lot of things can change in twelve years, Admiral. Well, that's certainly good to know. About four years. I got tired of hearing how young I looked."
+          'This is not about revenge. This is about justice. A lot of things can change in twelve years, Admiral. Well, that\'s certainly good to know. About four years. I got tired of hearing how young I looked.'
       }
     ]}
   />

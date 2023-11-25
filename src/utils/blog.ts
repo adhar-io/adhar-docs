@@ -1,7 +1,7 @@
-import type { Post } from '~/types';
+import type { Post } from '@/types';
 import type { CollectionEntry } from 'astro:content';
 
-import { APP_BLOG } from '~/utils/config';
+import { APP_BLOG } from '@/utils/config';
 import { getCollection } from 'astro:content';
 
 import {

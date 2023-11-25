@@ -1,8 +1,8 @@
 {
   "lang": "en-EN",
-  "name": "Astro Vanilla TypeScript — Template",
-  "short_name": "Astro Vanilla TypeScript — Template",
-  "description": "Boilerplate designed to quickly bootstrap a Astro.JS project. It comes configured with TypeScript, TailwindCSS, Vite, PostCSS, Eslint and Prettier.",
+  "name": "Adhar.io",
+  "short_name": "Adhar.io",
+  "description": "Adhar.io - Open Foundation for Modern Businesses",
   "start_url": "/",
   "display": "standalone",
   "orientation": "portrait",

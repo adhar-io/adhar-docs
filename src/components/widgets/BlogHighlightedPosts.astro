@@ -1,11 +1,11 @@
 ---
-import type { Widget } from '~/types';
+import type { Widget } from '@/types';
 
-import Grid from '~/components/blog/Grid.astro';
-import WidgetWrapper from '~/components/ui/WidgetWrapper.astro';
-import { findPostsByIds } from '~/utils/blog';
-import { APP_BLOG } from '~/utils/config';
-import { getBlogPermalink } from '~/utils/permalinks';
+import Grid from '@/components/blog/Grid.astro';
+import WidgetWrapper from '@/components/ui/WidgetWrapper.astro';
+import { findPostsByIds } from '@/utils/blog';
+import { APP_BLOG } from '@/utils/config';
+import { getBlogPermalink } from '@/utils/permalinks';
 
 export interface Props extends Widget {
   title?: string;
