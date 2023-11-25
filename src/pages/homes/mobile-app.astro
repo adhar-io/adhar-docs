@@ -1,6 +1,4 @@
 ---
-import appStoreImg from '@/assets/imgs/app-store.png';
-import googlePlayImg from '@/assets/imgs/google-play.png';
 import Image from '@/components/common/Image.astro';
 import Button from '@/components/ui/Button.astro';
 import CallToAction from '@/components/widgets/CallToAction.astro';
@@ -67,11 +65,15 @@ const metadata = {
 
     <div slot='actions' class='flex max-w-sm gap-4'>
       <Button variant='link' href={appStoreDownloadLink}>
-        <Image src={appStoreImg} alt='App Store Image' width={200} />
+        <Image src={'/imgs/app-store.png'} alt='App Store Image' width={200} />
       </Button>
 
       <Button variant='link' href={googlePlayDownloadLink}>
-        <Image src={googlePlayImg} alt='Google Play Image' width={200} />
+        <Image
+          src={'/imgs/google-play.png'}
+          alt='Google Play Image'
+          width={200}
+        />
       </Button>
     </div>
   </Hero2>
@@ -295,11 +297,15 @@ const metadata = {
   >
     <div slot='actions' class='flex max-w-sm gap-4'>
       <Button variant='link' href={appStoreDownloadLink}>
-        <Image src={appStoreImg} alt='App Store Image' width={200} />
+        <Image src={'/imgs/app-store.png'} alt='App Store Image' width={200} />
       </Button>
 
       <Button variant='link' href={googlePlayDownloadLink}>
-        <Image src={googlePlayImg} alt='Google Play Image' width={200} />
+        <Image
+          src={'/imgs/google-play.png'}
+          alt='Google Play Image'
+          width={200}
+        />
       </Button>
     </div>
   </CallToAction>

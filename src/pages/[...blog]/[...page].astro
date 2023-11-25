@@ -6,12 +6,15 @@ import Layout from '@/layouts/PageLayout.astro';
 // import PostTags from "~/components/blog/Tags.astro";
 
 import { blogListRobots, getStaticPathsBlogList } from '@/utils/blog';
+import { GetStaticPaths, InferGetStaticPropsType } from 'astro';
 
 export const prerender = true;
 
-export async function getStaticPaths({ paginate }) {
+export const getStaticPaths = (async ({ paginate }) => {
   return await getStaticPathsBlogList({ paginate });
-}
+}) satisfies GetStaticPaths;
+
+type Props = InferGetStaticPropsType<typeof getStaticPaths>;
 
 const { page } = Astro.props;
 const currentPage = page.currentPage ?? 1;
@@ -19,8 +22,9 @@ const currentPage = page.currentPage ?? 1;
 // const allCategories = await findCategories();
 // const allTags = await findTags();
 
+let pageLabel = ` — Page ${currentPage}`;
 const metadata = {
-  title: `Blog${currentPage > 1 ? ` — Page ${currentPage}` : ''}`,
+  title: `Blog${currentPage > 1 ? pageLabel : ''}`,
   robots: {
     index: blogListRobots?.index && currentPage === 1,
     follow: blogListRobots?.follow

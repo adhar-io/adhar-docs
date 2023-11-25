@@ -7,7 +7,7 @@ import { blogCategoryRobots, getStaticPathsBlogCategory } from '@/utils/blog';
 
 export const prerender = true;
 
-export async function getStaticPaths({ paginate }) {
+export async function getStaticPaths({ paginate }: any) {
   return await getStaticPathsBlogCategory({ paginate });
 }
 

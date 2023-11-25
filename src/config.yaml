@@ -11,16 +11,16 @@ metadata:
   title:
     default: Adhar.io
     template: '%s — Adhar'
-  description: "Adhar.io - Open Foundation for Modern Businesses"
+  description: 'Adhar.io - Open Foundation for Modern Businesses'
   robots:
     index: true
     follow: true
   openGraph:
     site_name: Adhar
     images:
-    - url: '/imgs/default.png'
-      width: 1200
-      height: 628
+      - url: '/imgs/default.png'
+        width: 1200
+        height: 628
     type: website
   twitter:
     handle: '@onwidget'

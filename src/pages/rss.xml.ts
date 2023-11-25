@@ -1,7 +1,7 @@
-import { getRssString } from '@astrojs/rss';
 import { fetchPosts } from '@/utils/blog';
 import { APP_BLOG, METADATA, SITE } from '@/utils/config';
 import { getPermalink } from '@/utils/permalinks';
+import { getRssString } from '@astrojs/rss';
 
 export const GET = async () => {
   if (!APP_BLOG.isEnabled) {

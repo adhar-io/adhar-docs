@@ -281,12 +281,12 @@ export const unpicOptimizer: ImagesOptimizer = async (
   return Promise.all(
     breakpoints.map(async (w: number) => {
       const url =
-        (await transformUrl({
+        transformUrl({
           url: image,
           width: w,
           height: width && height ? computeHeight(w, width / height) : height,
           cdn: urlParsed.cdn
-        })) || image;
+        }) || image;
       return {
         src: String(url),
         width: w

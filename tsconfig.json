@@ -1,9 +1,10 @@
 {
-  "extends": "astro/tsconfigs/strictest",
+  "extends": "astro/tsconfigs/strict",
   "compilerOptions": {
     "jsx": "preserve",
     "skipLibCheck": true,
     "strictNullChecks": true,
+    "verbatimModuleSyntax": true,
     "allowJs": false,
     "baseUrl": ".",
     "paths": {

@@ -1,11 +1,11 @@
 ---
-import type { Props as AstroSeoProps } from '@astrolib/seo';
 import type { MetaData } from '@/types';
+import type { Props as AstroSeoProps } from '@astrolib/seo';
 
-import { AstroSeo } from '@astrolib/seo';
 import { I18N, METADATA, SITE } from '@/utils/config';
 import { adaptOpenGraphImages } from '@/utils/images';
 import { getCanonical } from '@/utils/permalinks';
+import { AstroSeo } from '@astrolib/seo';
 import merge from 'lodash.merge';
 
 export interface Props extends MetaData {
