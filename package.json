@@ -8,10 +8,10 @@
     "lint": "eslint src/**/*.{astro,js,jsx,ts,tsx}",
     "lint:fix": "eslint --fix",
     "format": "prettier -w .",
-    "dev": "astro dev",
-    "start": "astro dev",
-    "build": "astro build",
-    "preview": "astro preview",
+    "dev": "astro check && astro dev",
+    "start": "astro check && astro dev",
+    "build": "astro check && astro build",
+    "preview": "astro check && astro preview",
     "astro": "astro"
   },
   "dependencies": {
