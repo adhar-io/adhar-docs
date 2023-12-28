@@ -5,9 +5,9 @@ import mdx from '@astrojs/mdx';
 import partytown from '@astrojs/partytown';
 import sitemap from '@astrojs/sitemap';
 import tailwind from '@astrojs/tailwind';
-import compress from 'astro-compress';
 import icon from 'astro-icon';
-import { defineConfig } from 'astro/config';
+import compress from 'astro-compress';
+import { defineConfig, squooshImageService } from 'astro/config';
 import { VitePWA } from 'vite-plugin-pwa';
 
 import { ANALYTICS, SITE } from './src/utils/config.ts';
@@ -64,15 +64,17 @@ export default defineConfig({
 
     compress({
       CSS: true,
-      HTML: {
-        removeAttributeQuotes: false
-      },
+      HTML: false,
       Image: false,
       JavaScript: true,
       SVG: true,
       Logger: 1
     })
   ],
+
+  image: {
+    service: squooshImageService()
+  },
 
   markdown: {
     remarkPlugins: [readingTimeRemarkPlugin]
