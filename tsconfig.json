@@ -1,20 +1,23 @@
 {
   "extends": "astro/tsconfigs/strictest",
   "compilerOptions": {
-    "jsx": "preserve",
+    "jsx": "react-jsx",
     "skipLibCheck": true,
     "strictNullChecks": true,
     "verbatimModuleSyntax": true,
     "allowJs": false,
     "baseUrl": ".",
     "paths": {
-      "@/*": ["./src/*"]
-    }
+      "@/*": [
+        "./src/*"
+      ]
+    },
+    "jsxImportSource": "react"
   },
   "include": [
     "src",
     "astro.config.mjs",
-    ".eslintrc.cjs",
+    ".eslintrc.mjs",
     "**/*.js",
     "**/*.ts",
     "**/*.cjs",

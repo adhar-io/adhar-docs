@@ -1,0 +1,90 @@
+---
+const { title, pretitle, description, button, featureList } = Astro.props;
+const firstFourFeatures = featureList.slice(0, 4);
+import FeatureCard from "./feature-card.astro";
+const lastFourFeatures = featureList.slice(4);
+---
+
+<section class="bg-[#F6F6F6] py-16">
+    <div class="custom-container">
+        <div
+            class="flex justify-center items-center lg:flex-row flex-col gap-12"
+        >
+            <div class="lg:w-1/2 w-full relative">
+                <img
+                    src="/assets/icons/feature-pattern.svg"
+                    class="absolute -top-20 right-0"
+                    alt=""
+                    data-aos="fade-up"
+                    data-aos-delay="50"
+                    data-aos-duration="1000"
+                />
+                <div class="relative z-50">
+                    <h1
+                        class="md:text-2xl text-xl font-semibold mb-6 text-secondary"
+                        data-aos="fade-up"
+                        data-aos-delay="100"
+                        data-aos-duration="1000"
+                    >
+                        {pretitle}
+                    </h1>
+                    <h2
+                        class="md:text-4xl text-3xl font-semibold text-muted mb-4"
+                        data-aos="fade-up"
+                        data-aos-delay="150"
+                        data-aos-duration="1000"
+                    >
+                        {title}
+                    </h2>
+                    <p
+                        class="text-muted opacity-50 mb-12 text-xl"
+                        data-aos="fade-up"
+                        data-aos-delay="200"
+                        data-aos-duration="1000"
+                    >
+                        {description}
+                    </p>
+                    <a
+                        data-aos="fade-up"
+                        data-aos-delay="250"
+                        data-aos-duration="1000"
+                        href={button.link}
+                        class="bg-primary whitespace-nowrap rounded-[10px] py-3 px-8 text-xl font-semibold text-white"
+                        >{button.title}</a
+                    >
+                </div>
+            </div>
+            <div
+                class="grid grid-cols-1 md:grid-cols-2 lg:w-1/2 w-full gap-x-6 gap-y-10"
+            >
+                {
+                    firstFourFeatures.map((feature: any, index: number) => (
+                        <div
+                            data-aos="zoom-in"
+                            data-aos-delay={`${100 * (index + 1)}`}
+                        >
+                            <FeatureCard {...feature} index={index} />
+                        </div>
+                    ))
+                }
+            </div>
+        </div>
+
+        <div
+            class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-x-7 gap-y-10 mt-10"
+        >
+            {
+                lastFourFeatures.map((feature: any, index: number) => (
+                    <div
+                        data-aos="zoom-out"
+                        data-aos-duration="1000"
+                        data-aos-delay={`${150 * (index + 1)}`}
+                        class="h-full"
+                    >
+                        <FeatureCard {...feature} index={index + 4} />
+                    </div>
+                ))
+            }
+        </div>
+    </div>
+</section>

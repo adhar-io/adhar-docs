@@ -1,0 +1,133 @@
+---
+import { Image } from "astro:assets";
+
+const { pretitle, title, description, tabsData } = Astro.props;
+---
+
+<section class="custom-container text-center lg:py-24 py-16">
+    <h3
+        class="md:text-2xl text-xl font-semibold text-center text-secondary"
+        data-aos="fade-up"
+        data-aos-duration="1000"
+        data-aos-delay="50"
+    >
+        {pretitle}
+    </h3>
+    <h2
+        class="md:text-4xl text-3xl text-center font-semibold my-5"
+        data-aos="fade-up"
+        data-aos-delay="100"
+        data-aos-duration="1000"
+    >
+        {title}
+    </h2>
+    <p
+        class="text-paraColor text-center"
+        data-aos="fade-up"
+        data-aos-duration="1000"
+    >
+        {description}
+    </p>
+    <div class="">
+        <div
+            role="tablist"
+            aria-label="tabs"
+            data-aos-delay="250"
+            class="relative flex justify-center items-center flex-wrap gap-4 overflow-hidden mt-8 transition"
+        >
+            {
+                tabsData.map((tab: any, index: number) => (
+                    <div
+                        role="tab"
+                        aria-selected={index === 0 ? "true" : "false"}
+                        aria-controls={tab.id}
+                        id={`tab-${index + 1}`}
+                        data-aos="zoom-in"
+                        data-aos-delay={200}
+                        data-aos-offset="90"
+                        style="filter: drop-shadow(0px 4px 4px rgba(0, 0, 0, 0.25))"
+                        class={`relative block px-6 tab rounded-full border border-paraColor ${index === 0 ? "active" : "border-paraColor"}`}
+                    >
+                        <div class="cursor-pointer p-2 indicator flex flex-col justify-center items-center">
+                            <p class="font-semibold whitespace-nowrap">
+                                {tab.title}
+                            </p>
+                        </div>
+                    </div>
+                ))
+            }
+        </div>
+        <div class="relative mt-[70px]">
+            {
+                tabsData.map((tab: any, index: any) => (
+                    <div
+                        role="tabpanel"
+                        id={tab.id}
+                        class={`tab-panel flex justify-between gap-8 items-center md:flex-row flex-col transition duration-300 ${index === 0 ? "" : "absolute top-0 invisible opacity-0"} w-full`}
+                    >
+                        <div
+                            class="text-start lg:w-1/2 w-full"
+                            data-aos="zoom-in"
+                        >
+                            <h3 class="md:text-4xl text-3xl mb-8 uppercase text-paraColor">
+                                {tab.title}
+                            </h3>
+                            <div class="mb-8">
+                                {tab.list.map((item: any) => (
+                                    <div class="mb-4">
+                                        <h4 class="md:text-2xl text-xl font-semibold ">
+                                            {item.title}
+                                        </h4>
+                                        <p class="text-xl text-paraColor opacity-80">
+                                            {item.description}
+                                        </p>
+                                    </div>
+                                ))}
+                            </div>
+                            <a
+                                href={tab.button.link}
+                                class="bg-primary whitespace-nowrap rounded-[10px] py-3 px-8 text-xl font-semibold text-white"
+                            >
+                                {tab.button.text}
+                            </a>
+                        </div>
+                        <div class="lg:w-1/2 w-full" data-aos="zoom-in">
+                            <img
+                                src={tab.image}
+                                alt={tab.title + "image"}
+                                width={500}
+                                height={350}
+                                class={"w-full"}
+                            />
+                        </div>
+                    </div>
+                ))
+            }
+        </div>
+    </div>
+</section>
+<script>
+    let tabs = document.querySelectorAll(".tab");
+    let panels = document.querySelectorAll(".tab-panel");
+
+    tabs.forEach((tab, index) => {
+        tab.addEventListener("click", () => {
+            let tabTarget = tab.getAttribute("aria-controls");
+
+            tabs.forEach((tab) => {
+                tab.classList.remove("active");
+            });
+            tab.classList.add("active");
+
+            panels.forEach((panel) => {
+                let panelId = panel.getAttribute("id");
+                if (tabTarget === panelId) {
+                    panel.classList.remove("invisible", "opacity-0");
+                    panel.classList.add("visible", "opacity-100");
+                } else {
+                    panel.classList.add("invisible", "opacity-0");
+                }
+            });
+        });
+    });
+</script>

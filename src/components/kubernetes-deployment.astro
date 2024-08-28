@@ -1,0 +1,133 @@
+---
+import { Image } from "astro:assets";
+
+const { title, description, tabsData } = Astro.props;
+---
+
+<section class="custom-container lg:py-24 py-16">
+    <div>
+        <div class="text-center md:max-w-[760px] mx-auto">
+            <h2
+                class="md:text-4xl text-3xl text-center font-semibold mb-5"
+                data-aos="fade-up"
+                data-aos-delay="50"
+                data-aos-duration="1000"
+            >
+                {title}
+            </h2>
+            <p
+                class="text-paraColor text-lg !opacity-50 text-center"
+                data-aos="fade-up"
+                data-aos-delay="100"
+                data-aos-duration="1000"
+            >
+                {description}
+            </p>
+        </div>
+        <div
+            class="flex justify-start rounded-lg md:flex-row flex-col gap-6 md:gap-0 mt-8 bg-white p-3"
+            style="box-shadow: 0px 6px 31px rgba(0, 0, 0, 0.05);"
+            data-aos="zoom-in"
+            data-aos-delay="100"
+            data-aos-duration="1000"
+        >
+            <div
+                role="tablist"
+                aria-label="tabs"
+                class="relative flex px-4 justify-start items-center flex-col overflow-hidden pt-6 transition lg:w-1/4 md:w-2/5"
+            >
+                {
+                    tabsData.map((tab: any, index: number) => (
+                        <div
+                            role="tab"
+                            aria-selected={index === 0 ? "true" : "false"}
+                            aria-controls={tab.id}
+                            id={`tab-${index + 1}`}
+                            class={`relative w-full block px-4 tab rounded-md  ${index === 0 ? "active" : "text-paraColor"}`}
+                        >
+                            <div class="cursor-pointer w-full py-4 indicator flex flex-col justify-center items-center">
+                                <p class="font-medium whitespace-nowrap w-full flex justify-between items-center">
+                                    {tab.title}
+                                    <svg
+                                        width="16"
+                                        height="16"
+                                        viewBox="0 0 16 16"
+                                        fill="currentColor"
+                                        xmlns="http://www.w3.org/2000/svg"
+                                    >
+                                        <path
+                                            d="M4.05267 15C4.05291 14.7348 4.15842 14.4807 4.34601 14.2933L9.46067 9.17864C9.61548 9.02387 9.73829 8.84012 9.82207 8.63788C9.90586 8.43564 9.94898 8.21888 9.94898 7.99997C9.94898 7.78106 9.90586 7.5643 9.82207 7.36206C9.73829 7.15983 9.61548 6.97607 9.46067 6.8213L4.35267 1.70997C4.17052 1.52137 4.06972 1.26877 4.072 1.00657C4.07428 0.744373 4.17945 0.49356 4.36485 0.308152C4.55026 0.122744 4.80108 0.017575 5.06327 0.0152966C5.32547 0.0130182 5.57807 0.113813 5.76667 0.295971L10.8747 5.4033C11.5615 6.09148 11.9472 7.02403 11.9472 7.9963C11.9472 8.96858 11.5615 9.90113 10.8747 10.5893L5.76001 15.704C5.62035 15.8437 5.44244 15.939 5.2487 15.9777C5.05497 16.0164 4.85411 15.9969 4.67147 15.9216C4.48882 15.8463 4.33257 15.7185 4.22245 15.5545C4.11232 15.3905 4.05324 15.1975 4.05267 15Z"
+                                            fill="currentColor"
+                                        />
+                                    </svg>
+                                </p>
+                            </div>
+                        </div>
+                    ))
+                }
+            </div>
+            <div
+                class="relative lg:w-9/12 md:w-3/5 bg-[#02CFC0] bg-opacity-5 border-[#02CFC0] border rounded-md"
+            >
+                {
+                    tabsData.map((tab: any, index: any) => (
+                        <div
+                            role="tabpanel"
+                            id={tab.id}
+                            class={`tab-panel flex justify-between gap-8 items-center transition duration-300 ${index === 0 ? "" : "absolute top-0 invisible opacity-0"} w-full`}
+                        >
+                            <div class="text-start">
+                                <div class="flex justify-start items-start md:flex-row flex-col gap-12 p-4">
+                                    <img src={tab.icon} alt="" />
+                                    <div>
+                                        <h4 class="md:text-2xl text-xl capitalize text-paraColor font-semibold">
+                                            {tab.title}
+                                        </h4>
+                                        <p class="text-paraColor opacity-80">
+                                            {tab.description}
+                                        </p>
+
+                                        <div class="mt-8 ">
+                                            <ul>
+                                                {tab.list.map((item: any) => (
+                                                    <li class=" mb-4 text-paraColor list-disc ">
+                                                        {item}
+                                                    </li>
+                                                ))}
+                                            </ul>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    ))
+                }
+            </div>
+        </div>
+    </div>
+</section>
+<script>
+    let tabs = document.querySelectorAll(".tab");
+    let panels = document.querySelectorAll(".tab-panel");
+
+    tabs.forEach((tab, index) => {
+        tab.addEventListener("click", () => {
+            let tabTarget = tab.getAttribute("aria-controls");
+
+            tabs.forEach((tab) => {
+                tab.classList.remove("active");
+            });
+            tab.classList.add("active");
+
+            panels.forEach((panel) => {
+                let panelId = panel.getAttribute("id");
+                if (tabTarget === panelId) {
+                    panel.classList.remove("invisible", "opacity-0");
+                    panel.classList.add("visible", "opacity-100");
+                } else {
+                    panel.classList.add("invisible", "opacity-0");
+                }
+            });
+        });
+    });
+</script>

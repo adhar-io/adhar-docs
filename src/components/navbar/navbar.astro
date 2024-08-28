@@ -1,0 +1,49 @@
+---
+import Dropdown from "./dropdown.astro";
+import { Astronav, MenuItems, MenuIcon } from "astro-navbar";
+import { navbar } from "@/data";
+import Logo from "../Logo.astro";
+---
+
+<div class="sticky top-0 bg-white w-full z-[999] shadow-sm">
+    <header
+        class="flex custom-container flex-col lg:flex-row justify-between items-center py-3"
+    >
+        <Astronav>
+            <div class="flex w-full lg:w-auto items-center justify-between">
+                <a href="/" class="text-lg">
+                    <Logo />
+                </a>
+                <div class="block lg:hidden">
+                    <MenuIcon class="w-8 h-8 text-textColor" />
+                </div>
+            </div>
+            <MenuItems class="hidden w-full lg:w-auto mt-6 lg:flex lg:mt-0">
+                <ul class="flex flex-col lg:flex-row gap-0 lg:gap-4">
+                    {
+                        navbar.navitems.map((item, index) => (
+                            <li>
+                                {item.children && item.children.length > 0 ? (
+                                    <Dropdown
+                                        title={item.title}
+                                        children={item.children}
+                                        lastItem={
+                                            index === navbar.navitems.length - 1
+                                        }
+                                    />
+                                ) : (
+                                    <a
+                                        href={item.link}
+                                        class="flex py-2 h-[50px] lg:h-auto border-b lg:border-b-0 text-lg items-center text-textColor"
+                                    >
+                                        <span>{item.title}</span>
+                                    </a>
+                                )}
+                            </li>
+                        ))
+                    }
+                </ul>
+            </MenuItems>
+        </Astronav>
+    </header>
+</div>

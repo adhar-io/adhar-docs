@@ -1,0 +1,41 @@
+---
+const { image, title, description, button } = Astro.props;
+---
+
+<section class="bg-secondary py-4">
+    <div
+        class="custom-container text-white gap-8 flex justify-between items-center md:flex-row flex-col"
+    >
+        <img
+            src={image}
+            width={200}
+            height={150}
+            class={"w-full max-w-40"}
+            alt={"subscription image"}
+            data-aos="zoom-in"
+            data-aos-delay="100"
+            data-aos-offset="0"
+            data-aos-duration="1000"
+        />
+        <div
+            class="text-center lg:text-start"
+            data-aos="zoom-in"
+            data-aos-delay="200"
+            data-aos-offset="0"
+            data-aos-duration="1000"
+        >
+            <h3 class="md:text-2xl text-xl font-semibold mb-2">{title}</h3>
+            <p class="text-white opacity-50 text-lg font-medium">
+                {description}
+            </p>
+        </div>
+        <a
+            href={button.link}
+            data-aos="zoom-in"
+            data-aos-delay="300"
+            data-aos-offset="0"
+            class="bg-accent whitespace-nowrap rounded-[10px] py-5 px-8 text-xl font-semibold text-white"
+            >{button.text}</a
+        >
+    </div>
+</section>

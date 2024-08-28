@@ -1,0 +1,99 @@
+---
+import { footerData } from "@/data";
+---
+
+<footer class="bg-[#F6F6F6] pt-8">
+    <div class="custom-container mx-auto px-4">
+        <div class="grid grid-cols-12 gap-4">
+            <div class="text-center md:text-left lg:col-span-4 col-span-12">
+                <a href="#" class="md:text-2xl text-xl mb-4 font-semibold">
+                    <img
+                        src="/assets/branding/adhar-logo-dark.svg"
+                        class="max-w-[13rem]"
+                        alt=""
+                    />
+                </a>
+                <p class="mt-2 mb-4 text-sm text-muted">
+                    Stop by any of the hundreds of meetups around the world for
+                    in-person banter or join our Slack and Discourse for virtual
+                    peer support. Our Docker Captains are also a great source of
+                    developer insight and expertise.
+                </p>
+                <a
+                    href={`mailto:${footerData.email}`}
+                    class="text-primary mt-2 block"
+                >
+                    {footerData.email}
+                </a>
+            </div>
+            <div class="lg:col-span-2 sm:col-span-6 col-span-12">
+                <h5 class="text-gray-800 font-semibold">Product</h5>
+                <ul class="mt-2">
+                    {
+                        footerData.sections.product.map((item) => (
+                            <li class="text-muted mt-2 opacity-50">
+                                <a href="#">{item}</a>
+                            </li>
+                        ))
+                    }
+                </ul>
+            </div>
+            <div class="lg:col-span-2 sm:col-span-6 col-span-12">
+                <h5 class="text-gray-800 font-semibold">Platform</h5>
+                <ul class="mt-2">
+                    {
+                        footerData.sections.platform.map((item) => (
+                            <li class="text-muted mt-2 opacity-50">
+                                <a href="#">{item}</a>
+                            </li>
+                        ))
+                    }
+                </ul>
+            </div>
+            <div class="lg:col-span-2 sm:col-span-6 col-span-12">
+                <h5 class="text-gray-800 font-semibold">Support</h5>
+                <ul class="mt-2">
+                    {
+                        footerData.sections.support.map((item) => (
+                            <li class="text-muted mt-2 opacity-50">
+                                <a href="#">{item}</a>
+                            </li>
+                        ))
+                    }
+                </ul>
+            </div>
+            <div class="lg:col-span-2 sm:col-span-6 col-span-12">
+                <h5 class="text-gray-800 font-semibold">Company</h5>
+                <ul class="mt-2">
+                    {
+                        footerData.sections.company.map((item) => (
+                            <li class="text-muted mt-2 opacity-50">
+                                <a href="#">{item}</a>
+                            </li>
+                        ))
+                    }
+                </ul>
+            </div>
+        </div>
+
+        <div class="mt-8 flex justify-center space-x-4">
+            {
+                footerData.socialLinks.map((platform) => (
+                    <a
+                        href={platform.link}
+                        class="text-gray-500 hover:text-gray-700"
+                    >
+                        <img
+                            src={platform.icon}
+                            alt=""
+                            class="w-8 h-8 hover:scale-150 duration-150"
+                        />
+                    </a>
+                ))
+            }
+        </div>
+    </div>
+    <p class="py-4 mt-8 text-center bg-[#ECECEC] text-muted">
+        {footerData.companyInfo}
+    </p>
+</footer>

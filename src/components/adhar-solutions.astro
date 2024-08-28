@@ -1,0 +1,48 @@
+---
+const { cards, title, description } = Astro.props;
+---
+
+<section class="custom-container lg:py-24 py-16">
+    <div>
+        <div class="text-center md:max-w-[760px] mx-auto">
+            <h2
+                class="text-center md:text-4xl text-3xl font-semibold mb-2"
+                data-aos="zoom-in"
+                data-aos-delay="50"
+                data-aos-duration="1000"
+            >
+                {title}
+            </h2>
+            <p
+                class="text-xl font-medium text-center text-paraColor opacity-50"
+                data-aos="zoom-in"
+                data-aos-delay="100"
+                data-aos-duration="1000"
+            >
+                {description}
+            </p>
+        </div>
+        <div
+            class="grid lg:grid-cols-4 md:grid-cols-2 divide-x-2 divide-y-2 lg:divide-y-0 mt-8 divide-white items-center bg-[#F6F6F6] rounded-2xl"
+        >
+            {
+                cards.map((item: any, index: number) => (
+                    <div
+                        class="flex-1 py-9 px-8  h-full flex justify-center text-center items-center flex-col"
+                        data-aos="zoom-out"
+                        data-aos-delay={`${100 * (index + 1)}`}
+                        data-aos-duration="1000"
+                    >
+                        <img src={item.icon} alt={item.title + "icon"} />
+                        <h4 class="mt-6 mb-1 md:text-2xl text-xl font-semibold lg:h-[65px] 2xl:h-0">
+                            {item.title}
+                        </h4>
+                        <p class=" text-paraColor opacity-80  lg:h-[120px] 2xl:h-0">
+                            {item.description}
+                        </p>
+                    </div>
+                ))
+            }
+        </div>
+    </div>
+</section>

@@ -1,9 +1,9 @@
 ---
 import type { MetaData } from '@/types';
-
-import Header from '@/components/widgets/Header.astro';
-import PageLayout from '@/layouts/PageLayout.astro';
-import { headerData } from '@/navigation';
+import Navbar from "@/components/navbar/navbar.astro";
+import Topbar from "@/components/Topbar.astro";
+import Footer from "@/components/Footer.astro";
+import Layout from '@/layouts/Layout.astro';
 
 export interface Props {
   metadata?: MetaData;
@@ -12,25 +12,17 @@ export interface Props {
 const { metadata } = Astro.props;
 ---
 
-<PageLayout metadata={metadata}>
-  <Fragment slot='announcement'>
-    <slot name='announcement' />
-  </Fragment>
-  <Fragment slot='header'>
-    <slot name='header'>
-      <Header
-        links={headerData?.links[2] ? [headerData.links[2]] : undefined}
-        actions={[
-          {
-            type: 'ghost',
-            text: 'Download',
-            href: 'https://github.com/onwidget/astrowind'
-          }
-        ]}
-        showToggleTheme
-        position='right'
-      />
-    </slot>
-  </Fragment>
-  <slot />
-</PageLayout>
+<Layout metadata={metadata}>
+  <slot name='topbar'>
+    <Topbar />
+  </slot>
+  <slot name='header'>
+    <Navbar />
+  </slot>
+  <main>
+    <slot/>
+  </main>
+  <slot name='footer'>
+    <Footer />
+  </slot>
+</Layout>

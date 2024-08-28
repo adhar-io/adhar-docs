@@ -1,0 +1,45 @@
+---
+const { title, pretitle, description, button, image } = Astro.props;
+---
+
+<section
+    class="flex justify-center items-center md:flex-row flex-col lg:gap-12 gap-6 custom-container lg:py-24 py-16"
+>
+    <div
+        class="md:w-1/2 w-full"
+        data-aos="zoom-in"
+        data-aos-offset="300"
+        data-aos-duration="1000"
+    >
+        <img src={image} class={"w-full "} alt={"our team image"} />
+    </div>
+
+    <div
+        class="md:w-1/2 w-full relative"
+        data-aos="zoom-in"
+        data-aos-offset="300"
+        data-aos-duration="1000"
+    >
+        <img
+            src="/assets/icons/our-team-pattern.svg"
+            class="absolute -top-20 right-0"
+            alt=""
+        />
+        <div class="relative z-50">
+            <h1 class="md:text-2xl text-xl font-semibold mb-6 text-secondary">
+                {pretitle}
+            </h1>
+            <h2 class="md:text-4xl text-3xl font-semibold text-muted mb-4">
+                {title}
+            </h2>
+            <p class="text-muted opacity-50 mb-12 text-xl">
+                {description}
+            </p>
+            <a
+                href={button.link}
+                class="bg-primary whitespace-nowrap rounded-[10px] py-3 px-8 text-xl font-semibold text-white"
+                >{button.title}</a
+            >
+        </div>
+    </div>
+</section>
