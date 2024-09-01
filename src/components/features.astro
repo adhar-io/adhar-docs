@@ -2,6 +2,7 @@
 const { title, pretitle, description, button, featureList } = Astro.props;
 const firstFourFeatures = featureList.slice(0, 4);
 import FeatureCard from "./feature-card.astro";
+import { Button } from "./ui/button";
 const lastFourFeatures = featureList.slice(4);
 ---
 
@@ -44,14 +45,14 @@ const lastFourFeatures = featureList.slice(4);
                     >
                         {description}
                     </p>
-                    <a
+                    <Button
                         data-aos="fade-up"
                         data-aos-delay="250"
                         data-aos-duration="1000"
-                        href={button.link}
-                        class="bg-primary whitespace-nowrap rounded-[10px] py-3 px-8 text-xl font-semibold text-white"
-                        >{button.title}</a
-                    >
+                        variant="outline"
+                        className="w-full sm:w-fit h-[50px] py-5 px-6 text-xl font-semibold hover:bg-transparent hover:opacity-80 text-black"
+                        >{button.title}
+                    </Button>
                 </div>
             </div>
             <div

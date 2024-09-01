@@ -1,5 +1,5 @@
 ---
-import { Image } from "astro:assets";
+import { Button } from "@/components/ui/button";
 
 const { pretitle, title, description, tabsData } = Astro.props;
 ---
@@ -69,27 +69,24 @@ const { pretitle, title, description, tabsData } = Astro.props;
                             class="text-start lg:w-1/2 w-full"
                             data-aos="zoom-in"
                         >
-                            <h3 class="md:text-4xl text-3xl mb-8 uppercase text-paraColor">
+                            <h3 class="md:text-4xl text-3xl mb-8 uppercase text-muted font-serif">
                                 {tab.title}
                             </h3>
                             <div class="mb-8">
                                 {tab.list.map((item: any) => (
                                     <div class="mb-4">
-                                        <h4 class="md:text-2xl text-xl font-semibold ">
+                                        <h4 class="md:text-2xl text-xl font-medium">
                                             {item.title}
                                         </h4>
-                                        <p class="text-xl text-paraColor opacity-80">
+                                        <p class="text-xl text-muted-foreground opacity-80">
                                             {item.description}
                                         </p>
                                     </div>
                                 ))}
                             </div>
-                            <a
-                                href={tab.button.link}
-                                class="bg-primary whitespace-nowrap rounded-[10px] py-3 px-8 text-xl font-semibold text-white"
-                            >
+                            <Button variant="outline" className="h-[50px]  py-5 px-6 text-xl font-semibold hover:bg-transparent hover:opacity-80 text-black">
                                 {tab.button.text}
-                            </a>
+                            </Button>
                         </div>
                         <div class="lg:w-1/2 w-full" data-aos="zoom-in">
                             <img

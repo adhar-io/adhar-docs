@@ -60,179 +60,179 @@ export const navbar = {
 };
 export const heroData = {
   title:
-    "Accelerate cloud-native development with All-in-One open-source Adhar internal developer platform (IDP)",
+    "ADHAR Internal Developer Platform, The Open Foundation for Your Business!",
   description:
-    "Tired of building and maintaining in-house platforms? Unleash your team's potential with Adhar. Our open-source platform empowers you to focus on your core product. From ideation to deployment, Adhar accelerates your cloud-native journey. Define, design, develop, deliver, and discover your business applications and services seamlessly.",
+    "Elevate your team's efficiency with Adhar open-source platform. From ideation to deployment, Adhar streamlines your cloud-native journey, enabling you to define, design, develop, deliver, and discover business applications and services effortlessly.",
   firstbutton: { text: "Try Adhar Cloud", link: "/" },
   secondbutton: { text: "Learn More", link: "/docs" },
   heroImage: "/assets/imgs/hero-img.png",
 };
 export const subscriptionData = {
   image: "/assets/imgs/subscription.svg",
-  title: "Choose a subscription that’s right for you",
+  title: "Avoid the hassle of setup, try Adhar Cloud!",
   description:
-    "Find your perfect balance of collaboration, security, and support with a Adhar subscription.",
-  button: { text: "View Pricing", link: "/" },
+    "Explore Adhar platform with a free forever plan, and upgrade to a paid plan whenever you're ready.",
+  button: { text: "View Pricing" },
 };
 export const howWorksData = {
   pretitle: "How Adhar Works?",
   title: "A Structured Approach from Define to Discover",
   description:
-    "Lorem Ipsum is simply dummy text of the printing and typesetting industry.",
+    "Experience a comprehensive software development life cycle with the Adhar platform, covering everything from requirement gathering to deployment and beyond.",
 
   tabsData: [
     {
       id: 1,
-      title: "Define",
+      title: "🎯 Define",
       list: [
         {
-          title: "Understand Needs",
+          title: "Requirement Gathering",
           description:
-            "We begin by understanding your needs and project goals. Through in-depth discussions and analysis, we gain insights into your requirements.",
+            "Start by understanding business needs and project goals. Through in-depth discussions and analysis, gather all necessary requirements to ensure a clear understanding of the objectives.",
         },
         {
           title: "Research",
           description:
-            "Next, we conduct thorough research on your industry, target audience, and competitors. This helps us identify trends and opportunities.",
+            "Next, conduct thorough research on industry, target audience, and competitors. This helps identify trends and opportunities to better align with business goals.",
         },
         {
-          title: "Define Scope",
+          title: "Define User-Stories",
           description:
-            "Based on our analysis and research, we define the scope of the project, outlining deliverables, timelines, and resources required.",
+            "Based on analysis and research, define the scope of the project, outlining deliverables, timelines, and resources required to meet your expectations.",
         },
       ],
-      image: "/assets/imgs/tab-image-1.png",
-      button: { text: "More Details", link: "/" },
+      image: "/assets/illustrations/requirements.svg",
+      button: { text: "Learn More", link: "/define" },
     },
     {
       id: 2,
-      title: "Design",
+      title: "💅 Design",
       list: [
         {
-          title: "Understand Needs",
+          title: "Architecture Design",
           description:
-            "We begin by understanding your needs and project goals. Through in-depth discussions and analysis, we gain insights into your requirements.",
+            "Architecture design focuses on building scalable, resilient, and flexible systems that leverage microservices, containerization, and orchestration to optimize performance and resource utilization.",
         },
         {
-          title: "Research",
+          title: "UX/UI Design",
           description:
-            "Next, we conduct thorough research on your industry, target audience, and competitors. This helps us identify trends and opportunities.",
+            "Design team crafts intuitive and engaging user experiences, focusing on usability and aesthetics to enhance user satisfaction and customer retention.",
         },
         {
-          title: "Define Scope",
+          title: "Prototyping",
           description:
-            "Based on our analysis and research, we define the scope of the project, outlining deliverables, timelines, and resources required.",
+            "Develop prototypes to visualize the design and gather feedback, allowing for iterative improvements before finalizing the design and spending time on development.",
         },
       ],
-      image: "/assets/imgs/tab-image-1.png",
-      button: { text: "More Details", link: "/" },
+      image: "/assets/illustrations/sketch.svg",
+      button: { text: "Learn More", link: "/design" },
     },
     {
       id: 3,
-      title: "Develop",
+      title: "👨‍💻 Develop",
       list: [
         {
-          title: "Understand Needs",
+          title: "Application & Services Development",
           description:
-            "We begin by understanding your needs and project goals. Through in-depth discussions and analysis, we gain insights into your requirements.",
+            "Application and services development involves creating robust, scalable, and user-friendly software solutions that meet specific business needs and enhance overall operational efficiency.",
         },
         {
-          title: "Research",
+          title: "Integration",
           description:
-            "Next, we conduct thorough research on your industry, target audience, and competitors. This helps us identify trends and opportunities.",
+            "Integrating various systems and services through APIs is crucial for ensuring seamless data exchange, enhancing application capabilities, and enabling efficient and scalable business operations.",
         },
         {
-          title: "Define Scope",
+          title: "Testing",
           description:
-            "Based on our analysis and research, we define the scope of the project, outlining deliverables, timelines, and resources required.",
+            "Rigorous testing is conducted to identify and fix any issues, ensuring different aspects of the application's functionality, performance, and reliability.",
         },
       ],
-      image: "/assets/imgs/tab-image-1.png",
-      button: { text: "More Details", link: "/" },
+      image: "/assets/illustrations/develop.svg",
+      button: { text: "Learn More", link: "/develop" },
     },
     {
       id: 4,
-      title: "Deliver",
+      title: "🚀  Deliver",
       list: [
         {
-          title: "Understand Needs",
+          title: "Deployment",
           description:
-            "We begin by understanding your needs and project goals. Through in-depth discussions and analysis, we gain insights into your requirements.",
+            "Delivering new features and updates to users, ensuring they have access to the latest improvements and functionalities seamlessly.",
         },
         {
-          title: "Research",
+          title: "Resiliency",
           description:
-            "Next, we conduct thorough research on your industry, target audience, and competitors. This helps us identify trends and opportunities.",
+            "Ability to recover quickly from failures and continue operating effectively, ensuring minimal disruption to users and maintaining service availability.",
         },
         {
-          title: "Define Scope",
+          title: "Support",
           description:
-            "Based on our analysis and research, we define the scope of the project, outlining deliverables, timelines, and resources required.",
+            "Post deployment support is available to address any issues and ensure the application continues to perform optimally.",
         },
       ],
-      image: "/assets/imgs/tab-image-1.png",
-      button: { text: "More Details", link: "/" },
+      image: "/assets/illustrations/delivery.svg",
+      button: { text: "Learn More", link: "/deliver" },
     },
     {
       id: 5,
-      title: "Discover",
+      title: "✨ Discover",
       list: [
         {
-          title: "Understand Needs",
+          title: "Analytics",
           description:
-            "We begin by understanding your needs and project goals. Through in-depth discussions and analysis, we gain insights into your requirements.",
+            "We provide tools and insights to help you retrieve and analyze key metrics, enabling you to make informed business decisions.",
         },
         {
-          title: "Research",
+          title: "Monitoring",
           description:
-            "Next, we conduct thorough research on your industry, target audience, and competitors. This helps us identify trends and opportunities.",
+            "Continuous monitoring of the application's performance helps identify areas for improvement and ensures ongoing optimization.",
         },
         {
-          title: "Define Scope",
+          title: "Business Insights",
           description:
-            "Based on our analysis and research, we define the scope of the project, outlining deliverables, timelines, and resources required.",
+            "Leverage data-driven insights to enhance your business strategies and drive growth, ensuring your application evolves with your needs.",
         },
       ],
-      image: "/assets/imgs/tab-image-1.png",
-      button: { text: "More Details", link: "/" },
+      image: "/assets/illustrations/monitor.svg",
+      button: { text: "Learn More", link: "/discover" },
     },
   ],
 };
 export const AdharSolutionData = {
-  title: "One Adhar Platform for Full Stack Solutions",
+  title: "Adhar: The All-in-One Platform",
   description:
-    "Adhar simplifies IT and DevOps with full automation, empowering enterprises to effortlessly build robust Kubernetes platforms for scalable efficiency.",
+    "Adhar streamlines software Development and Operations through full automation, enabling enterprises to effortlessly create robust Internal Developer Platform that ensures developer efficiency and better governance.",
   cards: [
     {
       icon: "/assets/icons/open-source.svg",
       title: "Open Source",
       description:
-        "Open Source-Powered: Adhar delivers enterprise Kubernetes solutions with open-source agility.",
-    },
-    {
-      icon: "/assets/icons/easy-to-run.svg",
-      title: "Easy to Run",
-      description:
-        "Adhar ensures ease of use, simplifying deployment and management for seamless operations.",
+        "By integrating the finest open-source tools and platforms, Adhar is meticulously crafted to be the best enterprise platform. This commitment to openness ensures transparency, fosters continuous innovation, and empowers modern enterprises to achieve greater efficiency and agility.",
     },
     {
       icon: "/assets/icons/rich-features.svg",
-      title: "Rich Features",
+      title: "Multi Cloud",
       description:
-        "Adhar offers a wealth of functionalities, empowering your enterprise with comprehensive capabilities.",
+        "Multi-cloud and Hybrid cloud strategies are essential for modern businesses to achieve greater flexibility, resilience, and cost efficiency. By leveraging multiple cloud providers, enterprises can avoid vendor lock-in, optimize performance, and ensure high availability.",
+    },
+    {
+      icon: "/assets/icons/easy-to-run.svg",
+      title: "Kubernetes Native",
+      description:
+        "The Adhar platform extends Kubernetes by addressing its gaps, transforming it into a comprehensive enterprise solution that accelerates the delivery of robust applications and services, ensuring efficiency and scalability for modern businesses.",
     },
     {
       icon: "/assets/icons/modular-pluggable.svg",
       title: "Modular & Pluggable",
       description:
-        "Adhar boasts a modular, plug-and-play architecture, ensuring flexibility and extensibility for seamless integration.",
+        "Adhar boasts a modular, plug-and-play architecture, ensuring flexibility and extensibility for seamless integration. This design fosters innovation and supports adaptability, allowing enterprises to adapt quickly to evolving technologies and business needs.",
     },
   ],
 };
 export const KubernetesDeploymentData = {
-  title: "Simplifying Kubernetes Deployment for Every Team",
+  title: "Simplifying Kubernetes Adoption",
   description:
-    "Adhar fosters seamless collaboration with a multi-tenant Kubernetes platform. Developers deploy code effortlessly, Ops gain insights, and DevOps strategies streamline workflows. Plus, flexible networking empowers Infrastructure teams, avoiding vendor lock-in.",
+    "Adhar fosters seamless collaboration through its multi-tenant Kubernetes platform, enabling diverse teams to work together efficiently, thereby providing greater control and adaptability. Experts gain full control, developers experience reduced cognitive load, and businesses become more engaged in the process.",
 
   tabsData: [
     {
@@ -293,23 +293,23 @@ export const KubernetesDeploymentData = {
   ],
 };
 export const featuresData = {
-  title: `"Unlocking the Potential of Cloud-Native Development with Adhar Platform"`,
-  description: `"Empower Your Development Journey with Adhar's Comprehensive Suite of Integrated Tools and Seamless Scalability"`,
-  pretitle: "FEATURES",
+  title: "Unlocking the Potential of Cloud-Native Development with Adhar Platform",
+  description: "Empower Your Development Journey with Adhar's Comprehensive Suite of Integrated Tools and Seamless Scalability",
+  pretitle: "ADHAR CAPABILITIES",
   button: {
-    title: "More Details",
+    title: "Learn More",
     link: "/",
   },
   featureList: [
     {
       icon: "/assets/icons/framework 1.svg",
-      title: "Multiple Languages and Frameworks",
-      description: `"Adhar supports a variety of languages and frameworks like Angular, Go, Java, JavaScript, Python, React, and TypeScript."`,
+      title: "Multiple Language and Framework Support",
+      description: "Adhar supports a wide range of languages and frameworks, including Angular, SpringBoot, Quarkus, Go, Java, JavaScript, Python, NodeJS, React, and TypeScript.",
     },
     {
       icon: "/assets/icons/framework 1.svg",
-      title: "Built-In Package Managers",
-      description: `Adhar integrates with popular package managers like npm, yarn, pip, and Maven, simplifying dependency management and accelerating development.`,
+      title: "Great Developer Experience",
+      description: "Adhar offers an exceptional developer experience right out of the box, by implementing fast feedback-loop and self service capabilities which allows developers to focus on building innovative solutions.",
     },
     {
       icon: "/assets/icons/framework 1.svg",
@@ -323,29 +323,29 @@ export const featuresData = {
     },
     {
       icon: "/assets/icons/framework 1.svg",
-      title: "Scalability",
+      title: "Pre-Built Enterprise Capabilities",
       description: `Adhar platform is designed to scale with your application. It can handle increased load by automatically adding resources when they are needed.`,
     },
     {
       icon: "/assets/icons/framework 1.svg",
-      title: "Security",
+      title: "Security, Compliance & Governance", 
       description: `Adhar platform provides robust security features, including automatic updates, secure service credentials, and isolation policies to protect your applications.`,
     },
     {
       icon: "/assets/icons/framework 1.svg",
-      title: "Continuous Integration/Continuous Deployment",
+      title: "Continuous Integration/Deployment",
       description: `Adhar platform supports CI/CD, allowing you to automate your development process, from code commit to production deployment.`,
     },
     {
       icon: "/assets/icons/framework 1.svg",
-      title: "Monitoring and Analytics",
+      title: "Monitoring and Observability",
       description: `Adhar platform provides monitoring and analytics tools that give you insights into your application performance and usage patterns.`,
     },
   ],
 };
 export const ourteamData = {
-  title: `"Unlocking the Potential of Cloud-Native Development with Adhar Platform"`,
-  description: `"Empower Your Development Journey with Adhar's Comprehensive Suite of Integrated Tools and Seamless Scalability"`,
+  title: "Unlocking the Potential of Cloud-Native Development with Adhar Platform",
+  description: "Empower Your Development Journey with Adhar's Comprehensive Suite of Integrated Tools and Seamless Scalability",
   pretitle: "OUR TEAM",
   button: {
     title: "More Details",
@@ -371,11 +371,11 @@ export const WorkWithUsData = {
   ],
   button: {
     link: "/",
-    title: "Let’s Work",
+    title: "Contact Us",
   },
 };
 export const footerData = {
-  email: "hello@adhar.io",
+  email: "contact@adhar.io",
   sections: {
     product: [
       "Features",

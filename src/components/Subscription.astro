@@ -1,8 +1,9 @@
 ---
+import { Button } from '@/components/ui/button';
 const { image, title, description, button } = Astro.props;
 ---
 
-<section class="bg-secondary py-4">
+<section class="bg-secondary py-4 subscription-clip">
     <div
         class="custom-container text-white gap-8 flex justify-between items-center md:flex-row flex-col"
     >
@@ -29,13 +30,12 @@ const { image, title, description, button } = Astro.props;
                 {description}
             </p>
         </div>
-        <a
-            href={button.link}
+        <Button
             data-aos="zoom-in"
             data-aos-delay="300"
             data-aos-offset="0"
-            class="bg-accent whitespace-nowrap rounded-[10px] py-5 px-8 text-xl font-semibold text-white"
-            >{button.text}</a
-        >
+            className="bg-accent hover:bg-accent hover:opacity-80 h-[60px] w-full sm:w-fit p-5 text-xl font-semibold text-white"
+            >{button.text}
+        </Button>
     </div>
 </section>

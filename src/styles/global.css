@@ -17,7 +17,7 @@
     --card-foreground: 222.2 84% 4.9%;
     --popover: 0 0% 100%;
     --popover-foreground: 222.2 84% 4.9%;
-    --primary: 263.4, 72.1%, 50.4%;
+    --primary: 243, 100%, 69%;
     --primary-foreground: 210 40% 98%;
     --secondary:  215, 20%, 27%;
     --secondary-foreground: 222.2 47.4% 11.2%;
@@ -112,6 +112,10 @@
 
   .btn-tertiary {
     @apply btn border-none text-muted shadow-none hover:text-gray-900 dark:text-gray-400 dark:hover:text-white;
+  }
+
+  .subscription-clip {
+    clip-path: polygon(0 0, 10% 10%, 20% 0, 30% 10%, 40% 0, 50% 10%, 60% 0, 70% 10%, 80% 0, 90% 10%, 100% 0, 100% 100%, 0 100%);
   }
 }
 

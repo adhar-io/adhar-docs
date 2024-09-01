@@ -14,7 +14,7 @@ const { cards, title, description } = Astro.props;
                 {title}
             </h2>
             <p
-                class="text-xl font-medium text-center text-paraColor opacity-50"
+                class="text-xl font-medium text-center text-muted opacity-50"
                 data-aos="zoom-in"
                 data-aos-delay="100"
                 data-aos-duration="1000"
@@ -34,10 +34,10 @@ const { cards, title, description } = Astro.props;
                         data-aos-duration="1000"
                     >
                         <img src={item.icon} alt={item.title + "icon"} />
-                        <h4 class="mt-6 mb-1 md:text-2xl text-xl font-semibold lg:h-[65px] 2xl:h-0">
+                        <h4 class="mt-6 mb-1 md:text-2xl text-xl font-semibold lg:h-[65px]">
                             {item.title}
                         </h4>
-                        <p class=" text-paraColor opacity-80  lg:h-[120px] 2xl:h-0">
+                        <p class="text-muted-foreground opacity-80 text-justify lg:h-[280px]">
                             {item.description}
                         </p>
                     </div>
