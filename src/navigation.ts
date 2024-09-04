@@ -24,7 +24,7 @@ export const headerData = {
       ]
     },
     {
-      text: 'Docs',
+      text: 'Documentation',
       href: '/docs'
     },
     {
