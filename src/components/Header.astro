@@ -145,10 +145,10 @@ const currentPath = `/${trimSlash(new URL(Astro.url).pathname)}`;
             showRssFeed && (
               <a
                 class='inline-flex items-center rounded-lg p-2.5 text-sm text-muted hover:bg-gray-100 focus:outline-none focus:ring-4 focus:ring-gray-200 dark:text-gray-400 dark:hover:bg-gray-700 dark:focus:ring-gray-700'
-                aria-label='RSS Feed'
-                href={getAsset('/rss.xml')}
+                aria-label='Login'
+                href='/login'
               >
-                <Icon name='tabler:rss' class='h-5 w-5' />
+                <Icon name='tabler:user-circle' class='h-5 w-5' />
               </a>
             )
           }
