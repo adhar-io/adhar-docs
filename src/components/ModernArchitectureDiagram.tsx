@@ -57,9 +57,9 @@ const ModernArchitectureDiagram = () => {
   ];
 
   return (
-    <div className="space-y-16">
-      {/* Enhanced Featured Capabilities with Solid Colors */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8 pt-4">
+    <div className="space-y-14 lg:space-y-16">
+      {/* Capability cards — clean neutral surfaces */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {capabilities.map((capability, index) => (
           <CapabilityCard
             key={index}

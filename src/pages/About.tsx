@@ -1,24 +1,19 @@
 import Navigation from '@/components/landing/Navigation';
 import Footer from '@/components/landing/Footer';
-import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { 
-  Target, 
-  Users, 
-  Globe, 
+import {
+  Target,
+  Users,
+  Globe,
   Shield,
   Award,
-  Building,
   MapPin,
-  Github,
-  Linkedin,
-  Twitter,
   Sparkles,
   Rocket,
-  Heart
+  ArrowRight
 } from 'lucide-react';
+import { Github, Linkedin, Twitter } from '@/components/brand-icons';
 
 const About = () => {
   const values = [
@@ -26,25 +21,21 @@ const About = () => {
       icon: Target,
       title: "Innovation First",
       description: "We push the boundaries of what's possible in cloud-native development, constantly exploring new technologies and methodologies.",
-      gradient: "from-blue-500 to-cyan-500"
     },
     {
       icon: Users,
       title: "Community Driven",
       description: "Our platform is built by developers, for developers. We listen to our community and evolve based on real needs.",
-      gradient: "from-purple-500 to-pink-500"
     },
     {
       icon: Globe,
       title: "Global Impact",
       description: "We're building tools that empower developers worldwide to create solutions that matter.",
-      gradient: "from-green-500 to-emerald-500"
     },
     {
       icon: Shield,
       title: "Security by Design",
       description: "Every feature is built with security as a foundation, not an afterthought.",
-      gradient: "from-orange-500 to-red-500"
     }
   ];
 
@@ -96,151 +87,118 @@ const About = () => {
   return (
     <div className="min-h-screen bg-background">
       <Navigation />
-      
-      <main className="pt-20">
-        {/* Hero Section with Animated Gradient */}
-        <section className="relative py-32 px-4 sm:px-6 lg:px-8 overflow-hidden bg-gradient-to-br from-primary/5 via-background to-accent/5">
-          <div className="absolute inset-0 bg-grid-pattern opacity-5"></div>
-          <div className="max-w-4xl mx-auto text-center relative">
-            <Badge className="mb-4 px-4 py-1 bg-primary/10 text-primary border-primary/20 animate-fade-in-up">
-              <Building className="w-3 h-3 mr-1" />
-              About ADHAR
-            </Badge>
-            <h1 className="text-5xl md:text-7xl font-bold mb-6 animate-fade-in-up">
-              <span className="bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 bg-clip-text text-transparent">
-                Building the Future of
-              </span>
-              <br />
-              <span className="text-foreground">Cloud-Native Development</span>
+
+      <main className="pt-16">
+        {/* Hero */}
+        <section className="relative section-padding container-padding overflow-hidden">
+          <div className="absolute inset-0 bg-mesh opacity-80 pointer-events-none" />
+          <div className="absolute inset-0 bg-grid bg-grid-fade opacity-40 dark:opacity-25 pointer-events-none" />
+          <div className="max-width-content relative text-center">
+            <span className="eyebrow mb-5">About ADHAR</span>
+            <h1 className="section-heading mt-5 text-foreground">
+              Building the future of
+              <br className="hidden sm:block" />
+              <span className="text-muted-foreground">cloud-native development.</span>
             </h1>
-            <p className="text-xl text-muted-foreground mb-8 max-w-2xl mx-auto animate-fade-in-up">
-              We're on a mission to transform how software is built, deployed, and scaled. 
+            <p className="section-subheading mt-6">
+              We're on a mission to transform how software is built, deployed, and scaled.
               ADHAR is the open cloud-native foundation that empowers teams to innovate faster.
             </p>
           </div>
         </section>
 
-        {/* Stats Section */}
-        <section className="py-16 px-4 sm:px-6 lg:px-8 bg-background">
-          <div className="max-w-6xl mx-auto">
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+        {/* Stats */}
+        <section className="container-padding pb-16">
+          <div className="max-width-content">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-px overflow-hidden rounded-2xl border border-border/70 bg-border/60">
               {stats.map((stat, index) => {
                 const Icon = stat.icon;
                 return (
-                  <Card 
-                    key={index} 
-                    className="text-center p-6 border-2 hover:border-primary/50 transition-all duration-300 hover:shadow-lg hover:-translate-y-1 bg-card/50 backdrop-blur-sm"
-                    style={{ animationDelay: `${index * 100}ms` }}
-                  >
-                    <div className="flex justify-center mb-3">
-                      <div className="p-3 rounded-full bg-primary/10">
-                        <Icon className="w-6 h-6 text-primary" />
-                      </div>
+                  <div key={index} className="bg-card px-5 py-6 text-center">
+                    <Icon className="w-4 h-4 text-muted-foreground mx-auto mb-3" strokeWidth={2} />
+                    <div className="text-2xl sm:text-3xl font-semibold text-foreground tracking-tight tabular">
+                      {stat.value}
                     </div>
-                    <div className="text-4xl font-bold text-foreground mb-2">{stat.value}</div>
-                    <div className="text-sm text-muted-foreground">{stat.label}</div>
-                  </Card>
+                    <div className="mt-1 text-xs sm:text-sm text-muted-foreground">{stat.label}</div>
+                  </div>
                 );
               })}
             </div>
           </div>
         </section>
 
-        {/* Values Section */}
-        <section className="py-20 px-4 sm:px-6 lg:px-8 bg-muted/30">
-          <div className="max-w-6xl mx-auto">
-            <div className="text-center mb-16">
-              <h2 className="text-4xl font-bold mb-4 text-foreground">Our Core Values</h2>
-              <p className="text-xl text-muted-foreground">
-                The principles that guide everything we build
-              </p>
+        {/* Values */}
+        <section className="relative section-padding container-padding bg-muted/30">
+          <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-border to-transparent" />
+          <div className="max-width-content">
+            <div className="text-center mb-14">
+              <span className="eyebrow mb-5">Values</span>
+              <h2 className="section-heading mt-5 text-foreground">
+                The principles that guide
+                <br className="hidden sm:block" />
+                <span className="text-muted-foreground">everything we build.</span>
+              </h2>
             </div>
-            <div className="grid md:grid-cols-2 gap-8">
+            <div className="grid sm:grid-cols-2 gap-px overflow-hidden rounded-2xl border border-border/70 bg-border/60">
               {values.map((value, index) => {
                 const Icon = value.icon;
                 return (
-                  <Card 
-                    key={index} 
-                    className="group hover:shadow-2xl transition-all duration-500 hover:-translate-y-2 border-2 hover:border-primary/30 bg-card/80 backdrop-blur-sm overflow-hidden"
-                  >
-                    <div className={`h-1 w-full bg-gradient-to-r ${value.gradient}`}></div>
-                    <CardHeader>
-                      <div className="flex items-center gap-4 mb-4">
-                        <div className={`p-4 rounded-xl bg-gradient-to-r ${value.gradient} shadow-lg group-hover:scale-110 transition-transform duration-300`}>
-                          <Icon className="w-8 h-8 text-white" />
-                        </div>
-                        <CardTitle className="text-2xl">{value.title}</CardTitle>
-                      </div>
-                      <CardDescription className="text-base leading-relaxed">
-                        {value.description}
-                      </CardDescription>
-                    </CardHeader>
-                  </Card>
+                  <article key={index} className="group bg-card p-7 sm:p-8 transition-colors hover:bg-muted/30">
+                    <div className="mb-5 inline-flex h-10 w-10 items-center justify-center rounded-xl border border-border/70 bg-background text-primary shadow-[var(--shadow-xs)]">
+                      <Icon className="h-5 w-5" />
+                    </div>
+                    <h3 className="text-lg font-semibold text-foreground tracking-tight">{value.title}</h3>
+                    <p className="mt-2 text-sm text-muted-foreground leading-relaxed">{value.description}</p>
+                  </article>
                 );
               })}
             </div>
           </div>
         </section>
 
-        {/* Team Section */}
-        <section className="py-20 px-4 sm:px-6 lg:px-8 bg-background">
-          <div className="max-w-6xl mx-auto">
-            <div className="text-center mb-16">
-              <Badge className="mb-4 px-4 py-1 bg-primary/10 text-primary border-primary/20">
-                <Heart className="w-3 h-3 mr-1 fill-current" />
-                Meet the Team
-              </Badge>
-              <h2 className="text-4xl font-bold mb-4 text-foreground">Leadership Team</h2>
-              <p className="text-xl text-muted-foreground">
-                The passionate people behind ADHAR
-              </p>
+        {/* Team */}
+        <section className="relative section-padding container-padding">
+          <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-border to-transparent" />
+          <div className="max-width-content">
+            <div className="text-center mb-14">
+              <span className="eyebrow mb-5">Team</span>
+              <h2 className="section-heading mt-5 text-foreground">Leadership team.</h2>
+              <p className="section-subheading mt-6">The passionate people behind ADHAR.</p>
             </div>
-            <div className="grid md:grid-cols-3 gap-8">
+            <div className="grid sm:grid-cols-2 md:grid-cols-3 gap-4">
               {team.map((member, index) => (
-                <Card 
-                  key={index} 
-                  className="group hover:shadow-2xl transition-all duration-500 hover:-translate-y-2 border-2 hover:border-primary/30 overflow-hidden bg-card/80 backdrop-blur-sm"
-                >
-                  <CardHeader className="text-center">
-                    <div className="relative inline-block mb-4">
-                      <Avatar className="w-32 h-32 mx-auto ring-4 ring-primary/20 group-hover:ring-primary/40 transition-all duration-300">
-                        <AvatarImage src={member.avatar} alt={member.name} />
-                        <AvatarFallback className="text-2xl bg-gradient-to-br from-blue-500 to-purple-500 text-white">
-                          {member.name.split(' ').map(n => n[0]).join('')}
-                        </AvatarFallback>
-                      </Avatar>
-                      <div className="absolute -bottom-2 left-1/2 transform -translate-x-1/2">
-                        <Badge className="bg-primary text-primary-foreground shadow-lg">
-                          {member.role.split(' ')[0]}
-                        </Badge>
-                      </div>
-                    </div>
-                    <CardTitle className="text-xl mb-1">{member.name}</CardTitle>
-                    <CardDescription className="text-sm mb-2">{member.role}</CardDescription>
-                    <div className="flex items-center justify-center gap-1 text-muted-foreground text-sm mb-4">
+                <Card key={index} className="card-elevated p-6 text-center">
+                  <CardHeader className="p-0 mb-4">
+                    <Avatar className="w-20 h-20 mx-auto ring-1 ring-border">
+                      <AvatarImage src={member.avatar} alt={member.name} />
+                      <AvatarFallback className="text-base bg-muted text-foreground font-medium">
+                        {member.name.split(' ').map(n => n[0]).join('')}
+                      </AvatarFallback>
+                    </Avatar>
+                    <CardTitle className="mt-4 text-base font-semibold tracking-tight">{member.name}</CardTitle>
+                    <CardDescription className="text-xs uppercase tracking-wider text-muted-foreground">{member.role}</CardDescription>
+                    <div className="flex items-center justify-center gap-1 text-xs text-muted-foreground mt-1">
                       <MapPin className="w-3 h-3" />
                       <span>{member.location}</span>
                     </div>
                   </CardHeader>
-                  <CardContent>
-                    <p className="text-muted-foreground text-sm text-center mb-4 leading-relaxed">
-                      {member.bio}
-                    </p>
-                    <div className="flex justify-center gap-3">
+                  <CardContent className="p-0">
+                    <p className="text-sm text-muted-foreground leading-relaxed mb-5">{member.bio}</p>
+                    <div className="flex justify-center gap-1 pt-4 border-t border-border/60">
                       {member.social.github && (
-                        <Button variant="ghost" size="icon" className="hover:text-primary">
+                        <a className="inline-flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors" aria-label="GitHub" href="#">
                           <Github className="w-4 h-4" />
-                        </Button>
+                        </a>
                       )}
                       {member.social.linkedin && (
-                        <Button variant="ghost" size="icon" className="hover:text-primary">
+                        <a className="inline-flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors" aria-label="LinkedIn" href="#">
                           <Linkedin className="w-4 h-4" />
-                        </Button>
+                        </a>
                       )}
                       {member.social.twitter && (
-                        <Button variant="ghost" size="icon" className="hover:text-primary">
+                        <a className="inline-flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors" aria-label="Twitter" href="#">
                           <Twitter className="w-4 h-4" />
-                        </Button>
+                        </a>
                       )}
                     </div>
                   </CardContent>
@@ -250,21 +208,35 @@ const About = () => {
           </div>
         </section>
 
-        {/* CTA Section */}
-        <section className="py-20 px-4 sm:px-6 lg:px-8 bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600">
-          <div className="max-w-4xl mx-auto text-center">
-            <h2 className="text-4xl font-bold text-white mb-6">Join Us on Our Mission</h2>
-            <p className="text-xl text-white/90 mb-8">
-              We're always looking for talented individuals who share our passion for innovation
-            </p>
-            <div className="flex flex-col sm:flex-row gap-4 justify-center">
-              <Button size="lg" variant="secondary" className="group">
-                View Open Positions
-                <Award className="w-4 h-4 ml-2 group-hover:rotate-12 transition-transform" />
-              </Button>
-              <Button size="lg" variant="outline" className="bg-white/10 border-white/30 text-white hover:bg-white/20">
-                Learn More About Us
-              </Button>
+        {/* CTA */}
+        <section className="section-padding container-padding">
+          <div className="max-width-content">
+            <div className="relative isolate overflow-hidden rounded-3xl border border-border/70 bg-card">
+              <div className="absolute inset-0 bg-mesh opacity-90 pointer-events-none" />
+              <div className="absolute inset-0 bg-grid opacity-40 dark:opacity-25 pointer-events-none" />
+              <div className="relative px-6 py-14 sm:px-12 sm:py-16 text-center">
+                <span className="eyebrow mb-6">Join us</span>
+                <h2 className="section-heading mt-4 text-foreground">Build the future with us.</h2>
+                <p className="section-subheading mt-5">
+                  We're always looking for talented individuals who share our passion for innovation.
+                </p>
+                <div className="mt-8 flex flex-col sm:flex-row gap-3 justify-center">
+                  <button
+                    type="button"
+                    className="btn-primary-modern group inline-flex items-center justify-center gap-2 rounded-full px-6 h-11 text-[15px] font-medium"
+                  >
+                    <span>View open positions</span>
+                    <ArrowRight className="w-4 h-4 transition-transform duration-300 group-hover:translate-x-0.5" />
+                  </button>
+                  <button
+                    type="button"
+                    className="btn-secondary-modern inline-flex items-center justify-center gap-2 rounded-full px-6 h-11 text-[15px] font-medium"
+                  >
+                    <Award className="w-4 h-4 text-muted-foreground" />
+                    <span>Learn more</span>
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
         </section>

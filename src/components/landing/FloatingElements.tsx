@@ -24,14 +24,14 @@ const FloatingElements = ({ mousePosition }: FloatingElementsProps) => {
   }, []);
 
   const prominentIcons = [
-    { Icon: Star, color: 'text-yellow-400', size: 'w-16 h-16', category: 'star', sensitivity: 0.03 },
-    { Icon: Sparkles, color: 'text-purple-400', size: 'w-14 h-14', category: 'sparkle', sensitivity: 0.025 },
-    { Icon: Zap, color: 'text-blue-400', size: 'w-14 h-14', category: 'tech', sensitivity: 0.035 },
-    { Icon: Diamond, color: 'text-emerald-400', size: 'w-12 h-12', category: 'gem', sensitivity: 0.03 },
-    { Icon: Heart, color: 'text-red-400', size: 'w-12 h-12', category: 'heart', sensitivity: 0.025 },
-    { Icon: Cpu, color: 'text-cyan-400', size: 'w-14 h-14', category: 'tech', sensitivity: 0.04 },
-    { Icon: Cloud, color: 'text-indigo-400', size: 'w-16 h-16', category: 'cloud', sensitivity: 0.02 },
-    { Icon: Rocket, color: 'text-pink-400', size: 'w-12 h-12', category: 'rocket', sensitivity: 0.035 },
+    { Icon: Star, color: 'text-primary/35', size: 'w-16 h-16', category: 'star', sensitivity: 0.03 },
+    { Icon: Sparkles, color: 'text-accent/35', size: 'w-14 h-14', category: 'sparkle', sensitivity: 0.025 },
+    { Icon: Zap, color: 'text-primary/30', size: 'w-14 h-14', category: 'tech', sensitivity: 0.035 },
+    { Icon: Diamond, color: 'text-muted-foreground/30', size: 'w-12 h-12', category: 'gem', sensitivity: 0.03 },
+    { Icon: Heart, color: 'text-accent/30', size: 'w-12 h-12', category: 'heart', sensitivity: 0.025 },
+    { Icon: Cpu, color: 'text-primary/30', size: 'w-14 h-14', category: 'tech', sensitivity: 0.04 },
+    { Icon: Cloud, color: 'text-muted-foreground/35', size: 'w-16 h-16', category: 'cloud', sensitivity: 0.02 },
+    { Icon: Rocket, color: 'text-primary/30', size: 'w-12 h-12', category: 'rocket', sensitivity: 0.035 },
   ];
 
   return (

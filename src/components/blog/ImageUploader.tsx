@@ -1,9 +1,6 @@
-
 import React, { useState } from 'react';
-import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Card } from '@/components/ui/card';
-import { Upload, Link, X } from 'lucide-react';
+import { Upload, Link as LinkIcon, X } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
 interface ImageUploaderProps {
@@ -17,92 +14,77 @@ const ImageUploader = ({ currentImage, onImageChange }: ImageUploaderProps) => {
   const [dragOver, setDragOver] = useState(false);
 
   const handleUrlSubmit = () => {
-    if (imageUrl) {
-      onImageChange(imageUrl);
-      setImageUrl('');
-      toast({
-        title: "Image Added",
-        description: "Featured image has been set successfully.",
-      });
-    }
+    const trimmed = imageUrl.trim();
+    if (!trimmed) return;
+    onImageChange(trimmed);
+    setImageUrl('');
+    toast({ title: 'Image set', description: 'Cover image saved.' });
   };
 
-  const handleDragOver = (e: React.DragEvent) => {
-    e.preventDefault();
-    setDragOver(true);
-  };
+  const readFileAsDataUrl = (file: File): Promise<string> =>
+    new Promise((resolve, reject) => {
+      const r = new FileReader();
+      r.onload = () => resolve(String(r.result));
+      r.onerror = () => reject(r.error);
+      r.readAsDataURL(file);
+    });
 
-  const handleDragLeave = (e: React.DragEvent) => {
-    e.preventDefault();
-    setDragOver(false);
-  };
-
-  const handleDrop = (e: React.DragEvent) => {
+  const handleDrop = async (e: React.DragEvent) => {
     e.preventDefault();
     setDragOver(false);
-    
-    const files = Array.from(e.dataTransfer.files);
-    if (files.length > 0) {
-      // In a real implementation, you'd upload the file here
-      toast({
-        title: "File Upload",
-        description: "File upload functionality would be implemented here with your preferred service.",
-      });
-    }
+    const file = Array.from(e.dataTransfer.files).find((f) => f.type.startsWith('image/'));
+    if (!file) return;
+    const dataUrl = await readFileAsDataUrl(file);
+    onImageChange(dataUrl);
+    toast({ title: 'Image attached', description: `${file.name} added as cover.` });
   };
 
-  const handleFileInput = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files;
-    if (files && files.length > 0) {
-      // In a real implementation, you'd upload the file here
-      toast({
-        title: "File Upload",
-        description: "File upload functionality would be implemented here with your preferred service.",
-      });
-    }
+  const handleFileInput = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const dataUrl = await readFileAsDataUrl(file);
+    onImageChange(dataUrl);
+    toast({ title: 'Image attached', description: `${file.name} added as cover.` });
   };
 
   const removeImage = () => {
     onImageChange('');
-    toast({
-      title: "Image Removed",
-      description: "Featured image has been removed.",
-    });
+    toast({ title: 'Image removed' });
   };
 
   return (
     <div className="space-y-4">
       {currentImage ? (
-        <div className="relative">
-          <img 
-            src={currentImage} 
-            alt="Featured" 
-            className="w-full h-48 object-cover rounded-lg"
+        <div className="relative rounded-xl overflow-hidden border border-border/70">
+          <img
+            src={currentImage}
+            alt="Cover preview"
+            className="w-full h-44 object-cover"
           />
-          <Button
-            size="sm"
-            variant="destructive"
-            className="absolute top-2 right-2"
+          <button
             onClick={removeImage}
+            className="absolute top-2 right-2 inline-flex items-center justify-center h-8 w-8 rounded-full bg-background/90 border border-border/70 text-foreground hover:bg-muted backdrop-blur-sm transition-colors"
+            aria-label="Remove image"
           >
-            <X className="w-4 h-4" />
-          </Button>
+            <X className="w-3.5 h-3.5" />
+          </button>
         </div>
       ) : (
-        <Card
-          className={`border-2 border-dashed p-8 text-center transition-colors ${
-            dragOver 
-              ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20' 
-              : 'border-gray-300 dark:border-gray-600'
+        <div
+          className={`relative rounded-xl border border-dashed p-6 text-center transition-colors ${
+            dragOver
+              ? 'border-primary bg-primary/5'
+              : 'border-border/70 hover:border-border'
           }`}
-          onDragOver={handleDragOver}
-          onDragLeave={handleDragLeave}
+          onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
+          onDragLeave={(e) => { e.preventDefault(); setDragOver(false); }}
           onDrop={handleDrop}
         >
-          <Upload className="w-12 h-12 mx-auto text-gray-400 mb-4" />
-          <p className="text-gray-600 dark:text-gray-400 mb-4">
-            Drag and drop an image here, or click to select
-          </p>
+          <div className="inline-flex items-center justify-center h-10 w-10 rounded-xl border border-border/70 bg-background text-muted-foreground mb-3 mx-auto">
+            <Upload className="w-4 h-4" />
+          </div>
+          <p className="text-sm text-foreground font-medium">Drag &amp; drop an image</p>
+          <p className="mt-1 text-xs text-muted-foreground">or click below to browse</p>
           <input
             type="file"
             accept="image/*"
@@ -110,23 +92,33 @@ const ImageUploader = ({ currentImage, onImageChange }: ImageUploaderProps) => {
             className="hidden"
             id="file-upload"
           />
-          <Button variant="outline" asChild>
-            <label htmlFor="file-upload" className="cursor-pointer">
-              Choose File
-            </label>
-          </Button>
-        </Card>
+          <label
+            htmlFor="file-upload"
+            className="btn-secondary-modern mt-4 inline-flex items-center justify-center gap-1.5 rounded-full px-4 h-9 text-xs font-medium cursor-pointer"
+          >
+            Choose file
+          </label>
+        </div>
       )}
 
       <div className="flex gap-2">
-        <Input
-          placeholder="Or paste image URL..."
-          value={imageUrl}
-          onChange={(e) => setImageUrl(e.target.value)}
-        />
-        <Button onClick={handleUrlSubmit} disabled={!imageUrl}>
-          <Link className="w-4 h-4" />
-        </Button>
+        <div className="relative flex-1">
+          <LinkIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
+          <Input
+            placeholder="Or paste image URL…"
+            value={imageUrl}
+            onChange={(e) => setImageUrl(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), handleUrlSubmit())}
+            className="pl-9 h-9 text-sm"
+          />
+        </div>
+        <button
+          onClick={handleUrlSubmit}
+          disabled={!imageUrl.trim()}
+          className="btn-secondary-modern inline-flex items-center justify-center rounded-full px-4 h-9 text-xs font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          Set
+        </button>
       </div>
     </div>
   );

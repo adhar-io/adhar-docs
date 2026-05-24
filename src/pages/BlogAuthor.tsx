@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Navigation from '@/components/landing/Navigation';
@@ -9,7 +8,6 @@ import DocumentDashboard from '@/components/docs/DocumentDashboard';
 import DocumentEditor from '@/components/docs/DocumentEditor';
 import { BlogPost } from '@/data/blogData';
 import { ArrowLeft, LogOut, FileText, PenTool } from 'lucide-react';
-import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
@@ -35,7 +33,6 @@ const BlogAuthor = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
 
-  // Check authentication on component mount
   useEffect(() => {
     const isAuthenticated = localStorage.getItem('isAuthenticated');
     if (!isAuthenticated || isAuthenticated !== 'true') {
@@ -55,28 +52,24 @@ const BlogAuthor = () => {
     setCurrentView('editor');
   };
 
-  const handleEditDocument = (doc: any) => {
+  const handleEditDocument = (doc: DocumentData) => {
     setEditingDocument(doc);
     setEditingPost(undefined);
     setCurrentView('editor');
   };
 
   const handleSave = (data: Partial<BlogPost> | DocumentData) => {
-    console.log('Saving content:', data);
-    // In a real implementation, you'd save to your backend/database
     toast({
-      title: "Content Saved",
-      description: `${contentType === 'blog' ? 'Blog post' : 'Documentation'} has been saved successfully.`,
+      title: "Saved",
+      description: `${contentType === 'blog' ? 'Blog post' : 'Documentation'} saved.`,
     });
   };
 
   const handlePublish = (data: Partial<BlogPost> | DocumentData) => {
-    console.log('Publishing content:', data);
-    // In a real implementation, you'd publish to your backend/database
     setCurrentView('dashboard');
     toast({
-      title: "Content Published",
-      description: `${contentType === 'blog' ? 'Blog post' : 'Documentation'} has been published successfully.`,
+      title: "Published",
+      description: `${contentType === 'blog' ? 'Blog post' : 'Documentation'} published.`,
     });
   };
 
@@ -89,10 +82,7 @@ const BlogAuthor = () => {
   const handleLogout = () => {
     localStorage.removeItem('isAuthenticated');
     localStorage.removeItem('userEmail');
-    toast({
-      title: "Logged Out",
-      description: "You have been successfully logged out.",
-    });
+    toast({ title: "Logged out", description: "Come back soon." });
     navigate('/');
   };
 
@@ -104,68 +94,64 @@ const BlogAuthor = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-100 dark:from-gray-900 dark:via-blue-900/20 dark:to-indigo-900/30">
+    <div className="min-h-screen bg-background">
       <Navigation />
-      
+
       {/* Auth Header */}
-      <div className="pt-20 px-4 sm:px-6 lg:px-8 py-4 border-b bg-white/80 backdrop-blur-md dark:bg-gray-900/80 dark:border-gray-700">
+      <div className="pt-20 px-4 sm:px-6 lg:px-8 py-4 border-b border-border bg-background/95 backdrop-blur-md">
         <div className="max-w-7xl mx-auto flex items-center justify-between">
-          <div className="flex items-center space-x-4">
-            <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
-              Content Management System
-            </h1>
-          </div>
-          <Button 
-            variant="outline" 
+          <h1 className="text-xl sm:text-2xl font-semibold tracking-tight text-foreground">
+            Content management
+          </h1>
+          <button
             onClick={handleLogout}
-            className="flex items-center space-x-2"
+            className="btn-secondary-modern inline-flex items-center justify-center gap-2 rounded-full px-4 h-9 text-xs font-medium"
           >
-            <LogOut className="w-4 h-4" />
-            <span>Logout</span>
-          </Button>
+            <LogOut className="w-3.5 h-3.5" />
+            Logout
+          </button>
         </div>
       </div>
-      
+
       <main className="pt-6">
         {currentView === 'editor' && (
           <div className="px-4 sm:px-6 lg:px-8 py-6">
             <div className="max-w-7xl mx-auto">
-              <Button 
-                variant="ghost" 
+              <button
                 onClick={handleBackToDashboard}
-                className="mb-6"
+                className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors mb-6"
               >
-                <ArrowLeft className="w-4 h-4 mr-2" />
-                Back to Dashboard
-              </Button>
+                <ArrowLeft className="w-3.5 h-3.5" />
+                Back to dashboard
+              </button>
             </div>
           </div>
         )}
-        
+
         {currentView === 'dashboard' ? (
           <div className="px-4 sm:px-6 lg:px-8">
             <div className="max-w-7xl mx-auto">
               <Tabs value={contentType} onValueChange={(value) => handleContentTypeChange(value as ContentType)} className="space-y-6">
                 <TabsList className="grid w-full max-w-md grid-cols-2">
-                  <TabsTrigger value="blog" className="flex items-center space-x-2">
+                  <TabsTrigger value="blog" className="flex items-center gap-2">
                     <PenTool className="w-4 h-4" />
-                    <span>Blog Management</span>
+                    <span>Blog</span>
                   </TabsTrigger>
-                  <TabsTrigger value="docs" className="flex items-center space-x-2">
+                  <TabsTrigger value="docs" className="flex items-center gap-2">
                     <FileText className="w-4 h-4" />
                     <span>Documentation</span>
                   </TabsTrigger>
                 </TabsList>
-                
+
                 <TabsContent value="blog">
-                  <BlogDashboard 
+                  <BlogDashboard
                     onCreateNew={handleCreateNew}
                     onEditPost={handleEditPost}
                   />
                 </TabsContent>
-                
+
                 <TabsContent value="docs">
-                  <DocumentDashboard 
+                  <DocumentDashboard
                     onCreateNew={handleCreateNew}
                     onEditDocument={handleEditDocument}
                   />

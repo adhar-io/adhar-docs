@@ -17,7 +17,7 @@ const IntegrationLayer = ({ integrations }: IntegrationLayerProps) => {
   return (
     <div className="absolute bottom-4 left-0 right-0">
       <div className="max-w-6xl mx-auto px-8">
-        <div className="grid grid-cols-4 gap-8">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 sm:gap-8">
           {integrations.map((integration, index) => {
             const IntegrationIcon = integration.icon;
             return (

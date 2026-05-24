@@ -32,7 +32,6 @@ import Partners from './pages/Partners';
 import Privacy from './pages/Privacy';
 import Terms from './pages/Terms';
 import Compliance from './pages/Compliance';
-import ComingSoon from './pages/ComingSoon';
 import AdharKit from './pages/AdharKit';
 
 const queryClient = new QueryClient();
@@ -88,7 +87,6 @@ function App() {
                 <Route path="/privacy" element={<Privacy />} />
                 <Route path="/terms" element={<Terms />} />
                 <Route path="/compliance" element={<Compliance />} />
-                <Route path="/coming-soon" element={<ComingSoon />} />
                 <Route path="/adhar-kit" element={<AdharKit />} />
                 <Route path="/adhar-kit/*" element={<AdharKit />} />
 

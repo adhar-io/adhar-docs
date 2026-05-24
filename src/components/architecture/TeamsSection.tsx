@@ -53,8 +53,8 @@ const TeamsSection = ({ teams }: TeamsSectionProps) => {
         })}
       </div>
       
-      {/* Background decorative grid */}
-      <div className="absolute inset-0 opacity-5 pointer-events-none">
+      {/* Background decorative grid — desktop only */}
+      <div className="absolute inset-0 opacity-5 pointer-events-none hidden md:block">
         <div className="grid grid-cols-6 gap-6 h-full">
           {Array.from({ length: 6 }).map((_, i) => (
             <div key={i} className="border-l border-gray-300 dark:border-gray-600"></div>

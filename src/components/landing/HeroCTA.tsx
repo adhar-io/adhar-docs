@@ -1,8 +1,8 @@
 
 import React from 'react';
 import { Link } from 'react-router-dom';
-import { Button } from "@/components/ui/button";
-import { Play, BookOpen, Sparkles, ArrowRight } from 'lucide-react';
+import { BookOpen, ArrowRight } from 'lucide-react';
+import { ADHAR_CONSOLE_LOGIN_URL } from '@/lib/config';
 
 interface HeroCTAProps {
   isVisible: boolean;
@@ -10,30 +10,29 @@ interface HeroCTAProps {
 
 const HeroCTA = ({ isVisible }: HeroCTAProps) => {
   return (
-    <div className={`flex flex-col sm:flex-row gap-4 justify-center items-center mb-16 sm:mb-20 transition-all duration-1000 delay-700 px-4 sm:px-0 ${isVisible ? 'opacity-100 translate-y-0 scale-100' : 'opacity-0 translate-y-8 scale-95'}`}>
-      <Link to="/coming-soon">       
-        <Button 
-          size="lg" 
-          className="group relative bg-primary hover:bg-primary/90 px-8 py-6 text-base font-semibold shadow-md hover:shadow-lg transition-all duration-300 hover:-translate-y-0.5 w-full sm:w-auto text-primary-foreground border-0 rounded-lg"
+    <div
+      className={`flex flex-col sm:flex-row gap-3 justify-center items-center mb-14 sm:mb-16 transition-all duration-700 delay-700 px-4 sm:px-0 ${
+        isVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-6'
+      }`}
+    >
+      <a href={ADHAR_CONSOLE_LOGIN_URL} className="w-full sm:w-auto">
+        <button
+          type="button"
+          className="btn-primary-modern group inline-flex w-full sm:w-auto items-center justify-center gap-2 rounded-full px-5 h-11 text-[15px] font-medium"
         >
-          <div className="flex items-center justify-center gap-2">
-            <span>Get Started Free</span>
-            <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform duration-300" />
-          </div>
-        </Button>
-      </Link>
+          <span>Get Started Free</span>
+          <ArrowRight className="w-4 h-4 transition-transform duration-300 group-hover:translate-x-0.5" />
+        </button>
+      </a>
 
-      <Link to="/docs"> 
-        <Button 
-          variant="outline" 
-          size="lg" 
-          className="group px-8 py-6 text-base font-semibold text-foreground border border-border hover:text-foreground hover:border-foreground/20 hover:bg-muted transition-all duration-300 hover:-translate-y-0.5 w-full sm:w-auto rounded-lg"
+      <Link to="/docs" className="w-full sm:w-auto">
+        <button
+          type="button"
+          className="btn-secondary-modern group inline-flex w-full sm:w-auto items-center justify-center gap-2 rounded-full px-5 h-11 text-[15px] font-medium"
         >
-          <div className="flex items-center justify-center gap-2">
-            <BookOpen className="w-4 h-4" />
-            <span>Read the Docs</span>
-          </div>
-        </Button>
+          <BookOpen className="w-4 h-4 text-muted-foreground group-hover:text-foreground transition-colors" />
+          <span>Read the docs</span>
+        </button>
       </Link>
     </div>
   );

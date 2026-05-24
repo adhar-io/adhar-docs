@@ -1,116 +1,110 @@
-
+import React from 'react';
 import Navigation from '@/components/landing/Navigation';
 import Footer from '@/components/landing/Footer';
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { MessageCircle, Mail, Phone, FileText } from "lucide-react";
+import { Label } from "@/components/ui/label";
+import { MessageCircle, Mail, Phone, FileText, Send, ArrowRight, Headphones } from "lucide-react";
+
+const supportChannels = [
+  { icon: MessageCircle, title: "Live chat", description: "Get instant help from our support team.", cta: "Start chat" },
+  { icon: Mail, title: "Email support", description: "Send us a detailed message.", cta: "Send email" },
+  { icon: Phone, title: "Phone support", description: "Talk to our experts directly.", cta: "Call now" },
+  { icon: FileText, title: "Documentation", description: "Find answers in our docs.", cta: "Browse docs" },
+];
 
 const Support = () => {
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-100 dark:from-gray-900 dark:via-blue-900/20 dark:to-indigo-900/30">
+    <div className="min-h-screen bg-background">
       <Navigation />
-      
-      <main className="pt-20">
-        {/* Header */}
-        <section className="py-20">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
-            <h1 className="text-5xl font-bold mb-6">
-              <span className="bg-gradient-to-r from-blue-600 via-purple-600 to-teal-600 bg-clip-text text-transparent">
-                Get Support
-              </span>
+
+      <main className="pt-16">
+        {/* Hero */}
+        <section className="relative section-padding container-padding overflow-hidden">
+          <div className="absolute inset-0 bg-mesh opacity-80 pointer-events-none" />
+          <div className="absolute inset-0 bg-grid bg-grid-fade opacity-40 dark:opacity-25 pointer-events-none" />
+          <div className="max-width-content relative text-center">
+            <span className="eyebrow mb-5"><Headphones className="w-3 h-3 mr-1" />Support</span>
+            <h1 className="section-heading mt-5 text-foreground">
+              We're here to
+              <br className="hidden sm:block" />
+              <span className="text-muted-foreground">help you succeed.</span>
             </h1>
-            <p className="text-xl text-gray-600 dark:text-gray-300 max-w-3xl mx-auto">
-              We're here to help you succeed with ADHAR. Choose the support option that works best for you.
+            <p className="section-subheading mt-6">
+              Choose the support option that works best for you — chat, email, phone, or self-serve docs.
             </p>
           </div>
         </section>
 
-        {/* Support Options */}
-        <section className="py-20">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-8 mb-16">
-              <Card className="text-center">
-                <CardHeader>
-                  <MessageCircle className="w-12 h-12 text-blue-500 mx-auto mb-4" />
-                  <CardTitle>Live Chat</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <p className="text-gray-600 dark:text-gray-400 mb-4">
-                    Get instant help from our support team
-                  </p>
-                  <Button className="w-full">Start Chat</Button>
-                </CardContent>
-              </Card>
+        {/* Support channels */}
+        <section className="container-padding pb-16">
+          <div className="max-width-content">
+            <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-px overflow-hidden rounded-2xl border border-border/70 bg-border/60">
+              {supportChannels.map((channel) => {
+                const Icon = channel.icon;
+                return (
+                  <article key={channel.title} className="bg-card p-6 sm:p-7 transition-colors hover:bg-muted/30">
+                    <div className="mb-5 inline-flex h-10 w-10 items-center justify-center rounded-xl border border-border/70 bg-background text-primary shadow-[var(--shadow-xs)]">
+                      <Icon className="h-5 w-5" />
+                    </div>
+                    <h3 className="text-base font-semibold text-foreground tracking-tight">{channel.title}</h3>
+                    <p className="mt-1.5 text-sm text-muted-foreground leading-relaxed">{channel.description}</p>
+                    <button
+                      type="button"
+                      className="btn-secondary-modern group mt-5 inline-flex w-full items-center justify-center gap-1.5 rounded-full h-9 text-xs font-medium"
+                    >
+                      <span>{channel.cta}</span>
+                      <ArrowRight className="w-3.5 h-3.5 transition-transform group-hover:translate-x-0.5" />
+                    </button>
+                  </article>
+                );
+              })}
+            </div>
+          </div>
+        </section>
 
-              <Card className="text-center">
-                <CardHeader>
-                  <Mail className="w-12 h-12 text-green-500 mx-auto mb-4" />
-                  <CardTitle>Email Support</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <p className="text-gray-600 dark:text-gray-400 mb-4">
-                    Send us a detailed message
-                  </p>
-                  <Button variant="outline" className="w-full">Send Email</Button>
-                </CardContent>
-              </Card>
-
-              <Card className="text-center">
-                <CardHeader>
-                  <Phone className="w-12 h-12 text-purple-500 mx-auto mb-4" />
-                  <CardTitle>Phone Support</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <p className="text-gray-600 dark:text-gray-400 mb-4">
-                    Talk to our experts directly
-                  </p>
-                  <Button variant="outline" className="w-full">Call Now</Button>
-                </CardContent>
-              </Card>
-
-              <Card className="text-center">
-                <CardHeader>
-                  <FileText className="w-12 h-12 text-orange-500 mx-auto mb-4" />
-                  <CardTitle>Documentation</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <p className="text-gray-600 dark:text-gray-400 mb-4">
-                    Find answers in our docs
-                  </p>
-                  <Button variant="outline" className="w-full">Browse Docs</Button>
-                </CardContent>
-              </Card>
+        {/* Contact form */}
+        <section className="relative section-padding container-padding bg-muted/30">
+          <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-border to-transparent" />
+          <div className="max-w-2xl mx-auto">
+            <div className="text-center mb-10">
+              <span className="eyebrow mb-5">Contact</span>
+              <h2 className="section-heading mt-5 text-foreground">Send us a message.</h2>
+              <p className="section-subheading mt-5">
+                Detail your question and our team will reply within one business day.
+              </p>
             </div>
 
-            {/* Contact Form */}
-            <Card className="max-w-2xl mx-auto">
-              <CardHeader>
-                <CardTitle className="text-center">Send us a Message</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-6">
-                <div className="grid md:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium mb-2">Name</label>
-                    <Input placeholder="Your name" />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium mb-2">Email</label>
-                    <Input type="email" placeholder="your@email.com" />
-                  </div>
+            <form
+              onSubmit={(e) => e.preventDefault()}
+              className="rounded-2xl border border-border/70 bg-card p-6 sm:p-7 shadow-[var(--shadow-xs)] space-y-5"
+            >
+              <div className="grid sm:grid-cols-2 gap-4">
+                <div>
+                  <Label htmlFor="name" className="text-xs font-medium text-muted-foreground">Name</Label>
+                  <Input id="name" placeholder="Your name" required className="mt-1.5" />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium mb-2">Subject</label>
-                  <Input placeholder="How can we help?" />
+                  <Label htmlFor="email" className="text-xs font-medium text-muted-foreground">Email</Label>
+                  <Input id="email" type="email" placeholder="you@company.com" required className="mt-1.5" />
                 </div>
-                <div>
-                  <label className="block text-sm font-medium mb-2">Message</label>
-                  <Textarea placeholder="Describe your issue or question..." rows={5} />
-                </div>
-                <Button className="w-full">Send Message</Button>
-              </CardContent>
-            </Card>
+              </div>
+              <div>
+                <Label htmlFor="subject" className="text-xs font-medium text-muted-foreground">Subject</Label>
+                <Input id="subject" placeholder="How can we help?" required className="mt-1.5" />
+              </div>
+              <div>
+                <Label htmlFor="message" className="text-xs font-medium text-muted-foreground">Message</Label>
+                <Textarea id="message" placeholder="Describe your issue or question..." rows={6} required className="mt-1.5 resize-none" />
+              </div>
+              <button
+                type="submit"
+                className="btn-primary-modern group w-full inline-flex items-center justify-center gap-2 rounded-full h-11 text-[15px] font-medium"
+              >
+                <Send className="w-4 h-4 transition-transform group-hover:translate-x-0.5" />
+                <span>Send message</span>
+              </button>
+            </form>
           </div>
         </section>
       </main>

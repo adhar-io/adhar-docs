@@ -121,7 +121,7 @@ const FuturisticBackground: React.FC<FuturisticBackgroundProps> = ({ mousePositi
       {/* Ambient glow */}
       <div
         ref={glowRef}
-        className="absolute -top-32 left-1/2 -translate-x-1/2 w-[80vw] h-[60vh] rounded-full blur-3xl opacity-40 transition-transform duration-300 ease-out"
+        className="absolute -top-24 sm:-top-32 left-1/2 -translate-x-1/2 w-[80vw] max-w-[1100px] h-[40vh] sm:h-[60vh] rounded-full blur-3xl opacity-40 transition-transform duration-300 ease-out"
         style={{
           background:
             "radial-gradient(circle, hsl(var(--primary) / 0.25), hsl(var(--accent) / 0.15) 40%, transparent 70%)",

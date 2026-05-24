@@ -29,35 +29,28 @@ const Index = () => {
       {/* Features Section */}
       <FeaturesSection />
       
-      {/* Enhanced Architecture Section */}
-      <section className="section-padding container-padding bg-gradient-to-br from-slate-50 via-white to-gray-50 dark:from-gray-900 dark:via-gray-900 dark:to-gray-800 overflow-hidden w-full">
+      {/* Modern Architecture Section */}
+      <section className="relative section-padding container-padding bg-muted/30 overflow-hidden w-full">
+        {/* Topline divider */}
+        <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-border to-transparent" />
+
         <div className="max-width-content">
           <div className="text-center mb-16 lg:mb-20">
-            {/* Enhanced badge */}
-            <div className="inline-flex items-center px-4 py-2 glass-effect rounded-full text-blue-700 dark:text-blue-300 text-sm font-medium mb-8 animate-scale-in">
-              <span className="w-2 h-2 bg-blue-500 rounded-full mr-2 animate-pulse"></span>
-              Cloud-Native Excellence
-            </div>
-            
-            {/* Improved heading */}
-            <h2 className="text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-bold heading-gradient mb-8 leading-tight text-balance animate-fade-in-up">
-              Modern Architecture
+            <span className="eyebrow mb-5">Architecture</span>
+            <h2 className="section-heading mt-5 text-foreground">
+              Built for scale,
+              <br className="hidden sm:block" />
+              <span className="text-muted-foreground">designed for clarity.</span>
             </h2>
-            
-            {/* Enhanced description */}
-            <p className="text-lg sm:text-xl md:text-2xl text-gray-600 dark:text-gray-300 max-w-4xl mx-auto leading-relaxed font-light animate-fade-in-up" style={{ animationDelay: '0.1s' }}>
-              Experience our enterprise-grade platform designed for{' '}
-              <span className="font-semibold gradient-text">scalability</span>,{' '}
-              <span className="font-semibold gradient-text">security</span>, and{' '}
-              <span className="font-semibold gradient-text">performance</span> across multi-cloud environments
+            <p className="section-subheading mt-6">
+              An enterprise-grade platform tuned for scalability, security, and performance —
+              consistent across any cloud you run on.
             </p>
           </div>
-          
-          {/* Architecture diagram with improved container */}
-          <div className="w-full overflow-hidden animate-fade-in-up" style={{ animationDelay: '0.2s' }}>
-            <div className="hw-accelerate">
-              <ModernArchitectureDiagram />
-            </div>
+
+          {/* Architecture diagram */}
+          <div className="w-full overflow-hidden hw-accelerate">
+            <ModernArchitectureDiagram />
           </div>
         </div>
       </section>

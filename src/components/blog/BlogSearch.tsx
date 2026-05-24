@@ -180,7 +180,7 @@ const BlogSearch = ({ posts, className = "" }: Props) => {
   return (
     <div ref={containerRef} className={`relative ${className}`}>
       <div className="relative flex items-center">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[hsl(var(--blog-subtle))]" />
+        <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
         <input
           ref={inputRef}
           type="text"
@@ -191,34 +191,34 @@ const BlogSearch = ({ posts, className = "" }: Props) => {
           }}
           onFocus={() => setOpen(true)}
           onKeyDown={onInputKey}
-          placeholder="Search titles, headings, excerpts…"
+          placeholder="Search posts, headings, excerpts…"
           aria-label="Search blog"
-          className="w-full bg-[hsl(var(--blog-surface))] border border-[hsl(var(--blog-border))] rounded-md pl-9 pr-20 py-3 text-sm text-[hsl(var(--blog-heading))] placeholder:text-[hsl(var(--blog-subtle))] focus:outline-none focus:border-[hsl(var(--blog-accent))] transition-colors"
+          className="w-full bg-card border border-border/70 rounded-full pl-10 pr-20 h-11 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent transition-colors"
         />
-        <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1">
+        <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1.5">
           {q && (
             <button
               onClick={() => {
                 setQ("");
                 inputRef.current?.focus();
               }}
-              className="p-1 rounded text-[hsl(var(--blog-subtle))] hover:text-[hsl(var(--blog-heading))]"
+              className="p-1 rounded text-muted-foreground hover:text-foreground transition-colors"
               aria-label="Clear search"
             >
               <X className="w-3.5 h-3.5" />
             </button>
           )}
-          <kbd className="hidden sm:inline-flex items-center px-1.5 py-0.5 rounded border border-[hsl(var(--blog-border))] text-[10px] font-mono-display text-[hsl(var(--blog-subtle))]">
+          <kbd className="hidden sm:inline-flex items-center px-1.5 py-0.5 rounded border border-border/70 text-[10px] font-medium text-muted-foreground tabular bg-muted/40">
             ⌘K
           </kbd>
         </div>
       </div>
 
       {open && q.trim().length >= 2 && (
-        <div className="absolute z-50 left-0 right-0 mt-2 max-h-[28rem] overflow-y-auto rounded-md border border-[hsl(var(--blog-border))] bg-[hsl(var(--blog-bg))] shadow-xl shadow-black/30">
+        <div className="absolute z-50 left-0 right-0 mt-2 max-h-[28rem] overflow-y-auto rounded-2xl border border-border/70 bg-card shadow-[var(--shadow-lg)]">
           {matches.length === 0 ? (
-            <div className="p-6 text-center text-sm text-[hsl(var(--blog-subtle))]">
-              No matches for <span className="text-[hsl(var(--blog-heading))]">"{q}"</span>
+            <div className="p-6 text-center text-sm text-muted-foreground">
+              No matches for <span className="text-foreground font-medium">"{q}"</span>
             </div>
           ) : (
             <ul className="py-2">
@@ -233,27 +233,27 @@ const BlogSearch = ({ posts, className = "" }: Props) => {
                       onClick={() => setOpen(false)}
                       className={`flex items-start gap-3 px-4 py-3 border-l-2 transition-colors ${
                         active
-                          ? "bg-[hsl(var(--blog-surface))] border-[hsl(var(--blog-accent))]"
-                          : "border-transparent hover:bg-[hsl(var(--blog-surface)/0.6)]"
+                          ? "bg-muted/60 border-primary"
+                          : "border-transparent hover:bg-muted/40"
                       }`}
                     >
-                      <span className="mt-0.5 text-[hsl(var(--blog-accent-soft))]">
+                      <span className="mt-0.5 text-muted-foreground">
                         <KindIcon kind={m.kind} />
                       </span>
                       <span className="min-w-0 flex-1">
-                        <span className="flex items-center gap-2 mb-1">
-                          <span className="font-mono-display text-[9px] uppercase tracking-[0.25em] text-[hsl(var(--blog-accent-soft))]">
+                        <span className="flex items-center gap-1.5 mb-1">
+                          <span className="inline-flex items-center px-1.5 py-0.5 rounded-full bg-primary/10 text-primary text-[10px] font-medium uppercase tracking-wider ring-1 ring-inset ring-primary/20">
                             {m.kind}
                           </span>
-                          <span className="font-mono-display text-[9px] uppercase tracking-[0.25em] text-[hsl(var(--blog-subtle))]">
+                          <span className="text-[11px] text-muted-foreground">
                             {m.post.category}
                           </span>
                         </span>
-                        <span className="block text-sm text-[hsl(var(--blog-heading))] font-medium leading-snug">
+                        <span className="block text-sm text-foreground font-medium leading-snug">
                           {highlight(m.snippet, q.trim())}
                         </span>
                         {m.kind !== "title" && (
-                          <span className="block text-xs text-[hsl(var(--blog-subtle))] mt-1 truncate">
+                          <span className="block text-xs text-muted-foreground mt-1 truncate">
                             in {m.post.title}
                           </span>
                         )}

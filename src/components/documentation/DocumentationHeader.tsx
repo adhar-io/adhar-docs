@@ -4,7 +4,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { Search, Github, ChevronDown, Moon, Sun } from "lucide-react";
+import { Search, ChevronDown, Moon, Sun } from "lucide-react";
+import { Github } from "@/components/brand-icons";
 import { Link } from "react-router-dom";
 
 interface DocumentationHeaderProps {

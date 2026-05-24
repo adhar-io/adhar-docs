@@ -1,11 +1,21 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import Navigation from "@/components/landing/Navigation";
 import Footer from "@/components/landing/Footer";
-import { ArrowRight, PenSquare, X } from "lucide-react";
-import { blogPosts } from "@/data/blogData";
+import {
+  ArrowRight,
+  Bookmark,
+  Clock,
+  Hash,
+  PenSquare,
+  Rss,
+  Sparkles,
+  TrendingUp,
+  X,
+} from "lucide-react";
+import { blogPosts, type BlogPost } from "@/data/blogData";
 import { listDrafts } from "@/lib/blogDrafts";
-import blogBanner from "@/assets/blog-banner-adhar.jpg";
+import { initials, listBookmarks, parsePostDate, tagsForPost } from "@/lib/blogExtras";
 import BlogSearch from "@/components/blog/BlogSearch";
 
 const CATEGORIES = ["All Stories", "Platform Updates", "DevOps", "Security", "AI/ML", "Community"];
@@ -14,6 +24,7 @@ const DEFAULT_CAT = "All Stories";
 const Blog = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const cat = searchParams.get("category") || DEFAULT_CAT;
+  const tag = searchParams.get("tag") || "";
   const q = searchParams.get("q") || "";
 
   const updateParam = (key: string, value: string, defaultValue = "") => {
@@ -24,11 +35,11 @@ const Blog = () => {
   };
 
   const setCat = (c: string) => updateParam("category", c, DEFAULT_CAT);
-  const setQ = (v: string) => updateParam("q", v);
+  const setTag = (t: string) => updateParam("tag", t);
   const resetFilters = () => setSearchParams({}, { replace: true });
-  const hasActiveFilters = cat !== DEFAULT_CAT || q.trim() !== "";
+  const hasActiveFilters = cat !== DEFAULT_CAT || q.trim() !== "" || tag.trim() !== "";
 
-  const allPosts = useMemo(() => {
+  const allPosts = useMemo<BlogPost[]>(() => {
     const drafts = listDrafts()
       .filter((d) => d.status === "published" && d.title && d.slug && d.content)
       .map((d) => ({
@@ -44,269 +55,414 @@ const Blog = () => {
         image: d.image || "https://images.unsplash.com/photo-1518770660439-4636190af475?w=1200&q=80",
         featured: d.featured || false,
       }));
-    return [...drafts, ...blogPosts];
+    return [...drafts, ...blogPosts].sort(
+      (a, b) => parsePostDate(b.date).getTime() - parsePostDate(a.date).getTime(),
+    );
   }, []);
+
+  const tagsByPost = useMemo(() => {
+    const map = new Map<string, string[]>();
+    for (const p of allPosts) map.set(p.id, tagsForPost(p));
+    return map;
+  }, [allPosts]);
+
+  const tagCloud = useMemo(() => {
+    const counts: Record<string, number> = {};
+    for (const tags of tagsByPost.values()) {
+      for (const t of tags) counts[t] = (counts[t] || 0) + 1;
+    }
+    return Object.entries(counts)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 10);
+  }, [tagsByPost]);
+
+  const topAuthors = useMemo(() => {
+    const counts: Record<string, { posts: number; latest: string }> = {};
+    for (const p of allPosts) {
+      const c = (counts[p.author] ||= { posts: 0, latest: p.date });
+      c.posts++;
+      if (parsePostDate(p.date) > parsePostDate(c.latest)) c.latest = p.date;
+    }
+    return Object.entries(counts)
+      .sort((a, b) => b[1].posts - a[1].posts)
+      .slice(0, 4)
+      .map(([author, meta]) => ({ author, ...meta }));
+  }, [allPosts]);
 
   const filtered = useMemo(() => {
     const needle = q.toLowerCase().trim();
     return allPosts.filter((p) => {
       const matchQ = !needle || p.title.toLowerCase().includes(needle) || p.excerpt.toLowerCase().includes(needle);
       const matchC = cat === "All Stories" || p.category === cat;
-      return matchQ && matchC;
+      const matchT = !tag || (tagsByPost.get(p.id) || []).includes(tag);
+      return matchQ && matchC && matchT;
     });
-  }, [allPosts, q, cat]);
+  }, [allPosts, q, cat, tag, tagsByPost]);
 
   const featured = filtered.find((p) => p.featured) || filtered[0];
-  const bulletin = filtered.filter((p) => p.id !== featured?.id).slice(0, 3);
-  const grid = filtered.filter((p) => p.id !== featured?.id);
+  const rest = filtered.filter((p) => p.id !== featured?.id);
 
-  // Initials for author monograms
-  const initials = (name: string) =>
-    name.split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0]).join("").toUpperCase();
+  const [bookmarkSlugs] = useState<string[]>(() => (typeof window !== "undefined" ? listBookmarks() : []));
+  const bookmarked = useMemo(
+    () => allPosts.filter((p) => bookmarkSlugs.includes(p.slug)).slice(0, 4),
+    [allPosts, bookmarkSlugs],
+  );
 
   return (
-    <div className="min-h-screen bg-[hsl(var(--blog-bg))] text-[hsl(var(--blog-muted))] selection:bg-[hsl(var(--blog-accent)/0.3)]">
+    <div className="min-h-screen bg-background">
       <Navigation />
 
-      <main className="pt-20">
-        {/* Adhar branded social banner */}
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-6 sm:pt-10">
-          <div className="relative overflow-hidden rounded-2xl border border-[hsl(var(--blog-border)/0.6)] shadow-lg shadow-primary/10">
-            <img
-              src={blogBanner}
-              alt="Adhar Platform Updates — Engineering Notes & Cloud-Native Insights"
-              className="w-full h-auto object-cover aspect-[21/9]"
-              width={1920}
-              height={822}
-            />
-          </div>
-        </div>
-
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          {/* Masthead */}
-          <header className="pt-8 sm:pt-12 pb-8 sm:pb-12 border-b border-[hsl(var(--blog-border)/0.5)]">
-            <div className="flex justify-between items-baseline gap-8 flex-wrap">
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-3 mb-6">
-                  <span className="h-px w-8 bg-[hsl(var(--blog-accent)/0.6)]" />
-                  <span className="font-mono-display text-[10px] uppercase tracking-[0.4em] text-[hsl(var(--blog-accent-soft))]">
-                    The Adhar Journal
-                  </span>
-                </div>
-                <h1 className="font-semibold text-[hsl(var(--blog-heading))] leading-[1.05] tracking-tight text-4xl sm:text-6xl md:text-7xl break-words">
-                  <span className="bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">Adhar</span> Platform Updates
+      <main className="pt-16">
+        {/* Hero / masthead */}
+        <section className="relative section-padding container-padding overflow-hidden">
+          <div className="absolute inset-0 bg-mesh opacity-80 pointer-events-none" />
+          <div className="absolute inset-0 bg-grid bg-grid-fade opacity-40 dark:opacity-25 pointer-events-none" />
+          <div className="max-width-content relative">
+            <div className="flex flex-col lg:flex-row lg:items-end lg:justify-between gap-8">
+              <div className="max-w-2xl">
+                <span className="eyebrow mb-5">Blog</span>
+                <h1 className="section-heading mt-5 text-foreground">
+                  Notes on the
+                  <br className="hidden sm:block" />
+                  <span className="text-muted-foreground">craft of platforms.</span>
                 </h1>
-                <p className="mt-6 sm:mt-8 max-w-xl text-base sm:text-lg text-[hsl(var(--blog-muted))] font-light leading-relaxed">
-                  Field notes on internal developer platforms, cloud-native architecture, and the craft of platform engineering.
+                <p className="section-subheading mt-6 !mx-0 !text-left">
+                  Field reports on internal developer platforms, cloud-native architecture,
+                  and how to ship faster without breaking things.
                 </p>
-                <div className="mt-8 max-w-xl">
-                  <BlogSearch posts={allPosts} />
-                </div>
               </div>
-              <Link
-                to="/blog/admin"
-                className="hidden md:inline-flex items-center gap-2 px-6 py-2.5 border border-[hsl(var(--blog-border))] text-[10px] font-mono-display uppercase tracking-widest hover:bg-[hsl(var(--blog-accent)/0.08)] hover:border-[hsl(var(--blog-accent))] hover:text-[hsl(var(--blog-heading))] transition-all"
-              >
-                <PenSquare className="w-3.5 h-3.5" />
-                Write a story
-              </Link>
-            </div>
-          </header>
-
-          {/* Featured Hero + Bulletin */}
-          {featured && (
-            <section className="grid grid-cols-12 gap-8 lg:gap-16 py-10 sm:py-16 lg:py-20">
-              <Link
-                to={`/blog/${featured.slug}`}
-                className="col-span-12 lg:col-span-8 group cursor-pointer block"
-              >
-                <div className="mb-10 overflow-hidden rounded-sm border border-[hsl(var(--blog-border)/0.6)] bg-[hsl(var(--blog-surface))]">
-                  <img
-                    src={featured.image}
-                    alt={featured.title}
-                    className="w-full aspect-[16/9] object-cover dark:grayscale dark:group-hover:grayscale-0 transition-all duration-700 group-hover:scale-[1.01]"
-                  />
-                </div>
-                <div className="flex items-center gap-4 mb-6 flex-wrap">
-                  <span className="px-2 py-0.5 bg-[hsl(var(--blog-accent)/0.1)] text-[hsl(var(--blog-accent-soft))] text-[10px] font-mono-display uppercase tracking-[0.2em] border border-[hsl(var(--blog-accent)/0.25)]">
-                    {featured.category}
-                  </span>
-                  <span className="text-[10px] font-mono-display text-[hsl(var(--blog-subtle))] uppercase tracking-widest tabular">
-                    {featured.readTime}
-                  </span>
-                  <span className="text-[10px] font-mono-display text-[hsl(var(--blog-subtle))] uppercase tracking-widest tabular">
-                    {featured.date}
-                  </span>
-                </div>
-                <h2 className="font-semibold text-[hsl(var(--blog-heading))] text-3xl sm:text-4xl md:text-5xl lg:text-6xl mb-4 sm:mb-6 group-hover:text-[hsl(var(--blog-accent-soft))] transition-colors leading-[1.1] max-w-3xl">
-                  {featured.title}
-                </h2>
-                <p className="text-[hsl(var(--blog-muted))] text-base sm:text-lg leading-relaxed max-w-2xl">
-                  <span className="float-left text-6xl leading-[0.7] mr-3 mt-2 font-semibold text-[hsl(var(--blog-accent-soft))]">
-                    {featured.excerpt.charAt(0)}
-                  </span>
-                  {featured.excerpt.slice(1)}
-                </p>
-                <div className="mt-8 flex items-center gap-2 text-[hsl(var(--blog-accent-soft))] font-mono-display text-[11px] uppercase tracking-widest border-b border-[hsl(var(--blog-accent)/0.3)] w-fit pb-1 group-hover:border-[hsl(var(--blog-accent))] transition-all">
-                  Read Full Story
-                  <ArrowRight className="w-3.5 h-3.5 ml-1 group-hover:translate-x-1 transition-transform" />
-                </div>
-              </Link>
-
-              <aside className="col-span-12 lg:col-span-4 lg:border-l border-[hsl(var(--blog-border)/0.5)] lg:pl-12">
-                <h3 className="font-mono-display text-[10px] uppercase tracking-[0.4em] text-[hsl(var(--blog-subtle))] mb-8 border-b border-[hsl(var(--blog-border)/0.5)] pb-4 flex justify-between items-center">
-                  The Bulletin
-                  <span className="w-1.5 h-1.5 rounded-full bg-[hsl(var(--blog-accent))] animate-pulse" />
-                </h3>
-                <div className="space-y-12">
-                  {bulletin.map((p) => (
-                    <Link key={p.id} to={`/blog/${p.slug}`} className="block group cursor-pointer">
-                      <span className="text-[9px] font-mono-display text-[hsl(var(--blog-accent-soft)/0.85)] uppercase tracking-[0.3em] block mb-2">
-                        {p.category}
-                      </span>
-                      <h4 className="font-semibold text-2xl text-[hsl(var(--blog-heading))] group-hover:text-[hsl(var(--blog-accent-soft))] transition-colors leading-tight mb-3">
-                        {p.title}
-                      </h4>
-                      <div className="flex items-center gap-3 text-[10px] font-mono-display text-[hsl(var(--blog-subtle))] uppercase tabular">
-                        <span>{p.author.split(" ").slice(0, 2).map((w, i) => i === 0 ? `${w[0]}.` : w).join(" ")}</span>
-                        <span className="text-[hsl(var(--blog-border))]">/</span>
-                        <span>{p.readTime.replace(" read", "")}</span>
-                      </div>
-                    </Link>
-                  ))}
-                </div>
-              </aside>
-            </section>
-          )}
-
-          {/* Filter Nav */}
-          <nav className="mt-10 lg:mt-20 border-t border-b border-[hsl(var(--blog-border)/0.5)] py-5 sm:py-7 flex flex-wrap items-center justify-between gap-4 sm:gap-8">
-            <ul className="flex flex-wrap gap-x-5 sm:gap-x-10 gap-y-3 text-[10px] font-mono-display uppercase tracking-[0.25em]">
-              {CATEGORIES.map((c) => (
-                <li key={c}>
-                  <button
-                    onClick={() => setCat(c)}
-                    className={`pb-1 transition-colors ${
-                      cat === c
-                        ? "text-[hsl(var(--blog-heading))] border-b border-[hsl(var(--blog-accent))]"
-                        : "text-[hsl(var(--blog-subtle))] hover:text-[hsl(var(--blog-accent-soft))]"
-                    }`}
-                  >
-                    {c}
-                  </button>
-                </li>
-              ))}
-            </ul>
-            <div className="flex items-center gap-4">
-              {hasActiveFilters && (
-                <button
-                  onClick={resetFilters}
-                  className="inline-flex items-center gap-1.5 text-[10px] font-mono-display uppercase tracking-[0.2em] text-[hsl(var(--blog-subtle))] hover:text-[hsl(var(--blog-accent-soft))] transition-colors"
-                  aria-label="Reset filters"
+              <div className="flex flex-row lg:flex-col items-start lg:items-end gap-3 shrink-0">
+                <Link
+                  to="/blog/admin"
+                  className="btn-secondary-modern inline-flex items-center justify-center gap-2 rounded-full px-4 h-9 text-xs font-medium"
                 >
-                  <X className="w-3 h-3" />
-                  Reset
-                </button>
-              )}
-            </div>
-          </nav>
-
-
-          {/* Article Grid */}
-          {grid.length > 0 ? (
-            <section className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-x-8 lg:gap-x-12 gap-y-12 sm:gap-y-20 lg:gap-y-24 mt-12 sm:mt-20 lg:mt-24">
-              {grid.map((p) => (
-                <Link key={p.id} to={`/blog/${p.slug}`} className="group editorial-card">
-                  <article>
-                    <div className="mb-8 aspect-[4/3] border border-[hsl(var(--blog-border)/0.6)] overflow-hidden bg-[hsl(var(--blog-surface))]">
-                      <img
-                        src={p.image}
-                        alt={p.title}
-                        className="editorial-thumb w-full h-full object-cover dark:grayscale dark:group-hover:grayscale-0 transition-all duration-500"
-                      />
-                    </div>
-                    <span className="text-[9px] font-mono-display text-[hsl(var(--blog-accent-soft))] uppercase tracking-[0.3em] mb-4 block">
-                      {p.category}
-                    </span>
-                    <h3 className="font-semibold text-2xl md:text-[1.7rem] text-[hsl(var(--blog-heading))] mb-4 leading-tight group-hover:text-[hsl(var(--blog-accent-soft))] transition-colors">
-                      {p.title}
-                    </h3>
-                    <p className="text-[hsl(var(--blog-muted))] text-sm leading-relaxed line-clamp-2 mb-6 font-light italic opacity-80 group-hover:opacity-100 transition-opacity">
-                      {p.excerpt}
-                    </p>
-                    <div className="flex items-center gap-3 pt-4 border-t border-[hsl(var(--blog-border)/0.5)]">
-                      <div className="w-6 h-6 rounded-full bg-gradient-to-br from-[hsl(var(--blog-accent))] to-[hsl(var(--blog-border))] grid place-items-center text-[8px] font-mono-display text-white font-semibold tracking-wider">
-                        {initials(p.author)}
-                      </div>
-                      <span className="text-[9px] font-mono-display text-[hsl(var(--blog-subtle))] uppercase tracking-tighter tabular">
-                        {p.author}
-                        <span className="text-[hsl(var(--blog-border))] mx-2">/</span>
-                        {p.readTime}
-                      </span>
-                    </div>
-                  </article>
+                  <PenSquare className="w-3.5 h-3.5" />
+                  Write a story
                 </Link>
-              ))}
-            </section>
-          ) : (
-            <div className="py-32 text-center border-y border-[hsl(var(--blog-border)/0.5)] mt-20">
-              <p className="font-semibold text-2xl text-[hsl(var(--blog-subtle))]">
-                No stories match your filter.
-              </p>
-              {hasActiveFilters && (
-                <button
-                  onClick={resetFilters}
-                  className="mt-6 inline-flex items-center gap-1.5 text-[10px] font-mono-display uppercase tracking-[0.25em] text-[hsl(var(--blog-accent-soft))] border-b border-[hsl(var(--blog-accent)/0.3)] pb-1 hover:border-[hsl(var(--blog-accent))] hover:text-[hsl(var(--blog-heading))] transition-all"
+                <a
+                  href="/rss.xml"
+                  className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
                 >
-                  <X className="w-3 h-3" />
-                  Clear filters
-                </button>
+                  <Rss className="w-3.5 h-3.5" />
+                  RSS feed
+                </a>
+              </div>
+            </div>
+
+            {/* Search */}
+            <div className="mt-10 max-w-xl">
+              <BlogSearch posts={allPosts} />
+            </div>
+          </div>
+        </section>
+
+        {/* Filter row */}
+        <section className="container-padding">
+          <div className="max-width-content">
+            <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between border-y border-border/70 py-4">
+              <div className="flex flex-wrap gap-1.5">
+                {CATEGORIES.map((c) => {
+                  const active = cat === c;
+                  return (
+                    <button
+                      key={c}
+                      onClick={() => setCat(c)}
+                      className={`inline-flex items-center h-8 px-3 rounded-full text-xs font-medium transition-colors ${
+                        active
+                          ? "bg-primary text-primary-foreground"
+                          : "bg-card text-muted-foreground border border-border/70 hover:text-foreground hover:bg-muted"
+                      }`}
+                    >
+                      {c}
+                    </button>
+                  );
+                })}
+              </div>
+              <div className="flex items-center gap-3 text-xs text-muted-foreground">
+                <span className="tabular">
+                  <span className="text-foreground font-medium">{filtered.length}</span>{" "}
+                  {filtered.length === 1 ? "story" : "stories"}
+                </span>
+                {hasActiveFilters && (
+                  <button
+                    onClick={resetFilters}
+                    className="inline-flex items-center gap-1 hover:text-foreground transition-colors"
+                  >
+                    <X className="w-3 h-3" />
+                    Reset
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* Active filter chips */}
+            {(tag || q) && (
+              <div className="flex items-center gap-2 flex-wrap mt-4">
+                {tag && (
+                  <button
+                    onClick={() => setTag("")}
+                    className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-primary/10 text-primary text-xs font-medium ring-1 ring-inset ring-primary/20"
+                  >
+                    <Hash className="w-3 h-3" />
+                    {tag}
+                    <X className="w-3 h-3 ml-0.5" />
+                  </button>
+                )}
+                {q && (
+                  <span className="inline-flex items-center px-2.5 py-1 rounded-full bg-muted text-xs font-medium text-muted-foreground">
+                    "{q}"
+                  </span>
+                )}
+              </div>
+            )}
+          </div>
+        </section>
+
+        {/* Featured + grid */}
+        <section className="container-padding py-12">
+          <div className="max-width-content">
+            {filtered.length === 0 ? (
+              <div className="text-center py-20 rounded-2xl border border-border/70 bg-card">
+                <h3 className="text-base font-semibold text-foreground tracking-tight">No stories match your filter.</h3>
+                <p className="mt-1 text-sm text-muted-foreground">Try a different search or category.</p>
+                {hasActiveFilters && (
+                  <button
+                    onClick={resetFilters}
+                    className="btn-secondary-modern mt-5 inline-flex items-center justify-center gap-1.5 rounded-full px-4 h-9 text-xs font-medium"
+                  >
+                    Clear filters
+                  </button>
+                )}
+              </div>
+            ) : (
+              <>
+                {/* Featured */}
+                {featured && (
+                  <Link
+                    to={`/blog/${featured.slug}`}
+                    className="group block mb-12 overflow-hidden rounded-3xl border border-border/70 bg-card transition-all hover:border-border hover:shadow-[var(--shadow-md)]"
+                  >
+                    <div className="grid lg:grid-cols-2 gap-0">
+                      <div className="relative aspect-[16/10] lg:aspect-auto overflow-hidden bg-muted">
+                        <img
+                          src={featured.image}
+                          alt={featured.title}
+                          className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-[1.02]"
+                        />
+                        <div className="absolute top-4 left-4">
+                          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-background/90 backdrop-blur-sm border border-border/70 text-xs font-medium text-foreground shadow-[var(--shadow-xs)]">
+                            <Sparkles className="w-3 h-3 text-primary" />
+                            Featured
+                          </span>
+                        </div>
+                      </div>
+                      <div className="flex flex-col justify-center p-7 sm:p-10 lg:p-12">
+                        <div className="flex flex-wrap items-center gap-2 mb-4">
+                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full bg-primary/10 text-primary text-xs font-medium ring-1 ring-inset ring-primary/20">
+                            {featured.category}
+                          </span>
+                          <span className="text-xs text-muted-foreground tabular">{featured.readTime}</span>
+                        </div>
+                        <h2 className="text-2xl sm:text-3xl lg:text-[2rem] font-semibold tracking-tight text-foreground leading-[1.15] text-balance group-hover:text-primary transition-colors">
+                          {featured.title}
+                        </h2>
+                        <p className="mt-4 text-sm sm:text-base text-muted-foreground leading-relaxed line-clamp-3">
+                          {featured.excerpt}
+                        </p>
+                        <div className="mt-6 pt-6 border-t border-border/60 flex items-center justify-between">
+                          <div className="flex items-center gap-2.5">
+                            <div className="w-8 h-8 rounded-full bg-muted ring-1 ring-border grid place-items-center text-xs font-semibold text-foreground">
+                              {initials(featured.author)}
+                            </div>
+                            <div>
+                              <p className="text-xs font-medium text-foreground">{featured.author}</p>
+                              <p className="text-[11px] text-muted-foreground tabular">{featured.date}</p>
+                            </div>
+                          </div>
+                          <ArrowRight className="w-4 h-4 text-muted-foreground transition-transform group-hover:translate-x-0.5 group-hover:text-foreground" />
+                        </div>
+                      </div>
+                    </div>
+                  </Link>
+                )}
+
+                {/* Grid */}
+                {rest.length > 0 && (
+                  <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-5 sm:gap-6">
+                    {rest.map((p) => (
+                      <Link
+                        key={p.id}
+                        to={`/blog/${p.slug}`}
+                        className="group flex flex-col overflow-hidden rounded-2xl border border-border/70 bg-card transition-all hover:border-border hover:shadow-[var(--shadow-md)] hover:-translate-y-0.5"
+                      >
+                        <div className="relative aspect-[16/10] overflow-hidden bg-muted">
+                          <img
+                            src={p.image}
+                            alt={p.title}
+                            className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-[1.03]"
+                          />
+                        </div>
+                        <div className="flex-1 flex flex-col p-5 sm:p-6">
+                          <div className="flex items-center gap-2 mb-3">
+                            <span className="inline-flex items-center px-2 py-0.5 rounded-full bg-muted text-[11px] font-medium text-muted-foreground">
+                              {p.category}
+                            </span>
+                            <span className="text-[11px] text-muted-foreground tabular">{p.readTime}</span>
+                          </div>
+                          <h3 className="text-base sm:text-lg font-semibold tracking-tight text-foreground leading-snug text-balance group-hover:text-primary transition-colors">
+                            {p.title}
+                          </h3>
+                          <p className="mt-2 text-sm text-muted-foreground leading-relaxed line-clamp-2">
+                            {p.excerpt}
+                          </p>
+                          <div className="mt-auto pt-4 flex items-center gap-2 text-xs text-muted-foreground">
+                            <div className="w-6 h-6 rounded-full bg-muted ring-1 ring-border grid place-items-center text-[10px] font-semibold text-foreground">
+                              {initials(p.author)}
+                            </div>
+                            <span className="font-medium text-foreground">{p.author}</span>
+                            <span aria-hidden>·</span>
+                            <span className="tabular">{p.date}</span>
+                          </div>
+                        </div>
+                      </Link>
+                    ))}
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+        </section>
+
+        {/* Topics + Reading list + Authors */}
+        <section className="relative section-padding container-padding bg-muted/30">
+          <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-border to-transparent" />
+          <div className="max-width-content">
+            <div className="grid lg:grid-cols-3 gap-5 sm:gap-6">
+              {/* Topics */}
+              {tagCloud.length > 0 && (
+                <article className="rounded-2xl border border-border/70 bg-card p-6">
+                  <div className="flex items-center gap-2 mb-4">
+                    <Hash className="w-4 h-4 text-muted-foreground" />
+                    <h3 className="text-sm font-semibold text-foreground tracking-tight">Topics</h3>
+                  </div>
+                  <div className="flex flex-wrap gap-1.5">
+                    {tagCloud.map(([t, n]) => {
+                      const active = t === tag;
+                      return (
+                        <button
+                          key={t}
+                          onClick={() => setTag(active ? "" : t)}
+                          className={`inline-flex items-center gap-1.5 h-7 px-2.5 rounded-full text-xs font-medium transition-colors ${
+                            active
+                              ? "bg-primary text-primary-foreground"
+                              : "bg-background text-muted-foreground border border-border/70 hover:text-foreground hover:bg-muted"
+                          }`}
+                        >
+                          {t}
+                          <span className={`text-[10px] tabular ${active ? "opacity-80" : "opacity-60"}`}>{n}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </article>
+              )}
+
+              {/* Reading list */}
+              <article className="rounded-2xl border border-border/70 bg-card p-6">
+                <div className="flex items-center gap-2 mb-4">
+                  <Bookmark className="w-4 h-4 text-muted-foreground" />
+                  <h3 className="text-sm font-semibold text-foreground tracking-tight">Your reading list</h3>
+                </div>
+                {bookmarked.length > 0 ? (
+                  <ul className="space-y-3">
+                    {bookmarked.map((p) => (
+                      <li key={p.id}>
+                        <Link
+                          to={`/blog/${p.slug}`}
+                          className="group block"
+                        >
+                          <p className="text-sm font-medium text-foreground leading-snug line-clamp-2 group-hover:text-primary transition-colors">
+                            {p.title}
+                          </p>
+                          <p className="mt-1 text-xs text-muted-foreground tabular flex items-center gap-1.5">
+                            <Clock className="w-3 h-3" />
+                            {p.readTime}
+                          </p>
+                        </Link>
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="text-sm text-muted-foreground leading-relaxed">
+                    Save articles for later by bookmarking them. They'll show up here.
+                  </p>
+                )}
+              </article>
+
+              {/* Top authors */}
+              {topAuthors.length > 0 && (
+                <article className="rounded-2xl border border-border/70 bg-card p-6">
+                  <div className="flex items-center gap-2 mb-4">
+                    <TrendingUp className="w-4 h-4 text-muted-foreground" />
+                    <h3 className="text-sm font-semibold text-foreground tracking-tight">Top contributors</h3>
+                  </div>
+                  <ul className="space-y-3">
+                    {topAuthors.map((a) => (
+                      <li key={a.author} className="flex items-center gap-3">
+                        <div className="w-8 h-8 rounded-full bg-muted ring-1 ring-border grid place-items-center text-xs font-semibold text-foreground shrink-0">
+                          {initials(a.author)}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium text-foreground truncate">{a.author}</p>
+                          <p className="text-xs text-muted-foreground tabular">
+                            {a.posts} {a.posts === 1 ? "story" : "stories"}
+                          </p>
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                </article>
               )}
             </div>
+          </div>
+        </section>
 
-          )}
-
-          {/* Newsletter */}
-          <section className="mt-16 sm:mt-32 lg:mt-48 mb-12 sm:mb-24 border border-[hsl(var(--blog-border)/0.5)] p-6 sm:p-12 md:p-20 bg-[hsl(var(--blog-surface))] relative overflow-hidden">
-            <div className="absolute top-0 right-0 w-96 h-96 bg-[hsl(var(--blog-accent)/0.1)] blur-[120px] rounded-full -translate-y-1/2 translate-x-1/2 pointer-events-none" />
-            <div className="absolute bottom-0 left-0 w-72 h-72 bg-[hsl(var(--blog-accent-soft)/0.06)] blur-[100px] rounded-full translate-y-1/2 -translate-x-1/2 pointer-events-none" />
-            <div className="max-w-2xl mx-auto text-center space-y-8 relative z-10">
-              <div className="flex items-center justify-center gap-3">
-                <span className="h-px w-8 bg-[hsl(var(--blog-accent)/0.6)]" />
-                <span className="font-mono-display text-[10px] uppercase tracking-[0.4em] text-[hsl(var(--blog-accent-soft))]">
-                  Dispatch No. 24
-                </span>
-                <span className="h-px w-8 bg-[hsl(var(--blog-accent)/0.6)]" />
-              </div>
-              <h2 className="font-semibold text-3xl sm:text-5xl md:text-6xl text-[hsl(var(--blog-heading))] tracking-tight leading-[1.1]">
-                Stay at the frontier.
-              </h2>
-              <p className="text-[hsl(var(--blog-muted))] font-light leading-relaxed text-lg max-w-lg mx-auto">
-                Monthly deep-dives on cloud-native architecture, security patches, and platform-engineering trends. Direct to your inbox.
-              </p>
-              <form
-                onSubmit={(e) => e.preventDefault()}
-                className="flex flex-col sm:flex-row gap-3 max-w-md mx-auto pt-2"
-              >
-                <input
-                  type="email"
-                  required
-                  placeholder="email@organization.com"
-                  className="flex-1 bg-[hsl(var(--blog-bg)/0.6)] border border-[hsl(var(--blog-border))] px-5 py-4 text-sm focus:outline-none focus:border-[hsl(var(--blog-accent))] transition-colors text-[hsl(var(--blog-heading))] placeholder:text-[hsl(var(--blog-subtle)/0.7)]"
-                />
-                <button
-                  type="submit"
-                  className="bg-[hsl(var(--blog-accent))] hover:bg-[hsl(var(--blog-accent-soft))] text-white px-8 py-4 text-[11px] font-mono-display uppercase tracking-[0.2em] transition-all active:scale-[0.98]"
+        {/* Newsletter */}
+        <section className="section-padding container-padding">
+          <div className="max-width-content">
+            <div className="relative isolate overflow-hidden rounded-3xl border border-border/70 bg-card">
+              <div className="absolute inset-0 bg-mesh opacity-90 pointer-events-none" />
+              <div className="absolute inset-0 bg-grid opacity-40 dark:opacity-25 pointer-events-none" />
+              <div className="relative px-6 py-14 sm:px-12 sm:py-16 text-center max-w-2xl mx-auto">
+                <span className="eyebrow mb-6">Newsletter</span>
+                <h2 className="section-heading mt-4 text-foreground">Stay in the loop.</h2>
+                <p className="section-subheading mt-5">
+                  Monthly deep-dives on cloud-native architecture, security patches, and platform-engineering trends — straight to your inbox.
+                </p>
+                <form
+                  onSubmit={(e) => e.preventDefault()}
+                  className="mt-8 flex flex-col sm:flex-row gap-3 max-w-md mx-auto"
                 >
-                  Subscribe
-                </button>
-              </form>
-              <p className="text-[9px] font-mono-display text-[hsl(var(--blog-subtle))] uppercase tracking-widest tabular pt-2">
-                12,400+ engineers · No spam · Unsubscribe anytime
-              </p>
+                  <input
+                    type="email"
+                    required
+                    placeholder="email@company.com"
+                    className="flex-1 bg-background border border-border rounded-full px-4 h-11 text-sm focus:outline-none focus:ring-2 focus:ring-ring text-foreground placeholder:text-muted-foreground"
+                  />
+                  <button
+                    type="submit"
+                    className="btn-primary-modern inline-flex items-center justify-center gap-2 rounded-full px-6 h-11 text-sm font-medium"
+                  >
+                    Subscribe
+                  </button>
+                </form>
+                <p className="mt-4 text-xs text-muted-foreground tabular">
+                  12,400+ engineers · No spam · Unsubscribe anytime
+                </p>
+              </div>
             </div>
-          </section>
-        </div>
+          </div>
+        </section>
       </main>
 
       <Footer />

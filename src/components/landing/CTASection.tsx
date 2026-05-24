@@ -1,79 +1,71 @@
 
 import React from "react";
-import { Button } from "@/components/ui/button";
-import { Play, BookOpen } from "lucide-react";
+import { ArrowRight, BookOpen } from "lucide-react";
 
 const CTASection = () => {
   return (
-    <section className="section-padding bg-gradient-to-br from-primary via-accent to-primary/80 dark:from-primary/90 dark:via-accent/90 dark:to-primary/70 relative overflow-hidden">
-      {/* Enhanced background pattern */}
-      <div className="absolute inset-0 opacity-10 dark:opacity-20">
-        <div className="absolute inset-0 bg-[linear-gradient(45deg,rgba(255,255,255,0.1)_1px,transparent_1px),linear-gradient(-45deg,rgba(255,255,255,0.1)_1px,transparent_1px)] bg-[size:20px_20px]"></div>
-      </div>
-      
-      {/* Animated background elements */}
-      <div className="absolute top-10 left-10 w-32 h-32 bg-background/5 rounded-full blur-2xl animate-gentle-float"></div>
-      <div className="absolute bottom-10 right-10 w-24 h-24 bg-background/5 rounded-full blur-2xl animate-gentle-float" style={{ animationDelay: '2s' }}></div>
-      
-      <div className="max-width-content container-padding relative z-10">
-        <div className="text-center mb-20">
-          <h2 className="text-4xl sm:text-5xl md:text-6xl font-bold text-primary-foreground mb-8 leading-tight text-balance animate-fade-in-up">
-            Ready to Scale with{' '}
-            <span className="bg-gradient-to-r from-background/90 to-background/70 bg-clip-text text-transparent">
-              ADHAR Platform?
-            </span>
-          </h2>
-          
-          <p className="text-lg sm:text-xl text-primary-foreground/90 max-w-4xl mx-auto mb-12 leading-relaxed animate-fade-in-up" style={{ animationDelay: '0.1s' }}>
-            Join thousands of enterprises who have accelerated their cloud-native journey with ADHAR. 
-            Start with our free plan and experience the power of Kubernetes-native development.
-          </p>
-          
-          <div className="flex flex-col sm:flex-row gap-6 justify-center animate-fade-in-up" style={{ animationDelay: '0.2s' }}>
-            <Button 
-              size="lg" 
-              className="bg-background text-foreground hover:bg-background/90 px-10 py-4 text-lg shadow-2xl hover:shadow-3xl transition-all duration-300 hover:-translate-y-1 interactive-lift font-semibold"
-            >
-              <div className="w-5 h-5 mr-3 bg-gradient-to-r from-primary to-accent rounded-full flex items-center justify-center">
-                <Play className="w-3 h-3 text-primary-foreground" />
-              </div>
-              Start Free Trial
-            </Button>
-            
-            <Button 
-              size="lg" 
-              variant="ghost" 
-              className="text-primary-foreground hover:bg-background/10 border-2 border-primary-foreground/20 hover:border-primary-foreground/30 px-10 py-4 text-lg transition-all duration-300 hover:-translate-y-1 interactive-lift font-semibold"
-            >
-              <div className="w-5 h-5 mr-3 bg-gradient-to-r from-accent/80 to-primary/80 rounded-full flex items-center justify-center">
-                <BookOpen className="w-3 h-3 text-primary-foreground" />
-              </div>
-              View Documentation
-            </Button>
-          </div>
-        </div>
-        
-        {/* Enhanced stats grid */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-6 lg:gap-8">
-          {[
-            { number: "500+", label: "Enterprise Customers" },
-            { number: "10K+", label: "K8s Clusters Managed" },
-            { number: "100K+", label: "Apps Deployed" },
-            { number: "99.9%", label: "Platform Uptime" }
-          ].map((stat, index) => (
-            <div 
-              key={stat.label}
-              className="glass-effect rounded-2xl p-6 lg:p-8 bg-background/15 hover:bg-background/20 transition-all duration-300 interactive-lift animate-scale-in"
-              style={{ animationDelay: `${0.3 + index * 0.1}s` }}
-            >
-              <div className="text-3xl sm:text-4xl lg:text-5xl font-bold text-primary-foreground mb-2 bg-gradient-to-r from-background/90 to-background/70 bg-clip-text text-transparent">
-                {stat.number}
-              </div>
-              <div className="text-primary-foreground/80 text-sm sm:text-base lg:text-lg font-medium">
-                {stat.label}
-              </div>
+    <section className="section-padding container-padding relative overflow-hidden">
+      <div className="max-width-content">
+        <div className="relative isolate overflow-hidden rounded-3xl border border-border/70 bg-card">
+          {/* Mesh + grid backdrop */}
+          <div className="absolute inset-0 bg-mesh opacity-90" />
+          <div className="absolute inset-0 bg-grid opacity-40 dark:opacity-25" />
+          <div
+            className="absolute -top-32 sm:-top-40 left-1/2 -translate-x-1/2 w-[min(800px,100vw)] h-[300px] sm:h-[350px] lg:h-[400px] rounded-full blur-3xl opacity-50"
+            style={{ background: 'radial-gradient(closest-side, hsl(var(--primary) / 0.35), transparent)' }}
+          />
+
+          <div className="relative px-6 py-16 sm:px-12 sm:py-20 lg:px-16 lg:py-24 text-center">
+            <span className="eyebrow mb-6">Get started</span>
+
+            <h2 className="section-heading mt-4 text-foreground">
+              Ship a platform today, not next quarter.
+            </h2>
+
+            <p className="section-subheading mt-5">
+              Join teams who replaced months of platform work with a single command.
+              Free to start, open source, no lock-in.
+            </p>
+
+            <div className="mt-9 flex flex-col sm:flex-row gap-3 justify-center">
+              <button
+                type="button"
+                className="btn-primary-modern group inline-flex items-center justify-center gap-2 rounded-full px-6 h-12 text-[15px] font-medium"
+              >
+                <span>Start free</span>
+                <ArrowRight className="w-4 h-4 transition-transform duration-300 group-hover:translate-x-0.5" />
+              </button>
+              <button
+                type="button"
+                className="btn-secondary-modern group inline-flex items-center justify-center gap-2 rounded-full px-6 h-12 text-[15px] font-medium"
+              >
+                <BookOpen className="w-4 h-4 text-muted-foreground group-hover:text-foreground transition-colors" />
+                <span>View documentation</span>
+              </button>
             </div>
-          ))}
+
+            {/* Refined stats row */}
+            <div className="mt-14 grid grid-cols-2 md:grid-cols-4 gap-px overflow-hidden rounded-2xl border border-border/60 bg-border/50">
+              {[
+                { number: "500+", label: "Enterprise customers" },
+                { number: "10K+", label: "K8s clusters managed" },
+                { number: "100K+", label: "Apps deployed" },
+                { number: "99.9%", label: "Platform uptime" },
+              ].map((stat) => (
+                <div
+                  key={stat.label}
+                  className="bg-card/80 backdrop-blur-sm px-5 py-6"
+                >
+                  <div className="text-2xl sm:text-3xl font-semibold text-foreground tracking-tight tabular">
+                    {stat.number}
+                  </div>
+                  <div className="mt-1 text-xs sm:text-sm text-muted-foreground">
+                    {stat.label}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
         </div>
       </div>
     </section>

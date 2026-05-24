@@ -170,33 +170,33 @@ const InteractiveArchitecture = () => {
   ];
 
   return (
-    <div className="w-full bg-gradient-to-br from-slate-50 via-white to-blue-50 dark:from-gray-900 dark:via-gray-850 dark:to-gray-800 rounded-3xl overflow-hidden shadow-2xl backdrop-blur-sm animated-bg">
+    <div className="w-full overflow-hidden rounded-3xl border border-border/70 bg-card shadow-[var(--shadow-sm)]">
       <ArchitectureHeader />
 
-      <div className="p-8 space-y-12">
+      <div className="p-6 sm:p-8 lg:p-10 space-y-10 sm:space-y-12">
         <DevelopmentPhases phases={phases} />
-        
-        <div className="section-divider"></div>
-        
+
+        <div className="h-px bg-border/60" />
+
         <TeamsSection teams={teams} />
 
-        <div className="section-divider"></div>
+        <div className="h-px bg-border/60" />
 
         <InterfaceLayer interfaceItems={interfaceItems} />
-        
-        <div className="section-divider"></div>
-        
+
+        <div className="h-px bg-border/60" />
+
         <ControlPlane />
-        
-        <div className="section-divider"></div>
-        
+
+        <div className="h-px bg-border/60" />
+
         <PlatformStack platformCategories={platformCategories} />
 
-        <div className="section-divider"></div>
+        <div className="h-px bg-border/60" />
 
         <OrchestrationLayer orchestrationTools={orchestrationTools} />
 
-        <div className="section-divider"></div>
+        <div className="h-px bg-border/60" />
 
         <CloudProviders cloudProviders={cloudProviders} />
       </div>

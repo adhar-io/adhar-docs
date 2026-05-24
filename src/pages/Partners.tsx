@@ -1,101 +1,118 @@
-
+import React from 'react';
 import Navigation from '@/components/landing/Navigation';
 import Footer from '@/components/landing/Footer';
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { Building, Handshake, Users, Globe } from "lucide-react";
+import { Building, Handshake, Users, Globe, ArrowRight } from "lucide-react";
 
 const Partners = () => {
   const partnerTypes = [
     {
-      title: "Technology Partners",
+      title: "Technology partners",
       icon: Building,
-      description: "Leading technology companies that integrate with ADHAR",
-      partners: ["AWS", "Google Cloud", "Microsoft Azure", "Docker", "Kubernetes"]
+      description: "Leading technology companies that integrate with ADHAR.",
+      partners: ["AWS", "Google Cloud", "Microsoft Azure", "Docker", "Kubernetes"],
     },
     {
-      title: "Solution Partners",
+      title: "Solution partners",
       icon: Handshake,
-      description: "Certified partners who implement ADHAR solutions",
-      partners: ["Acme Consulting", "TechFlow Solutions", "CloudFirst", "DevOps Pro"]
+      description: "Certified partners who implement ADHAR solutions.",
+      partners: ["Acme Consulting", "TechFlow Solutions", "CloudFirst", "DevOps Pro"],
     },
     {
-      title: "Channel Partners",
+      title: "Channel partners",
       icon: Users,
-      description: "Partners who resell and distribute ADHAR",
-      partners: ["Global Tech", "Enterprise Solutions", "Cloud Resellers", "TechDistro"]
+      description: "Partners who resell and distribute ADHAR.",
+      partners: ["Global Tech", "Enterprise Solutions", "Cloud Resellers", "TechDistro"],
     },
     {
-      title: "Regional Partners",
+      title: "Regional partners",
       icon: Globe,
-      description: "Local partners providing regional support",
-      partners: ["APAC Solutions", "EU Tech Partners", "Americas Cloud", "EMEA Partners"]
-    }
+      description: "Local partners providing regional support.",
+      partners: ["APAC Solutions", "EU Tech Partners", "Americas Cloud", "EMEA Partners"],
+    },
   ];
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-100 dark:from-gray-900 dark:via-blue-900/20 dark:to-indigo-900/30">
+    <div className="min-h-screen bg-background">
       <Navigation />
-      
-      <main className="pt-20">
-        {/* Header */}
-        <section className="py-20">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
-            <h1 className="text-5xl font-bold mb-6">
-              <span className="bg-gradient-to-r from-blue-600 via-purple-600 to-teal-600 bg-clip-text text-transparent">
-                Our Partners
-              </span>
+
+      <main className="pt-16">
+        {/* Hero */}
+        <section className="relative section-padding container-padding overflow-hidden">
+          <div className="absolute inset-0 bg-mesh opacity-80 pointer-events-none" />
+          <div className="absolute inset-0 bg-grid bg-grid-fade opacity-40 dark:opacity-25 pointer-events-none" />
+          <div className="max-width-content relative text-center">
+            <span className="eyebrow mb-5"><Handshake className="w-3 h-3 mr-1" />Partners</span>
+            <h1 className="section-heading mt-5 text-foreground">
+              We work with
+              <br className="hidden sm:block" />
+              <span className="text-muted-foreground">the best in the field.</span>
             </h1>
-            <p className="text-xl text-gray-600 dark:text-gray-300 max-w-3xl mx-auto">
-              We work with leading organizations worldwide to deliver exceptional cloud-native solutions.
+            <p className="section-subheading mt-6">
+              Together with leading organizations worldwide, we deliver exceptional cloud-native solutions to teams of every size.
             </p>
           </div>
         </section>
 
-        {/* Partner Types */}
-        <section className="py-20">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div className="grid md:grid-cols-2 gap-8">
-              {partnerTypes.map((type) => (
-                <Card key={type.title}>
-                  <CardHeader>
-                    <div className="flex items-center gap-3">
-                      <type.icon className="w-8 h-8 text-blue-500" />
-                      <CardTitle>{type.title}</CardTitle>
+        {/* Partner types */}
+        <section className="container-padding pb-16">
+          <div className="max-width-content">
+            <div className="grid sm:grid-cols-2 gap-px overflow-hidden rounded-2xl border border-border/70 bg-border/60">
+              {partnerTypes.map((type) => {
+                const Icon = type.icon;
+                return (
+                  <article key={type.title} className="bg-card p-7 sm:p-8 transition-colors hover:bg-muted/30">
+                    <div className="flex items-start gap-4">
+                      <div className="inline-flex h-11 w-11 items-center justify-center rounded-xl border border-border/70 bg-background text-primary shadow-[var(--shadow-xs)] shrink-0">
+                        <Icon className="h-5 w-5" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <h3 className="text-lg font-semibold text-foreground tracking-tight">{type.title}</h3>
+                        <p className="mt-1.5 text-sm text-muted-foreground leading-relaxed">{type.description}</p>
+                      </div>
                     </div>
-                    <p className="text-gray-600 dark:text-gray-400">{type.description}</p>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="flex flex-wrap gap-2">
+                    <div className="mt-5 pt-5 border-t border-border/60 flex flex-wrap gap-1.5">
                       {type.partners.map((partner) => (
-                        <Badge key={partner} variant="secondary">
+                        <span key={partner} className="inline-flex items-center px-2.5 py-0.5 rounded-full bg-muted text-xs font-medium text-muted-foreground">
                           {partner}
-                        </Badge>
+                        </span>
                       ))}
                     </div>
-                  </CardContent>
-                </Card>
-              ))}
+                  </article>
+                );
+              })}
             </div>
           </div>
         </section>
 
-        {/* Become a Partner CTA */}
-        <section className="py-20">
-          <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
-            <Card>
-              <CardContent className="p-12">
-                <h2 className="text-3xl font-bold mb-4">Become a Partner</h2>
-                <p className="text-xl text-gray-600 dark:text-gray-400 mb-8">
-                  Join our partner ecosystem and grow your business with ADHAR
+        {/* Become a partner CTA */}
+        <section className="section-padding container-padding">
+          <div className="max-width-content">
+            <div className="relative isolate overflow-hidden rounded-3xl border border-border/70 bg-card">
+              <div className="absolute inset-0 bg-mesh opacity-90 pointer-events-none" />
+              <div className="absolute inset-0 bg-grid opacity-40 dark:opacity-25 pointer-events-none" />
+              <div className="relative px-6 py-14 sm:px-12 sm:py-16 text-center">
+                <span className="eyebrow mb-6">Join us</span>
+                <h2 className="section-heading mt-4 text-foreground">Become a partner.</h2>
+                <p className="section-subheading mt-5">
+                  Join our partner ecosystem and grow your business with ADHAR.
                 </p>
-                <div className="flex flex-col sm:flex-row gap-4 justify-center">
-                  <Button size="lg">Apply Now</Button>
-                  <Button size="lg" variant="outline">Learn More</Button>
+                <div className="mt-8 flex flex-col sm:flex-row gap-3 justify-center">
+                  <button
+                    type="button"
+                    className="btn-primary-modern group inline-flex items-center justify-center gap-2 rounded-full px-6 h-11 text-[15px] font-medium"
+                  >
+                    <span>Apply now</span>
+                    <ArrowRight className="w-4 h-4 transition-transform group-hover:translate-x-0.5" />
+                  </button>
+                  <button
+                    type="button"
+                    className="btn-secondary-modern inline-flex items-center justify-center gap-2 rounded-full px-6 h-11 text-[15px] font-medium"
+                  >
+                    <span>Learn more</span>
+                  </button>
                 </div>
-              </CardContent>
-            </Card>
+              </div>
+            </div>
           </div>
         </section>
       </main>

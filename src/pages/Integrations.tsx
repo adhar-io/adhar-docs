@@ -1,377 +1,470 @@
-import { useState } from "react";
-import { Card, CardContent } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+import { useMemo, useState } from "react";
+import { Link } from "react-router-dom";
 import { Input } from "@/components/ui/input";
 import Navigation from "@/components/landing/Navigation";
 import Footer from "@/components/landing/Footer";
-import { Search, Filter, ExternalLink, ChevronDown } from "lucide-react";
+import {
+  Search,
+  ExternalLink,
+  Hexagon,
+  Boxes,
+  GitBranch,
+  Activity,
+  Shield,
+  Cpu,
+  ArrowRight,
+  Plug,
+  type LucideIcon,
+} from "lucide-react";
+
+type Category = "Application" | "Monitoring" | "Security" | "Infrastructure" | "CI/CD" | "Storage";
+
+interface Integration {
+  name: string;
+  icon: string;
+  description: string;
+  category: Category;
+  isFoundation?: boolean;
+  features: string[];
+}
+
+const integrations: Integration[] = [
+  {
+    name: "Kubernetes",
+    icon: "https://cdn.jsdelivr.net/gh/devicons/devicon/icons/kubernetes/kubernetes-plain.svg",
+    description: "Container orchestration for automated deployment, scaling, and management.",
+    category: "Application",
+    isFoundation: true,
+    features: ["Auto-scaling", "Self-healing", "Load balancing", "Rolling updates"],
+  },
+  {
+    name: "Docker",
+    icon: "https://cdn.jsdelivr.net/gh/devicons/devicon/icons/docker/docker-original.svg",
+    description: "Containerization platform for packaging applications and dependencies.",
+    category: "Application",
+    features: ["Container packaging", "Image management", "Multi-platform", "Lightweight"],
+  },
+  {
+    name: "Jenkins",
+    icon: "https://cdn.jsdelivr.net/gh/devicons/devicon/icons/jenkins/jenkins-original.svg",
+    description: "Open-source automation server for CI/CD pipelines.",
+    category: "CI/CD",
+    features: ["Pipeline automation", "Plugin ecosystem", "Distributed builds", "Integration"],
+  },
+  {
+    name: "GitLab",
+    icon: "https://cdn.jsdelivr.net/gh/devicons/devicon/icons/gitlab/gitlab-original.svg",
+    description: "Complete DevOps platform with Git repository management.",
+    category: "CI/CD",
+    features: ["Git hosting", "CI/CD pipelines", "Issue tracking", "Code review"],
+  },
+  {
+    name: "Prometheus",
+    icon: "https://cdn.jsdelivr.net/gh/devicons/devicon/icons/prometheus/prometheus-original.svg",
+    description: "Open-source monitoring and alerting toolkit.",
+    category: "Monitoring",
+    features: ["Time-series DB", "Powerful queries", "Alerting", "Service discovery"],
+  },
+  {
+    name: "Grafana",
+    icon: "https://cdn.jsdelivr.net/gh/devicons/devicon/icons/grafana/grafana-original.svg",
+    description: "Analytics and interactive visualization for any data source.",
+    category: "Monitoring",
+    features: ["Dashboards", "Alerts", "Data sources", "Visualization"],
+  },
+  {
+    name: "Jaeger",
+    icon: "https://cdn.jsdelivr.net/gh/simple-icons/simple-icons/icons/jaeger.svg",
+    description: "End-to-end distributed tracing for microservices.",
+    category: "Monitoring",
+    features: ["Distributed tracing", "Performance monitoring", "Root cause analysis", "Service deps"],
+  },
+  {
+    name: "Fluentd",
+    icon: "https://cdn.jsdelivr.net/gh/simple-icons/simple-icons/icons/fluentd.svg",
+    description: "Unified logging layer for collecting and processing log data.",
+    category: "Monitoring",
+    features: ["Log aggregation", "Data processing", "Multiple outputs", "Flexible routing"],
+  },
+  {
+    name: "Falco",
+    icon: "https://cdn.jsdelivr.net/gh/simple-icons/simple-icons/icons/falco.svg",
+    description: "Cloud-native runtime security for threat detection.",
+    category: "Security",
+    features: ["Runtime security", "Threat detection", "Anomaly detection", "Compliance"],
+  },
+  {
+    name: "Vault",
+    icon: "https://cdn.jsdelivr.net/gh/simple-icons/simple-icons/icons/vault.svg",
+    description: "Secrets management and data protection platform.",
+    category: "Security",
+    features: ["Secret storage", "Dynamic secrets", "Encryption", "Access control"],
+  },
+  {
+    name: "Terraform",
+    icon: "https://cdn.jsdelivr.net/gh/devicons/devicon/icons/terraform/terraform-original.svg",
+    description: "Infrastructure as code for provisioning and managing resources.",
+    category: "Infrastructure",
+    features: ["IaC", "Multi-cloud", "State management", "Resource graph"],
+  },
+  {
+    name: "Helm",
+    icon: "https://cdn.jsdelivr.net/gh/devicons/devicon/icons/helm/helm-original.svg",
+    description: "Package manager for Kubernetes applications.",
+    category: "Infrastructure",
+    features: ["Package management", "Templating", "Release management", "Rollbacks"],
+  },
+  {
+    name: "Istio",
+    icon: "https://cdn.jsdelivr.net/gh/simple-icons/simple-icons/icons/istio.svg",
+    description: "Service mesh for microservices communication.",
+    category: "Infrastructure",
+    features: ["Traffic management", "Security policies", "Observability", "Service discovery"],
+  },
+  {
+    name: "Linkerd",
+    icon: "https://cdn.jsdelivr.net/gh/simple-icons/simple-icons/icons/linkerd.svg",
+    description: "Ultralight service mesh for Kubernetes.",
+    category: "Infrastructure",
+    features: ["Service mesh", "mTLS", "Load balancing", "Observability"],
+  },
+  {
+    name: "Envoy",
+    icon: "https://cdn.jsdelivr.net/gh/simple-icons/simple-icons/icons/envoyproxy.svg",
+    description: "Cloud-native, high-performance edge and service proxy.",
+    category: "Infrastructure",
+    features: ["Load balancing", "HTTP/2 & gRPC", "Observability", "Advanced routing"],
+  },
+  {
+    name: "Consul",
+    icon: "https://cdn.jsdelivr.net/gh/simple-icons/simple-icons/icons/consul.svg",
+    description: "Service networking for discovery and configuration.",
+    category: "Infrastructure",
+    features: ["Service discovery", "Health checks", "KV store", "Service mesh"],
+  },
+  {
+    name: "NATS",
+    icon: "https://cdn.jsdelivr.net/gh/simple-icons/simple-icons/icons/nats.svg",
+    description: "Cloud-native messaging for microservices.",
+    category: "Infrastructure",
+    features: ["Messaging", "Streaming", "Request-reply", "Clustering"],
+  },
+  {
+    name: "ArgoCD",
+    icon: "https://cdn.jsdelivr.net/gh/simple-icons/simple-icons/icons/argo.svg",
+    description: "Declarative GitOps continuous delivery for Kubernetes.",
+    category: "CI/CD",
+    features: ["GitOps", "Declarative deploys", "Multi-cluster", "Rollbacks"],
+  },
+];
+
+const categories: { key: Category | "All"; icon: LucideIcon }[] = [
+  { key: "All", icon: Plug },
+  { key: "Application", icon: Boxes },
+  { key: "Monitoring", icon: Activity },
+  { key: "Security", icon: Shield },
+  { key: "Infrastructure", icon: Cpu },
+  { key: "CI/CD", icon: GitBranch },
+];
 
 const Integrations = () => {
   const [searchTerm, setSearchTerm] = useState("");
-  const [selectedCategory, setSelectedCategory] = useState("All");
-  const [showAll, setShowAll] = useState(false);
+  const [selectedCategory, setSelectedCategory] = useState<Category | "All">("All");
 
-  const categories = ["All", "Application", "Monitoring", "Security", "Infrastructure", "CI/CD", "Storage"];
+  const counts = useMemo(() => {
+    const all = integrations.length;
+    const byCat: Record<string, number> = { All: all };
+    for (const i of integrations) byCat[i.category] = (byCat[i.category] || 0) + 1;
+    return byCat;
+  }, []);
 
-  const integrations = [
-    // Application
-    {
-      name: "Kubernetes",
-      icon: "https://cdn.jsdelivr.net/gh/devicons/devicon/icons/kubernetes/kubernetes-plain.svg",
-      description: "Container orchestration platform for automated deployment, scaling, and management",
-      category: "Application",
-      color: "bg-gradient-to-br from-blue-50 to-blue-100 dark:from-blue-900/20 dark:to-blue-800/20",
-      isFoundation: true,
-      features: ["Auto-scaling", "Self-healing", "Load balancing", "Rolling updates"]
-    },
-    {
-      name: "Docker",
-      icon: "https://cdn.jsdelivr.net/gh/devicons/devicon/icons/docker/docker-original.svg",
-      description: "Containerization platform for packaging applications and dependencies",
-      category: "Application",
-      color: "bg-gradient-to-br from-blue-50 to-cyan-100 dark:from-blue-900/20 dark:to-cyan-800/20",
-      features: ["Container packaging", "Image management", "Multi-platform", "Lightweight"]
-    },
-    {
-      name: "Jenkins",
-      icon: "https://cdn.jsdelivr.net/gh/devicons/devicon/icons/jenkins/jenkins-original.svg",
-      description: "Open source automation server for CI/CD pipelines",
-      category: "CI/CD",
-      color: "bg-gradient-to-br from-blue-50 to-indigo-100 dark:from-blue-900/20 dark:to-indigo-800/20",
-      features: ["Pipeline automation", "Plugin ecosystem", "Distributed builds", "Integration"]
-    },
-    {
-      name: "GitLab",
-      icon: "https://cdn.jsdelivr.net/gh/devicons/devicon/icons/gitlab/gitlab-original.svg",
-      description: "Complete DevOps platform with Git repository management",
-      category: "CI/CD",
-      color: "bg-gradient-to-br from-orange-50 to-red-100 dark:from-orange-900/20 dark:to-red-800/20",
-      features: ["Git hosting", "CI/CD pipelines", "Issue tracking", "Code review"]
-    },
-    // Monitoring
-    {
-      name: "Prometheus",
-      icon: "https://cdn.jsdelivr.net/gh/devicons/devicon/icons/prometheus/prometheus-original.svg",
-      description: "Open-source monitoring and alerting toolkit",
-      category: "Monitoring",
-      color: "bg-gradient-to-br from-orange-50 to-yellow-100 dark:from-orange-900/20 dark:to-yellow-800/20",
-      features: ["Time-series DB", "Powerful queries", "Alerting", "Service discovery"]
-    },
-    {
-      name: "Grafana",
-      icon: "https://cdn.jsdelivr.net/gh/devicons/devicon/icons/grafana/grafana-original.svg",
-      description: "Analytics and interactive visualization web application",
-      category: "Monitoring",
-      color: "bg-gradient-to-br from-orange-50 to-amber-100 dark:from-orange-900/20 dark:to-amber-800/20",
-      features: ["Dashboards", "Alerts", "Data sources", "Visualization"]
-    },
-    {
-      name: "Jaeger",
-      icon: "https://cdn.jsdelivr.net/gh/simple-icons/simple-icons/icons/jaeger.svg",
-      description: "End-to-end distributed tracing for microservices",
-      category: "Monitoring",
-      color: "bg-gradient-to-br from-indigo-50 to-purple-100 dark:from-indigo-900/20 dark:to-purple-800/20",
-      features: ["Distributed tracing", "Performance monitoring", "Root cause analysis", "Service dependencies"]
-    },
-    {
-      name: "Fluentd",
-      icon: "https://cdn.jsdelivr.net/gh/simple-icons/simple-icons/icons/fluentd.svg",
-      description: "Unified logging layer for collecting and processing log data",
-      category: "Monitoring",
-      color: "bg-gradient-to-br from-blue-50 to-cyan-100 dark:from-blue-900/20 dark:to-cyan-800/20",
-      features: ["Log aggregation", "Data processing", "Multiple outputs", "Flexible routing"]
-    },
-    // Security
-    {
-      name: "Falco",
-      icon: "https://cdn.jsdelivr.net/gh/simple-icons/simple-icons/icons/falco.svg",
-      description: "Cloud native runtime security for threat detection",
-      category: "Security",
-      color: "bg-gradient-to-br from-red-50 to-pink-100 dark:from-red-900/20 dark:to-pink-800/20",
-      features: ["Runtime security", "Threat detection", "Anomaly detection", "Compliance"]
-    },
-    {
-      name: "Vault",
-      icon: "https://cdn.jsdelivr.net/gh/simple-icons/simple-icons/icons/vault.svg",
-      description: "Secrets management and data protection platform",
-      category: "Security",
-      color: "bg-gradient-to-br from-gray-50 to-slate-100 dark:from-gray-900/20 dark:to-slate-800/20",
-      features: ["Secret storage", "Dynamic secrets", "Encryption", "Access control"]
-    },
-    // Infrastructure
-    {
-      name: "Terraform",
-      icon: "https://cdn.jsdelivr.net/gh/devicons/devicon/icons/terraform/terraform-original.svg",
-      description: "Infrastructure as code for provisioning and managing resources",
-      category: "Infrastructure",
-      color: "bg-gradient-to-br from-purple-50 to-indigo-100 dark:from-purple-900/20 dark:to-indigo-800/20",
-      features: ["Infrastructure as code", "Multi-cloud", "State management", "Resource graph"]
-    },
-    {
-      name: "Helm",
-      icon: "https://cdn.jsdelivr.net/gh/devicons/devicon/icons/helm/helm-original.svg",
-      description: "Package manager for Kubernetes applications",
-      category: "Infrastructure",
-      color: "bg-gradient-to-br from-blue-50 to-blue-100 dark:from-blue-900/20 dark:to-blue-800/20",
-      features: ["Package management", "Templating", "Release management", "Rollbacks"]
-    },
-    {
-      name: "Istio",
-      icon: "https://cdn.jsdelivr.net/gh/simple-icons/simple-icons/icons/istio.svg",
-      description: "Service mesh platform for microservices communication",
-      category: "Infrastructure",
-      color: "bg-gradient-to-br from-blue-50 to-teal-100 dark:from-blue-900/20 dark:to-teal-800/20",
-      features: ["Traffic management", "Security policies", "Observability", "Service discovery"]
-    },
-    {
-      name: "Linkerd",
-      icon: "https://cdn.jsdelivr.net/gh/simple-icons/simple-icons/icons/linkerd.svg",
-      description: "Ultralight service mesh for Kubernetes",
-      category: "Infrastructure",
-      color: "bg-gradient-to-br from-green-50 to-teal-100 dark:from-green-900/20 dark:to-teal-800/20",
-      features: ["Service mesh", "mTLS", "Load balancing", "Observability"]
-    },
-    {
-      name: "Envoy",
-      icon: "https://cdn.jsdelivr.net/gh/simple-icons/simple-icons/icons/envoyproxy.svg",
-      description: "Cloud-native high-performance edge and service proxy",
-      category: "Infrastructure",
-      color: "bg-gradient-to-br from-teal-50 to-cyan-100 dark:from-teal-900/20 dark:to-cyan-800/20",
-      features: ["Load balancing", "HTTP/2 & gRPC", "Observability", "Advanced routing"]
-    },
-    {
-      name: "Consul",
-      icon: "https://cdn.jsdelivr.net/gh/simple-icons/simple-icons/icons/consul.svg",
-      description: "Service networking solution for service discovery and configuration",
-      category: "Infrastructure",
-      color: "bg-gradient-to-br from-pink-50 to-rose-100 dark:from-pink-900/20 dark:to-rose-800/20",
-      features: ["Service discovery", "Health checking", "KV store", "Service mesh"]
-    },
-    {
-      name: "NATS",
-      icon: "https://cdn.jsdelivr.net/gh/simple-icons/simple-icons/icons/nats.svg",
-      description: "Cloud native messaging system for microservices",
-      category: "Infrastructure",
-      color: "bg-gradient-to-br from-green-50 to-emerald-100 dark:from-green-900/20 dark:to-emerald-800/20",
-      features: ["Messaging", "Streaming", "Request-reply", "Clustering"]
-    },
-    // CI/CD
-    {
-      name: "ArgoCD",
-      icon: "https://cdn.jsdelivr.net/gh/simple-icons/simple-icons/icons/argo.svg",
-      description: "Declarative GitOps continuous delivery tool for Kubernetes",
-      category: "CI/CD",
-      color: "bg-gradient-to-br from-purple-50 to-pink-100 dark:from-purple-900/20 dark:to-pink-800/20",
-      features: ["GitOps", "Declarative deployments", "Multi-cluster", "Rollbacks"]
-    }
-  ];
-
-  const filteredIntegrations = integrations.filter(integration => {
-    const matchesSearch = integration.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         integration.description.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesCategory = selectedCategory === "All" || integration.category === selectedCategory;
-    return matchesSearch && matchesCategory;
-  });
-
-  // Show only first 9 items (3 rows) by default, all if showAll is true
-  const displayedIntegrations = showAll ? filteredIntegrations : filteredIntegrations.slice(0, 9);
-  const hasMoreItems = filteredIntegrations.length > 9;
-
-  const getCategoryBadgeColor = (category: string) => {
-    switch (category) {
-      case "Application": return "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300";
-      case "Monitoring": return "bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-300";
-      case "Security": return "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300";
-      case "Infrastructure": return "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300";
-      case "CI/CD": return "bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300";
-      case "Storage": return "bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300";
-      default: return "bg-gray-100 text-gray-800 dark:bg-gray-900/30 dark:text-gray-300";
-    }
-  };
+  const filtered = useMemo(() => {
+    const q = searchTerm.trim().toLowerCase();
+    return integrations.filter((it) => {
+      const matchSearch =
+        !q || it.name.toLowerCase().includes(q) || it.description.toLowerCase().includes(q);
+      const matchCat = selectedCategory === "All" || it.category === selectedCategory;
+      return matchSearch && matchCat;
+    });
+  }, [searchTerm, selectedCategory]);
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-100 dark:from-gray-900 dark:via-blue-900/20 dark:to-indigo-900/30">
+    <div className="min-h-screen bg-background">
       <Navigation />
-      
-      <main className="pt-20">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
-          {/* Header */}
-          <div className="text-center mb-12">
-            <h1 className="text-4xl md:text-5xl font-bold text-gray-900 dark:text-white mb-6">
-              All Integrations
-            </h1>
-            <p className="text-xl text-gray-600 dark:text-gray-300 max-w-3xl mx-auto">
-              Explore our comprehensive collection of open-source integrations that power the ADHAR platform.
-            </p>
-          </div>
 
-          {/* Search and Filter */}
-          <div className="mb-8 space-y-4">
-            <div className="relative max-w-md mx-auto">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 dark:text-gray-500 w-5 h-5" />
-              <Input
-                type="text"
-                placeholder="Search integrations..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-10 bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 focus:border-blue-500 dark:focus:border-blue-400"
-              />
+      <main className="pt-16">
+        {/* Hero */}
+        <section className="relative section-padding container-padding overflow-hidden">
+          <div className="absolute inset-0 bg-mesh opacity-80 pointer-events-none" />
+          <div className="absolute inset-0 bg-grid bg-grid-fade opacity-40 dark:opacity-25 pointer-events-none" />
+          <div className="max-width-content relative text-center">
+            <span className="eyebrow mb-5"><Plug className="w-3 h-3 mr-1" />Integrations</span>
+            <h1 className="section-heading mt-5 text-foreground">
+              The tools you already use,
+              <br className="hidden sm:block" />
+              <span className="text-muted-foreground">wired in by default.</span>
+            </h1>
+            <p className="section-subheading mt-6">
+              ADHAR is built on the most trusted open-source tools in the cloud-native ecosystem —
+              tuned, hardened, and pre-configured so you don't have to.
+            </p>
+
+            <div className="mt-6 flex flex-wrap items-center justify-center gap-2">
+              <span className="inline-flex items-center px-2.5 py-0.5 rounded-full bg-primary/10 text-primary text-xs font-medium ring-1 ring-inset ring-primary/20">
+                {integrations.length} integrations
+              </span>
+              <span className="inline-flex items-center px-2.5 py-0.5 rounded-full bg-muted text-xs font-medium text-muted-foreground">
+                {categories.length - 1} categories
+              </span>
+              <span className="inline-flex items-center px-2.5 py-0.5 rounded-full bg-muted text-xs font-medium text-muted-foreground">
+                100% open source
+              </span>
             </div>
-            
-            <div className="flex justify-center">
-              <div className="flex flex-wrap gap-2 p-1 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 shadow-sm">
-                {categories.map((category) => (
-                  <Button
-                    key={category}
-                    variant={selectedCategory === category ? "default" : "ghost"}
-                    size="sm"
-                    onClick={() => setSelectedCategory(category)}
-                    className={`${
-                      selectedCategory === category
-                        ? "bg-blue-600 text-white hover:bg-blue-700 dark:bg-blue-500 dark:hover:bg-blue-600"
-                        : "text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-700"
-                    } transition-all`}
-                  >
-                    <Filter className="w-4 h-4 mr-2" />
-                    {category}
-                  </Button>
-                ))}
+          </div>
+        </section>
+
+        {/* Featured / Foundation */}
+        <section className="container-padding pb-16">
+          <div className="max-width-content">
+            <div className="relative isolate overflow-hidden rounded-3xl border border-border/70 bg-card">
+              <div className="absolute inset-0 bg-mesh opacity-90 pointer-events-none" />
+              <div className="absolute inset-0 bg-grid opacity-40 dark:opacity-25 pointer-events-none" />
+              <div className="relative px-6 py-12 sm:px-10 sm:py-14">
+                <div className="flex flex-col sm:flex-row items-start sm:items-center gap-5">
+                  <div className="inline-flex h-12 w-12 items-center justify-center rounded-2xl border border-border/70 bg-background text-primary shadow-[var(--shadow-xs)] shrink-0">
+                    <Hexagon className="w-6 h-6" />
+                  </div>
+                  <div>
+                    <span className="inline-flex items-center px-2 py-0.5 rounded-full bg-primary/10 text-primary text-[10px] font-semibold uppercase tracking-wider ring-1 ring-inset ring-primary/20 mb-2">
+                      Foundation
+                    </span>
+                    <h2 className="text-2xl sm:text-3xl font-semibold tracking-tight text-foreground">
+                      Kubernetes-native, by design
+                    </h2>
+                    <p className="mt-1 text-muted-foreground">
+                      Every workload runs on Kubernetes — and every integration is built to amplify it.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="mt-8 grid grid-cols-2 md:grid-cols-4 gap-px overflow-hidden rounded-2xl border border-border/60 bg-border/50">
+                  {[
+                    { value: "99.9%", label: "Uptime SLA" },
+                    { value: "Auto", label: "Scaling" },
+                    { value: "Zero", label: "Downtime deploys" },
+                    { value: "Multi", label: "Cloud" },
+                  ].map((m) => (
+                    <div key={m.label} className="bg-card/80 backdrop-blur-sm px-5 py-5">
+                      <div className="text-2xl font-semibold text-foreground tracking-tight tabular">{m.value}</div>
+                      <div className="mt-1 text-xs text-muted-foreground">{m.label}</div>
+                    </div>
+                  ))}
+                </div>
               </div>
             </div>
           </div>
+        </section>
 
-          {/* Results Count */}
-          <div className="text-center mb-8">
-            <p className="text-gray-600 dark:text-gray-400">
-              Showing {displayedIntegrations.length} of {filteredIntegrations.length} integrations
-            </p>
+        {/* Search + filters */}
+        <section className="container-padding">
+          <div className="max-width-content">
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+              <div className="relative w-full sm:max-w-sm">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground w-4 h-4" />
+                <Input
+                  type="text"
+                  placeholder="Search integrations..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="pl-10 h-10 bg-card"
+                />
+              </div>
+
+              <div className="text-xs text-muted-foreground">
+                Showing <span className="font-medium text-foreground tabular">{filtered.length}</span> of {integrations.length}
+              </div>
+            </div>
+
+            <div className="mt-4 flex flex-wrap gap-1.5">
+              {categories.map((c) => {
+                const Icon = c.icon;
+                const isActive = selectedCategory === c.key;
+                return (
+                  <button
+                    key={c.key}
+                    onClick={() => setSelectedCategory(c.key)}
+                    className={`inline-flex items-center gap-1.5 h-9 px-3 rounded-full text-xs font-medium transition-colors ${
+                      isActive
+                        ? 'bg-primary text-primary-foreground'
+                        : 'bg-card text-muted-foreground border border-border/70 hover:text-foreground hover:bg-muted'
+                    }`}
+                  >
+                    <Icon className="w-3.5 h-3.5" />
+                    <span>{c.key}</span>
+                    <span className={`ml-0.5 inline-flex items-center px-1.5 rounded-full text-[10px] tabular ${
+                      isActive ? 'bg-primary-foreground/15' : 'bg-muted'
+                    }`}>
+                      {counts[c.key] || 0}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
           </div>
+        </section>
 
-          {/* Integrations Grid */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
-            {displayedIntegrations.map((integration, index) => (
-              <Card key={index} className={`${integration.color} border border-gray-200/50 dark:border-gray-700/50 hover:shadow-xl transition-all duration-300 hover:scale-[1.02] group relative overflow-hidden ${integration.isFoundation ? 'ring-2 ring-blue-400 dark:ring-blue-500' : ''}`}>
-                <CardContent className="p-6">
-                  <div className="flex items-start justify-between mb-4">
-                    <div className="group-hover:scale-110 transition-transform duration-300">
-                      {integration.icon.startsWith('http') ? (
-                        <img 
-                          src={integration.icon} 
-                          alt={`${integration.name} logo`}
-                          className="w-12 h-12 object-contain"
+        {/* Grid */}
+        <section className="container-padding py-10">
+          <div className="max-width-content">
+            {filtered.length === 0 ? (
+              <div className="text-center py-16 rounded-2xl border border-border/70 bg-card">
+                <Search className="w-6 h-6 text-muted-foreground mx-auto mb-3" />
+                <h3 className="text-base font-semibold text-foreground tracking-tight">No integrations found</h3>
+                <p className="mt-1 text-sm text-muted-foreground">Try a different search or category.</p>
+                <button
+                  type="button"
+                  onClick={() => { setSearchTerm(""); setSelectedCategory("All"); }}
+                  className="btn-secondary-modern mt-5 inline-flex items-center justify-center gap-1.5 rounded-full px-4 h-9 text-xs font-medium"
+                >
+                  Clear filters
+                </button>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-px overflow-hidden rounded-2xl border border-border/70 bg-border/60">
+                {filtered.map((integration, index) => (
+                  <article
+                    key={index}
+                    className={`group flex flex-col bg-card p-6 transition-colors hover:bg-muted/30 ${
+                      integration.isFoundation ? 'ring-1 ring-inset ring-primary/30' : ''
+                    }`}
+                  >
+                    <div className="flex items-start justify-between gap-3 mb-4">
+                      <div className="inline-flex h-12 w-12 items-center justify-center rounded-2xl border border-border/70 bg-background shadow-[var(--shadow-xs)]">
+                        <img
+                          src={integration.icon}
+                          alt={integration.name}
+                          className="w-7 h-7 object-contain"
                           onError={(e) => {
                             const target = e.target as HTMLImageElement;
                             target.style.display = 'none';
-                            const fallback = target.nextElementSibling as HTMLSpanElement;
-                            if (fallback) fallback.style.display = 'flex';
                           }}
                         />
-                      ) : (
-                        <span className="text-4xl">{integration.icon}</span>
-                      )}
-                      <span 
-                        className="hidden w-12 h-12 bg-gradient-to-br from-gray-100 to-gray-200 dark:from-gray-700 dark:to-gray-600 rounded-lg items-center justify-center text-sm font-semibold text-gray-600 dark:text-gray-300"
-                        style={{ display: 'none' }}
-                      >
-                        {integration.name.substring(0, 2).toUpperCase()}
-                      </span>
-                    </div>
-                    <div className="flex flex-col gap-2">
-                      <Badge className={getCategoryBadgeColor(integration.category)} variant="outline">
-                        {integration.category}
-                      </Badge>
-                      {integration.isFoundation && (
-                        <Badge className="bg-gradient-to-r from-blue-600 to-purple-600 text-white text-xs border-0">
-                          Core
-                        </Badge>
-                      )}
-                    </div>
-                  </div>
-                  
-                  <h3 className="font-bold text-gray-900 dark:text-white text-xl mb-3">
-                    {integration.name}
-                  </h3>
-                  
-                  <p className="text-gray-600 dark:text-gray-400 mb-4 leading-relaxed">
-                    {integration.description}
-                  </p>
-                  
-                  {integration.features && (
-                    <div className="mb-4">
-                      <h4 className="font-semibold text-gray-900 dark:text-white text-sm mb-2">Key Features:</h4>
-                      <div className="flex flex-wrap gap-1">
-                        {integration.features.slice(0, 3).map((feature, idx) => (
-                          <Badge key={idx} variant="outline" className="text-xs bg-white/50 dark:bg-gray-800/50 border-gray-300 dark:border-gray-600">
-                            {feature}
-                          </Badge>
-                        ))}
-                        {integration.features.length > 3 && (
-                          <Badge variant="outline" className="text-xs bg-white/50 dark:bg-gray-800/50 border-gray-300 dark:border-gray-600">
-                            +{integration.features.length - 3} more
-                          </Badge>
+                      </div>
+                      <div className="flex flex-col items-end gap-1">
+                        <span className="inline-flex items-center px-2 py-0.5 rounded-full bg-muted text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
+                          {integration.category}
+                        </span>
+                        {integration.isFoundation && (
+                          <span className="inline-flex items-center px-2 py-0.5 rounded-full bg-primary/10 text-primary text-[10px] font-semibold uppercase tracking-wider ring-1 ring-inset ring-primary/20">
+                            Core
+                          </span>
                         )}
                       </div>
                     </div>
-                  )}
-                  
-                  <Button variant="outline" className="w-full border-gray-300 dark:border-gray-600 hover:border-blue-400 dark:hover:border-blue-500 bg-white/70 dark:bg-gray-800/70 text-gray-900 dark:text-white hover:bg-white dark:hover:bg-gray-700 transition-all">
-                    <ExternalLink className="w-4 h-4 mr-2" />
-                    Learn More
-                  </Button>
-                </CardContent>
-              </Card>
-            ))}
+
+                    <h3 className="text-base font-semibold text-foreground tracking-tight">{integration.name}</h3>
+                    <p className="mt-1.5 text-sm text-muted-foreground leading-relaxed">{integration.description}</p>
+
+                    <div className="mt-4 flex flex-wrap gap-1.5">
+                      {integration.features.slice(0, 3).map((feature, idx) => (
+                        <span key={idx} className="inline-flex items-center px-2 py-0.5 rounded-full bg-muted text-[11px] font-medium text-muted-foreground">
+                          {feature}
+                        </span>
+                      ))}
+                      {integration.features.length > 3 && (
+                        <span className="inline-flex items-center px-2 py-0.5 rounded-full border border-border/70 text-[11px] font-medium text-muted-foreground">
+                          +{integration.features.length - 3}
+                        </span>
+                      )}
+                    </div>
+
+                    <button
+                      type="button"
+                      className="btn-secondary-modern mt-5 inline-flex w-full items-center justify-center gap-1.5 rounded-full h-9 text-xs font-medium"
+                    >
+                      <ExternalLink className="w-3.5 h-3.5" />
+                      <span>Learn more</span>
+                    </button>
+                  </article>
+                ))}
+              </div>
+            )}
           </div>
+        </section>
 
-          {/* Show More/Less Button */}
-          {hasMoreItems && (
-            <div className="text-center mb-8">
-              <Button
-                onClick={() => setShowAll(!showAll)}
-                variant="outline"
-                className="border-gray-300 dark:border-gray-600 hover:border-blue-400 dark:hover:border-blue-500 bg-white dark:bg-gray-800 text-gray-900 dark:text-white hover:bg-gray-50 dark:hover:bg-gray-700 px-8 py-3 transition-all"
-              >
-                {showAll ? (
-                  <>
-                    Show Less
-                    <ChevronDown className="w-4 h-4 ml-2 rotate-180" />
-                  </>
-                ) : (
-                  <>
-                    View All {filteredIntegrations.length} Integrations
-                    <ChevronDown className="w-4 h-4 ml-2" />
-                  </>
-                )}
-              </Button>
-            </div>
-          )}
-
-          {/* No Results */}
-          {filteredIntegrations.length === 0 && (
-            <div className="text-center py-12">
-              <div className="text-6xl mb-4">🔍</div>
-              <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">
-                No integrations found
-              </h3>
-              <p className="text-gray-600 dark:text-gray-400 mb-4">
-                Try adjusting your search terms or selected category
+        {/* How it fits */}
+        <section className="relative section-padding container-padding bg-muted/30">
+          <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-border to-transparent" />
+          <div className="max-width-content">
+            <div className="text-center mb-14">
+              <span className="eyebrow mb-5">How it fits</span>
+              <h2 className="section-heading mt-5 text-foreground">
+                Integrations
+                <br className="hidden sm:block" />
+                <span className="text-muted-foreground">that compose, not collide.</span>
+              </h2>
+              <p className="section-subheading mt-6">
+                Every integration ships with sensible defaults, secure-by-default networking, and observability baked in.
               </p>
-              <Button 
-                onClick={() => {
-                  setSearchTerm("");
-                  setSelectedCategory("All");
-                }}
-                variant="outline"
-                className="border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white hover:bg-gray-50 dark:hover:bg-gray-800 transition-all"
-              >
-                Clear Filters
-              </Button>
             </div>
-          )}
-        </div>
+
+            <div className="grid sm:grid-cols-3 gap-px overflow-hidden rounded-2xl border border-border/70 bg-border/60">
+              {[
+                { icon: Boxes, title: "Pre-configured", description: "Hardened defaults, version-pinned, and tested in production." },
+                { icon: Activity, title: "Observable", description: "Every component emits metrics, logs, and traces to a shared pipeline." },
+                { icon: Shield, title: "Secured", description: "mTLS, RBAC, and policy enforcement applied uniformly." },
+              ].map((item, idx) => {
+                const Icon = item.icon;
+                return (
+                  <article key={idx} className="bg-card p-7">
+                    <div className="mb-5 inline-flex h-10 w-10 items-center justify-center rounded-xl border border-border/70 bg-background text-primary shadow-[var(--shadow-xs)]">
+                      <Icon className="h-5 w-5" />
+                    </div>
+                    <h3 className="text-base font-semibold text-foreground tracking-tight">{item.title}</h3>
+                    <p className="mt-2 text-sm text-muted-foreground leading-relaxed">{item.description}</p>
+                  </article>
+                );
+              })}
+            </div>
+          </div>
+        </section>
+
+        {/* Related */}
+        <section className="section-padding container-padding">
+          <div className="max-width-content">
+            <div className="text-center mb-10">
+              <span className="eyebrow mb-5">Continue exploring</span>
+              <h2 className="section-heading mt-5 text-foreground">Related topics.</h2>
+            </div>
+
+            <div className="grid sm:grid-cols-3 gap-4">
+              {[
+                { to: "/architecture", icon: Boxes, title: "Architecture", description: "How these integrations fit into the layered platform." },
+                { to: "/capabilities", icon: Cpu, title: "Capabilities", description: "What you can build on top of the integration stack." },
+                { to: "/security", icon: Shield, title: "Security", description: "How we secure the data plane and the integrations." },
+              ].map((card, idx) => {
+                const Icon = card.icon;
+                return (
+                  <Link key={idx} to={card.to} className="group block">
+                    <article className="card-interactive p-6 h-full">
+                      <div className="mb-5 inline-flex h-10 w-10 items-center justify-center rounded-xl border border-border/70 bg-background text-primary shadow-[var(--shadow-xs)]">
+                        <Icon className="h-5 w-5" />
+                      </div>
+                      <h3 className="text-base font-semibold text-foreground tracking-tight">{card.title}</h3>
+                      <p className="mt-2 text-sm text-muted-foreground leading-relaxed">{card.description}</p>
+                      <div className="mt-4 inline-flex items-center gap-1 text-xs font-medium text-primary">
+                        <span>Learn more</span>
+                        <ArrowRight className="w-3.5 h-3.5 transition-transform group-hover:translate-x-0.5" />
+                      </div>
+                    </article>
+                  </Link>
+                );
+              })}
+            </div>
+          </div>
+        </section>
       </main>
-      
+
       <Footer />
     </div>
   );

@@ -1,318 +1,491 @@
 import { useState, useEffect } from "react";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import Navigation from "@/components/landing/Navigation";
 import Footer from "@/components/landing/Footer";
-import { Bot, Code, Zap, Shield, GitBranch, Monitor, Gauge, Users, Cloud, Database, Lock } from "lucide-react";
+import {
+  Bot,
+  Code,
+  GitBranch,
+  Monitor,
+  Shield,
+  Users,
+  Gauge,
+  Zap,
+  Cloud,
+  Database,
+  Workflow,
+  Boxes,
+  Terminal,
+  Settings,
+  ArrowRight,
+  Check,
+  type LucideIcon,
+} from "lucide-react";
 import { Link } from "react-router-dom";
+import { ADHAR_CONSOLE_LOGIN_URL } from "@/lib/config";
+
+interface Capability {
+  icon: LucideIcon;
+  title: string;
+  description: string;
+  features: string[];
+  metrics: { value: string; label: string }[];
+}
+
+const capabilities: Capability[] = [
+  {
+    icon: Bot,
+    title: "AI-powered code generation",
+    description: "Generate, refactor, and explain code with context-aware models trained on production stacks.",
+    features: [
+      "Natural language to working code",
+      "Context-aware suggestions across files",
+      "Automated refactoring and optimization",
+      "50+ languages and frameworks supported",
+      "Smart error detection and one-click fixes",
+    ],
+    metrics: [
+      { value: "70%", label: "faster development" },
+      { value: "90%", label: "code accuracy" },
+      { value: "50+", label: "languages" },
+    ],
+  },
+  {
+    icon: Code,
+    title: "Automated testing & QA",
+    description: "Auto-generated unit, integration, and end-to-end tests with continuous quality monitoring.",
+    features: [
+      "Auto-generated unit and integration tests",
+      "Continuous quality monitoring",
+      "Code coverage analysis",
+      "Performance benchmarking",
+      "Security vulnerability scanning",
+    ],
+    metrics: [
+      { value: "95%", label: "test coverage" },
+      { value: "80%", label: "fewer bugs" },
+      { value: "60%", label: "faster QA cycles" },
+    ],
+  },
+  {
+    icon: GitBranch,
+    title: "Intelligent deployment",
+    description: "Zero-downtime CI/CD with canary, blue/green, and automatic rollback on regression.",
+    features: [
+      "Zero-downtime deployments",
+      "Automated rollback mechanisms",
+      "Multi-environment management",
+      "Canary and blue-green strategies",
+      "Infrastructure as Code integration",
+    ],
+    metrics: [
+      { value: "99.9%", label: "uptime" },
+      { value: "5×", label: "faster deploys" },
+      { value: "0", label: "failed deploys" },
+    ],
+  },
+  {
+    icon: Monitor,
+    title: "Real-time observability",
+    description: "Metrics, traces, and logs unified — with AI-driven correlation and incident detection.",
+    features: [
+      "Real-time performance metrics",
+      "Distributed tracing",
+      "Log aggregation and analysis",
+      "Alerting and incident management",
+      "Predictive failure detection",
+    ],
+    metrics: [
+      { value: "100%", label: "visibility" },
+      { value: "90%", label: "faster MTTR" },
+      { value: "24/7", label: "monitoring" },
+    ],
+  },
+  {
+    icon: Shield,
+    title: "Security & compliance",
+    description: "Built-in scanning, secrets management, and audit-ready reporting for SOC 2, GDPR, and HIPAA.",
+    features: [
+      "Automated security scanning",
+      "Compliance reporting (SOC 2, GDPR, HIPAA)",
+      "Secrets and credentials management",
+      "Access control and audit trails",
+      "Threat detection and response",
+    ],
+    metrics: [
+      { value: "100%", label: "compliance" },
+      { value: "0", label: "incidents" },
+      { value: "24/7", label: "threat monitoring" },
+    ],
+  },
+  {
+    icon: Users,
+    title: "Team collaboration",
+    description: "Role-based access, automated reviews, and productivity analytics for engineering at scale.",
+    features: [
+      "Role-based access control",
+      "Automated code reviews",
+      "Team productivity analytics",
+      "Knowledge sharing platforms",
+      "Workflow automation",
+    ],
+    metrics: [
+      { value: "3×", label: "productivity" },
+      { value: "50%", label: "faster onboarding" },
+      { value: "100%", label: "review coverage" },
+    ],
+  },
+];
+
+const useCases = [
+  {
+    icon: Cloud,
+    title: "Platform engineering",
+    description: "Replace months of platform work with a single command. Self-service guardrails for every team.",
+    audience: "Platform teams",
+  },
+  {
+    icon: Workflow,
+    title: "Application teams",
+    description: "Ship features with confidence. CI/CD, environments, and observability already wired up.",
+    audience: "Product engineers",
+  },
+  {
+    icon: Database,
+    title: "Data & ML teams",
+    description: "Reproducible pipelines, dataset versioning, and managed inference — without a separate stack.",
+    audience: "Data & ML engineers",
+  },
+  {
+    icon: Shield,
+    title: "Security teams",
+    description: "Policy as code, audit trails, and continuous scanning. Approve frameworks, not tickets.",
+    audience: "Security & compliance",
+  },
+];
+
+const builders = [
+  { icon: Terminal, title: "CLI-first", description: "Everything scriptable from your terminal — no clicking through wizards." },
+  { icon: Boxes, title: "Composable", description: "Mix services to fit your architecture. Sensible defaults, swappable parts." },
+  { icon: Settings, title: "Policy as code", description: "Governance lives in version control alongside your application." },
+  { icon: Zap, title: "Fast feedback", description: "Sub-second hot reload locally, fast PR previews in CI." },
+];
+
+const techSpecs = [
+  {
+    icon: Gauge,
+    title: "Performance",
+    items: [
+      "Sub-second API response times",
+      "99.99% availability SLA",
+      "Auto-scaling for any workload",
+      "Global CDN distribution",
+      "Real-time collaboration",
+    ],
+  },
+  {
+    icon: Shield,
+    title: "Security",
+    items: [
+      "SOC 2 Type II compliant",
+      "End-to-end encryption",
+      "Role-based access control",
+      "Audit logging with 7yr retention",
+      "Continuous pen-testing",
+    ],
+  },
+  {
+    icon: Users,
+    title: "Scale",
+    items: [
+      "Unlimited team members",
+      "Multi-tenancy with isolation",
+      "Horizontal scaling per service",
+      "Multi-region deployment",
+      "Enterprise-grade infra",
+    ],
+  },
+];
 
 const Capabilities = () => {
   const [activeCapability, setActiveCapability] = useState(0);
 
-  const capabilities = [
-    {
-      icon: <Bot className="w-8 h-8" />,
-      title: "AI-Powered Code Generation",
-      description: "Intelligent code generation and completion powered by advanced AI models",
-      features: [
-        "Natural language to code conversion",
-        "Context-aware code suggestions",
-        "Automated refactoring and optimization",
-        "Multi-language support (Python, JavaScript, Go, Java, etc.)",
-        "Smart error detection and fixes"
-      ],
-      metrics: ["70% faster development", "90% code accuracy", "50+ languages supported"]
-    },
-    {
-      icon: <Code className="w-8 h-8" />,
-      title: "Automated Testing & Quality Assurance",
-      description: "Comprehensive testing automation with intelligent test generation",
-      features: [
-        "Auto-generated unit and integration tests",
-        "Continuous quality monitoring",
-        "Code coverage analysis",
-        "Performance benchmarking",
-        "Security vulnerability scanning"
-      ],
-      metrics: ["95% test coverage", "80% fewer bugs", "60% faster QA cycles"]
-    },
-    {
-      icon: <GitBranch className="w-8 h-8" />,
-      title: "Intelligent Deployment Pipelines",
-      description: "Smart CI/CD pipelines with automated deployment strategies",
-      features: [
-        "Zero-downtime deployments",
-        "Automated rollback mechanisms",
-        "Multi-environment management",
-        "Canary and blue-green deployments",
-        "Infrastructure as Code integration"
-      ],
-      metrics: ["99.9% uptime", "5x faster deployments", "Zero failed deployments"]
-    },
-    {
-      icon: <Monitor className="w-8 h-8" />,
-      title: "Real-time Monitoring & Observability",
-      description: "Comprehensive platform monitoring with AI-driven insights",
-      features: [
-        "Real-time performance metrics",
-        "Distributed tracing",
-        "Log aggregation and analysis",
-        "Alerting and incident management",
-        "Predictive failure detection"
-      ],
-      metrics: ["100% system visibility", "90% faster issue resolution", "Proactive alerting"]
-    },
-    {
-      icon: <Shield className="w-8 h-8" />,
-      title: "Security & Compliance Automation",
-      description: "Built-in security controls with automated compliance monitoring",
-      features: [
-        "Automated security scanning",
-        "Compliance reporting (SOC 2, GDPR, HIPAA)",
-        "Secrets management",
-        "Access control and audit trails",
-        "Threat detection and response"
-      ],
-      metrics: ["100% compliance coverage", "Zero security incidents", "24/7 threat monitoring"]
-    },
-    {
-      icon: <Users className="w-8 h-8" />,
-      title: "Team Collaboration & Governance",
-      description: "Advanced collaboration tools with intelligent workflow management",
-      features: [
-        "Role-based access control",
-        "Automated code reviews",
-        "Team productivity analytics",
-        "Knowledge sharing platforms",
-        "Workflow automation"
-      ],
-      metrics: ["300% team productivity", "50% faster onboarding", "100% code review coverage"]
-    }
-  ];
-
   useEffect(() => {
-    const interval = setInterval(() => {
+    const id = setInterval(() => {
       setActiveCapability((prev) => (prev + 1) % capabilities.length);
-    }, 5000);
-    return () => clearInterval(interval);
+    }, 6000);
+    return () => clearInterval(id);
   }, []);
+
+  const active = capabilities[activeCapability];
+  const ActiveIcon = active.icon;
 
   return (
     <div className="min-h-screen bg-background">
       <Navigation />
-      
-      <main className="pt-20">
-        {/* Hero Section */}
-        <section className="relative py-32 px-4 sm:px-6 lg:px-8 overflow-hidden bg-gradient-to-br from-primary/5 via-background to-accent/5">
-          <div className="absolute inset-0" style={{
-            backgroundImage: `radial-gradient(circle at 1px 1px, hsl(var(--muted-foreground) / 0.15) 1px, transparent 0)`,
-            backgroundSize: '40px 40px'
-          }}></div>
-          <div className="max-w-7xl mx-auto relative">
-            {/* Header */}
-            <div className="text-center mb-16">
-              <Badge className="mb-6 px-5 py-2 bg-primary/10 text-primary border-primary/20">
-                <Zap className="w-4 h-4 mr-2" />
-                Core Platform Capabilities
-              </Badge>
-              <h1 className="text-5xl md:text-7xl font-bold mb-6 tracking-tight">
-                <span className="block mb-2">Intelligent Development</span>
-                <span className="bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 bg-clip-text text-transparent">
-                  Platform Capabilities
-                </span>
-              </h1>
-              <p className="text-xl text-muted-foreground max-w-4xl mx-auto leading-relaxed">
-                ADHAR combines cutting-edge AI technology with proven DevOps practices to deliver 
-                unprecedented development velocity, quality, and security for modern engineering teams.
-              </p>
-            </div>
 
-            {/* Interactive Capabilities Showcase */}
-            <div className="mb-16">
-              <div className="grid lg:grid-cols-2 gap-12 items-center">
-                <div>
-                  <h2 className="text-3xl font-bold mb-8">
-                    Explore Our Core Capabilities
-                  </h2>
-                  <div className="space-y-4">
-                    {capabilities.map((capability, index) => (
-                      <Card 
-                        key={index}
-                        className={`cursor-pointer transition-all duration-300 ${
-                          activeCapability === index 
-                            ? 'ring-2 ring-primary shadow-lg' 
-                            : 'hover:shadow-md'
-                        }`}
-                        onClick={() => setActiveCapability(index)}
-                      >
-                        <CardContent className="p-4">
-                          <div className="flex items-center space-x-4">
-                            <div className={`p-2 rounded-lg ${
-                              activeCapability === index 
-                                ? 'bg-primary text-primary-foreground' 
-                                : 'bg-muted text-muted-foreground'
-                            }`}>
-                              {capability.icon}
+      <main className="pt-16">
+        {/* Hero */}
+        <section className="relative section-padding container-padding overflow-hidden">
+          <div className="absolute inset-0 bg-mesh opacity-80 pointer-events-none" />
+          <div className="absolute inset-0 bg-grid bg-grid-fade opacity-40 dark:opacity-25 pointer-events-none" />
+          <div className="max-width-content relative text-center">
+            <span className="eyebrow mb-5"><Zap className="w-3 h-3 mr-1" />Capabilities</span>
+            <h1 className="section-heading mt-5 text-foreground">
+              An intelligent platform
+              <br className="hidden sm:block" />
+              <span className="text-muted-foreground">for every step of delivery.</span>
+            </h1>
+            <p className="section-subheading mt-6">
+              ADHAR combines AI-assisted authoring with proven DevOps practices — so teams ship
+              with unprecedented velocity, quality, and security.
+            </p>
+            <div className="mt-8 flex flex-col sm:flex-row gap-3 justify-center">
+              <a href={ADHAR_CONSOLE_LOGIN_URL} className="w-full sm:w-auto">
+                <button type="button" className="btn-primary-modern group w-full sm:w-auto inline-flex items-center justify-center gap-2 rounded-full px-6 h-11 text-[15px] font-medium">
+                  <span>Get started</span>
+                  <ArrowRight className="w-4 h-4 transition-transform group-hover:translate-x-0.5" />
+                </button>
+              </a>
+              <Link to="/architecture" className="w-full sm:w-auto">
+                <button type="button" className="btn-secondary-modern w-full sm:w-auto inline-flex items-center justify-center gap-2 rounded-full px-6 h-11 text-[15px] font-medium">
+                  <Database className="w-4 h-4 text-muted-foreground" />
+                  <span>See architecture</span>
+                </button>
+              </Link>
+            </div>
+          </div>
+        </section>
+
+        {/* Interactive showcase */}
+        <section className="container-padding pb-16">
+          <div className="max-width-content">
+            <div className="grid lg:grid-cols-[1fr_1.4fr] gap-px overflow-hidden rounded-3xl border border-border/70 bg-border/60">
+              {/* List */}
+              <div className="bg-card p-4 sm:p-5">
+                <div className="px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                  Core capabilities
+                </div>
+                <ul className="mt-1 space-y-1">
+                  {capabilities.map((capability, index) => {
+                    const Icon = capability.icon;
+                    const isActive = activeCapability === index;
+                    return (
+                      <li key={index}>
+                        <button
+                          onClick={() => setActiveCapability(index)}
+                          className={`group w-full text-left rounded-xl p-3 transition-colors ${
+                            isActive ? 'bg-muted/60' : 'hover:bg-muted/40'
+                          }`}
+                        >
+                          <div className="flex items-start gap-3">
+                            <div
+                              className={`mt-0.5 inline-flex h-9 w-9 items-center justify-center rounded-lg border transition-colors ${
+                                isActive
+                                  ? 'bg-primary/10 text-primary border-primary/30'
+                                  : 'bg-background text-muted-foreground border-border/70'
+                              }`}
+                            >
+                              <Icon className="h-4 w-4" />
                             </div>
-                            <div>
-                              <h3 className="font-semibold">
+                            <div className="flex-1 min-w-0">
+                              <div className={`text-sm font-semibold tracking-tight ${isActive ? 'text-foreground' : 'text-foreground/90'}`}>
                                 {capability.title}
-                              </h3>
-                              <p className="text-sm text-muted-foreground">
+                              </div>
+                              <div className="mt-0.5 text-xs text-muted-foreground line-clamp-1">
                                 {capability.description}
-                              </p>
+                              </div>
                             </div>
+                            <ArrowRight
+                              className={`mt-1 h-4 w-4 transition-all ${
+                                isActive ? 'opacity-100 translate-x-0 text-primary' : 'opacity-0 -translate-x-1 text-muted-foreground'
+                              }`}
+                            />
                           </div>
-                        </CardContent>
-                      </Card>
-                    ))}
-                  </div>
-                </div>
-
-                <div className="lg:pl-8">
-                  <Card className="shadow-xl">
-                    <CardHeader>
-                      <div className="flex items-center space-x-4 mb-4">
-                        <div className="p-3 bg-primary rounded-lg text-primary-foreground">
-                          {capabilities[activeCapability].icon}
-                        </div>
-                        <div>
-                          <CardTitle className="text-xl">
-                            {capabilities[activeCapability].title}
-                          </CardTitle>
-                          <CardDescription>
-                            {capabilities[activeCapability].description}
-                          </CardDescription>
-                        </div>
-                      </div>
-                    </CardHeader>
-                    <CardContent>
-                      <div className="space-y-6">
-                        <div>
-                          <h4 className="font-semibold mb-3">Key Features:</h4>
-                          <ul className="space-y-2">
-                            {capabilities[activeCapability].features.map((feature, idx) => (
-                              <li key={idx} className="flex items-center text-muted-foreground">
-                                <Zap className="w-4 h-4 mr-2 text-primary" />
-                                {feature}
-                              </li>
-                            ))}
-                          </ul>
-                        </div>
-                        
-                        <div>
-                          <h4 className="font-semibold mb-3">Performance Metrics:</h4>
-                          <div className="flex flex-wrap gap-2">
-                            {capabilities[activeCapability].metrics.map((metric, idx) => (
-                              <Badge key={idx} variant="outline" className="bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-400 border-green-200 dark:border-green-800">
-                                {metric}
-                              </Badge>
-                            ))}
-                          </div>
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-                </div>
+                        </button>
+                      </li>
+                    );
+                  })}
+                </ul>
               </div>
-            </div>
 
-            {/* Architecture Integration */}
-            <div className="mb-16">
-              <Card className="bg-gradient-to-r from-blue-600 to-purple-600 text-white">
-                <CardContent className="p-12 text-center">
-                  <Cloud className="w-16 h-16 mx-auto mb-6 opacity-90" />
-                  <h2 className="text-3xl font-bold mb-4">
-                    Seamlessly Integrated Architecture
-                  </h2>
-                  <p className="text-xl text-blue-100 mb-8 max-w-3xl mx-auto">
-                    All capabilities work together through our unified platform architecture, 
-                    providing a cohesive development experience from code to production.
-                  </p>
-                  <div className="flex flex-col sm:flex-row gap-4 justify-center">
-                    <Link to="/architecture">
-                      <Button variant="secondary" size="lg" className="bg-white text-blue-600 hover:bg-gray-100">
-                        <Database className="w-5 h-5 mr-2" />
-                        View Architecture
-                      </Button>
-                    </Link>
-                    <Link to="/integrations">
-                      <Button variant="outline" size="lg" className="border-white text-white hover:bg-white/10">
-                        <Lock className="w-5 h-5 mr-2" />
-                        Explore Integrations
-                      </Button>
-                    </Link>
+              {/* Detail */}
+              <div className="bg-card p-6 sm:p-8">
+                <div className="flex items-start gap-4 mb-5">
+                  <div className="inline-flex h-12 w-12 items-center justify-center rounded-2xl border border-border/70 bg-background text-primary shadow-[var(--shadow-xs)]">
+                    <ActiveIcon className="h-5 w-5" />
                   </div>
-                </CardContent>
-              </Card>
-            </div>
+                  <div>
+                    <h2 className="text-xl sm:text-2xl font-semibold tracking-tight text-foreground">{active.title}</h2>
+                    <p className="mt-1 text-sm text-muted-foreground leading-relaxed">{active.description}</p>
+                  </div>
+                </div>
 
-            {/* Technical Specifications */}
-            <div className="mb-16">
-              <h2 className="text-3xl font-bold mb-8 text-center">
-                Technical Specifications
-              </h2>
-              <div className="grid md:grid-cols-3 gap-6">
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="flex items-center">
-                      <Gauge className="w-6 h-6 mr-2 text-blue-600" />
-                      Performance
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <ul className="space-y-2 text-muted-foreground">
-                      <li>• Sub-second response times</li>
-                      <li>• 99.99% availability SLA</li>
-                      <li>• Auto-scaling capabilities</li>
-                      <li>• Global CDN distribution</li>
-                      <li>• Real-time collaboration</li>
-                    </ul>
-                  </CardContent>
-                </Card>
+                <div className="mb-6 grid grid-cols-3 gap-px overflow-hidden rounded-2xl border border-border/60 bg-border/50">
+                  {active.metrics.map((m, idx) => (
+                    <div key={idx} className="bg-card/80 backdrop-blur-sm px-4 py-4">
+                      <div className="text-xl font-semibold text-foreground tracking-tight tabular">{m.value}</div>
+                      <div className="mt-0.5 text-xs text-muted-foreground">{m.label}</div>
+                    </div>
+                  ))}
+                </div>
 
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="flex items-center">
-                      <Shield className="w-6 h-6 mr-2 text-green-600" />
-                      Security
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <ul className="space-y-2 text-muted-foreground">
-                      <li>• SOC 2 Type II compliant</li>
-                      <li>• End-to-end encryption</li>
-                      <li>• Role-based access control</li>
-                      <li>• Audit logging</li>
-                      <li>• Penetration testing</li>
-                    </ul>
-                  </CardContent>
-                </Card>
-
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="flex items-center">
-                      <Users className="w-6 h-6 mr-2 text-purple-600" />
-                      Scalability
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <ul className="space-y-2 text-muted-foreground">
-                      <li>• Unlimited team members</li>
-                      <li>• Multi-tenancy support</li>
-                      <li>• Horizontal scaling</li>
-                      <li>• Global deployment</li>
-                      <li>• Enterprise-grade infrastructure</li>
-                    </ul>
-                  </CardContent>
-                </Card>
+                <h3 className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground mb-3">What's included</h3>
+                <ul className="space-y-2.5">
+                  {active.features.map((feature, idx) => (
+                    <li key={idx} className="flex items-start gap-2.5 text-sm text-foreground/90">
+                      <Check className="mt-0.5 h-4 w-4 flex-shrink-0 text-primary/80" strokeWidth={2.5} />
+                      <span>{feature}</span>
+                    </li>
+                  ))}
+                </ul>
               </div>
             </div>
           </div>
         </section>
+
+        {/* Built for */}
+        <section className="relative section-padding container-padding bg-muted/30">
+          <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-border to-transparent" />
+          <div className="max-width-content">
+            <div className="text-center mb-14">
+              <span className="eyebrow mb-5">Built for</span>
+              <h2 className="section-heading mt-5 text-foreground">
+                One platform,
+                <br className="hidden sm:block" />
+                <span className="text-muted-foreground">every engineering role.</span>
+              </h2>
+              <p className="section-subheading mt-6">
+                Whether you ship a single app or run a platform org of hundreds, ADHAR scales with the way you work.
+              </p>
+            </div>
+
+            <div className="grid sm:grid-cols-2 gap-px overflow-hidden rounded-2xl border border-border/70 bg-border/60">
+              {useCases.map((uc, idx) => {
+                const Icon = uc.icon;
+                return (
+                  <article key={idx} className="bg-card p-7 sm:p-8 transition-colors hover:bg-muted/30">
+                    <div className="flex items-start gap-4">
+                      <div className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-border/70 bg-background text-primary shadow-[var(--shadow-xs)]">
+                        <Icon className="h-5 w-5" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2">
+                          <h3 className="text-lg font-semibold text-foreground tracking-tight">{uc.title}</h3>
+                          <span className="inline-flex items-center px-2 py-0.5 rounded-full bg-muted text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
+                            {uc.audience}
+                          </span>
+                        </div>
+                        <p className="mt-2 text-sm text-muted-foreground leading-relaxed">{uc.description}</p>
+                      </div>
+                    </div>
+                  </article>
+                );
+              })}
+            </div>
+          </div>
+        </section>
+
+        {/* Builder principles */}
+        <section className="relative section-padding container-padding">
+          <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-border to-transparent" />
+          <div className="max-width-content">
+            <div className="text-center mb-14">
+              <span className="eyebrow mb-5">How it feels</span>
+              <h2 className="section-heading mt-5 text-foreground">
+                Designed for
+                <br className="hidden sm:block" />
+                <span className="text-muted-foreground">the way engineers work.</span>
+              </h2>
+            </div>
+
+            <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-px overflow-hidden rounded-2xl border border-border/70 bg-border/60">
+              {builders.map((b, idx) => {
+                const Icon = b.icon;
+                return (
+                  <article key={idx} className="bg-card p-6 transition-colors hover:bg-muted/30">
+                    <div className="mb-4 inline-flex h-9 w-9 items-center justify-center rounded-lg border border-border/70 bg-background text-primary shadow-[var(--shadow-xs)]">
+                      <Icon className="h-4 w-4" />
+                    </div>
+                    <h3 className="text-sm font-semibold text-foreground tracking-tight">{b.title}</h3>
+                    <p className="mt-1.5 text-xs text-muted-foreground leading-relaxed">{b.description}</p>
+                  </article>
+                );
+              })}
+            </div>
+          </div>
+        </section>
+
+        {/* Tech specs */}
+        <section className="relative section-padding container-padding bg-muted/30">
+          <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-border to-transparent" />
+          <div className="max-width-content">
+            <div className="text-center mb-14">
+              <span className="eyebrow mb-5">Technical specs</span>
+              <h2 className="section-heading mt-5 text-foreground">The numbers.</h2>
+            </div>
+
+            <div className="grid sm:grid-cols-3 gap-px overflow-hidden rounded-2xl border border-border/70 bg-border/60">
+              {techSpecs.map((spec, idx) => {
+                const Icon = spec.icon;
+                return (
+                  <article key={idx} className="bg-card p-7">
+                    <div className="flex items-center gap-3 mb-5">
+                      <div className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-border/70 bg-background text-primary shadow-[var(--shadow-xs)]">
+                        <Icon className="h-5 w-5" />
+                      </div>
+                      <h3 className="text-base font-semibold text-foreground tracking-tight">{spec.title}</h3>
+                    </div>
+                    <ul className="space-y-2 border-t border-border/60 pt-5">
+                      {spec.items.map((item, i) => (
+                        <li key={i} className="flex items-start gap-2.5 text-sm text-muted-foreground">
+                          <Check className="mt-0.5 h-4 w-4 flex-shrink-0 text-primary/80" strokeWidth={2.5} />
+                          <span>{item}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </article>
+                );
+              })}
+            </div>
+          </div>
+        </section>
+
+        {/* Related */}
+        <section className="section-padding container-padding">
+          <div className="max-width-content">
+            <div className="text-center mb-10">
+              <span className="eyebrow mb-5">Continue exploring</span>
+              <h2 className="section-heading mt-5 text-foreground">Related topics.</h2>
+            </div>
+
+            <div className="grid sm:grid-cols-3 gap-4">
+              {[
+                { to: "/architecture", icon: Boxes, title: "Architecture", description: "Layered, cloud-native architecture and request flow." },
+                { to: "/integrations", icon: Workflow, title: "Integrations", description: "Plug into Kubernetes, GitOps, observability, and more." },
+                { to: "/security", icon: Shield, title: "Security", description: "Zero-trust networking and audit-grade traceability." },
+              ].map((card, idx) => {
+                const Icon = card.icon;
+                return (
+                  <Link key={idx} to={card.to} className="group block">
+                    <article className="card-interactive p-6 h-full">
+                      <div className="mb-5 inline-flex h-10 w-10 items-center justify-center rounded-xl border border-border/70 bg-background text-primary shadow-[var(--shadow-xs)]">
+                        <Icon className="h-5 w-5" />
+                      </div>
+                      <h3 className="text-base font-semibold text-foreground tracking-tight">{card.title}</h3>
+                      <p className="mt-2 text-sm text-muted-foreground leading-relaxed">{card.description}</p>
+                      <div className="mt-4 inline-flex items-center gap-1 text-xs font-medium text-primary">
+                        <span>Learn more</span>
+                        <ArrowRight className="w-3.5 h-3.5 transition-transform group-hover:translate-x-0.5" />
+                      </div>
+                    </article>
+                  </Link>
+                );
+              })}
+            </div>
+          </div>
+        </section>
       </main>
-      
+
       <Footer />
     </div>
   );

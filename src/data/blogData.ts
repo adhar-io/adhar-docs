@@ -18,24 +18,24 @@ export interface BlogPost {
 export const blogPosts: BlogPost[] = [
   {
     id: '1',
-    title: 'Introducing ADHAR 2.0: The Future of Cloud-Native Development',
-    slug: 'introducing-adhar-2-0',
-    excerpt: 'We\'re excited to announce the release of ADHAR 2.0, featuring enhanced AI-powered development tools, improved security, and streamlined deployment workflows.',
-    content: `# Introducing ADHAR 2.0: The Future of Cloud-Native Development
+    title: 'Introducing ADHAR 1.0: The Future of Cloud-Native Development',
+    slug: 'introducing-adhar-1-0',
+    excerpt: 'We\'re excited to announce the release of ADHAR 1.0, featuring enhanced AI-powered development tools, improved security, and streamlined deployment workflows.',
+    content: `# Introducing ADHAR 1.0: The Future of Cloud-Native Development
 
-We're thrilled to announce the release of ADHAR 2.0, our most ambitious update yet. This release represents months of development and feedback from our amazing community of developers and organizations worldwide.
+We're thrilled to announce the release of ADHAR 1.0, our first major release. This represents months of development and feedback from our amazing community of developers and organizations worldwide.
 
-## What's New in ADHAR 2.0
+## What's in ADHAR 1.0
 
-### Enhanced AI-Powered Development
-ADHAR 2.0 introduces our revolutionary AI assistant that can help you:
+### AI-Powered Development
+ADHAR 1.0 introduces an AI assistant that can help you:
 - Generate boilerplate code and configurations
 - Suggest architectural improvements
 - Automatically detect and fix security vulnerabilities
 - Optimize performance bottlenecks
 
 ### Streamlined Deployment Workflows
-Our new deployment engine makes it easier than ever to get your applications from development to production:
+Our deployment engine makes it easier than ever to get your applications from development to production:
 
 \`\`\`bash
 # One command deployment
@@ -45,14 +45,14 @@ adhar deploy --environment production --auto-scale
 adhar update --strategy blue-green
 
 # Rollback in case of issues
-adhar rollback --to-version v1.2.3
+adhar rollback --to-version v1.0.0
 \`\`\`
 
-### Improved Security Framework
-Security is at the heart of everything we do. ADHAR 2.0 includes:
+### Security Framework
+Security is at the heart of everything we do. ADHAR 1.0 includes:
 
 \`\`\`yaml
-# Enhanced security configuration
+# Security configuration
 apiVersion: v1
 kind: SecurityPolicy
 metadata:
@@ -69,24 +69,24 @@ spec:
     atRest: true
 \`\`\`
 
-## Migration Guide
+## Getting Started
 
-Upgrading from ADHAR 1.x is straightforward:
+Spin up your first ADHAR platform in under 10 minutes:
 
-\`\`\`javascript
-// Install the migration tool
-npm install -g @adhar/migration-tool
+\`\`\`bash
+# Install the CLI
+npm install -g @adhar/cli
 
-// Run the migration
-adhar-migrate --from 1.x --to 2.0 --config ./adhar.config.js
+# Create a new platform
+adhar create my-platform
 
-// Verify the migration
-adhar verify --environment staging
+# Deploy it
+adhar deploy
 \`\`\`
 
 ## What's Next
 
-This is just the beginning. We're already working on ADHAR 2.1 with features like:
+This is just the beginning. We're already working on ADHAR 1.1 with features like:
 - Multi-cloud orchestration
 - Advanced observability
 - GraphQL federation

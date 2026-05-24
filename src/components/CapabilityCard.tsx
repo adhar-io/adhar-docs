@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { LucideIcon } from 'lucide-react';
 
@@ -13,56 +12,75 @@ interface CapabilityCardProps {
   useSolidBackground?: boolean;
 }
 
-const CapabilityCard = ({ 
-  icon: Icon, 
-  title, 
-  description, 
-  feature, 
-  gradientFrom, 
-  gradientTo, 
+const accentFromBg = (bg: string): { ring: string; chip: string; icon: string } => {
+  if (bg.includes('blue')) {
+    return {
+      ring: 'group-hover:border-blue-500/40',
+      chip: 'bg-blue-500/10 text-blue-600 dark:text-blue-300 ring-1 ring-inset ring-blue-500/20',
+      icon: 'text-blue-600 dark:text-blue-300',
+    };
+  }
+  if (bg.includes('purple')) {
+    return {
+      ring: 'group-hover:border-purple-500/40',
+      chip: 'bg-purple-500/10 text-purple-600 dark:text-purple-300 ring-1 ring-inset ring-purple-500/20',
+      icon: 'text-purple-600 dark:text-purple-300',
+    };
+  }
+  if (bg.includes('green')) {
+    return {
+      ring: 'group-hover:border-emerald-500/40',
+      chip: 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 ring-1 ring-inset ring-emerald-500/20',
+      icon: 'text-emerald-700 dark:text-emerald-300',
+    };
+  }
+  if (bg.includes('orange')) {
+    return {
+      ring: 'group-hover:border-amber-500/40',
+      chip: 'bg-amber-500/10 text-amber-700 dark:text-amber-300 ring-1 ring-inset ring-amber-500/20',
+      icon: 'text-amber-700 dark:text-amber-300',
+    };
+  }
+  return {
+    ring: 'group-hover:border-primary/40',
+    chip: 'bg-primary/10 text-primary ring-1 ring-inset ring-primary/20',
+    icon: 'text-primary',
+  };
+};
+
+const CapabilityCard = ({
+  icon: Icon,
+  title,
+  description,
+  feature,
+  gradientFrom,
   featureIcon: FeatureIcon,
-  useSolidBackground = false
 }: CapabilityCardProps) => {
-  // Get text color based on background
-  const getTextColor = (bgClass: string) => {
-    if (bgClass.includes('blue')) return 'text-blue-100';
-    if (bgClass.includes('purple')) return 'text-purple-100';
-    if (bgClass.includes('green')) return 'text-green-100';
-    if (bgClass.includes('orange')) return 'text-orange-100';
-    return 'text-white';
-  };
-
-  // Get feature text color
-  const getFeatureTextColor = (bgClass: string) => {
-    if (bgClass.includes('blue')) return 'text-blue-200';
-    if (bgClass.includes('purple')) return 'text-purple-200';
-    if (bgClass.includes('green')) return 'text-green-200';
-    if (bgClass.includes('orange')) return 'text-orange-200';
-    return 'text-gray-200';
-  };
-
-  const backgroundClass = useSolidBackground ? gradientFrom : `bg-gradient-to-br ${gradientFrom} ${gradientTo}`;
-  const textColor = getTextColor(gradientFrom);
-  const featureTextColor = getFeatureTextColor(gradientFrom);
+  const accent = accentFromBg(gradientFrom);
 
   return (
-    <div className={`group relative ${backgroundClass} rounded-3xl p-8 transition-all duration-500 hover:-translate-y-3 cursor-pointer overflow-hidden shadow-lg hover:shadow-2xl`}>
-      <div className="relative">
-        <div className="w-16 h-16 bg-white/20 backdrop-blur-sm rounded-2xl flex items-center justify-center mb-6 group-hover:scale-110 transition-transform duration-300 shadow-lg">
-          <Icon className="w-8 h-8 text-white" />
-        </div>
-        <h3 className="text-xl font-bold text-white mb-4">{title}</h3>
-        <p className={`${textColor} leading-relaxed text-sm mb-6`}>{description}</p>
-        <div className="flex items-center text-sm font-medium">
-          <div className="w-4 h-4 rounded-full bg-white/30 mr-2 flex items-center justify-center">
-            <FeatureIcon className="w-2.5 h-2.5 text-white" />
-          </div>
-          <span className={`${featureTextColor} font-semibold`}>
-            {feature}
-          </span>
+    <article
+      className={`group relative flex flex-col rounded-2xl border border-border/70 bg-card p-6 transition-all duration-300 hover:-translate-y-0.5 hover:shadow-[var(--shadow-md)] ${accent.ring}`}
+    >
+      {/* Icon chip */}
+      <div className={`mb-5 inline-flex h-10 w-10 items-center justify-center rounded-xl ${accent.chip}`}>
+        <Icon className={`h-5 w-5 ${accent.icon}`} strokeWidth={2} />
+      </div>
+
+      {/* Title */}
+      <h3 className="text-base font-semibold text-foreground tracking-tight">{title}</h3>
+
+      {/* Description */}
+      <p className="mt-2 text-sm text-muted-foreground leading-relaxed">{description}</p>
+
+      {/* Feature pill at footer */}
+      <div className="mt-6 pt-5 border-t border-border/60">
+        <div className="inline-flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+          <FeatureIcon className={`h-3.5 w-3.5 ${accent.icon}`} strokeWidth={2.5} />
+          <span>{feature}</span>
         </div>
       </div>
-    </div>
+    </article>
   );
 };
 

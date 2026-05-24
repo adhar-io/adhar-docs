@@ -1,400 +1,400 @@
-
 import React from 'react';
+import { Link } from 'react-router-dom';
 import Navigation from '@/components/landing/Navigation';
 import Footer from '@/components/landing/Footer';
 import ModernArchitectureDiagram from '@/components/ModernArchitectureDiagram';
-import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { 
-  Database, 
-  Cloud, 
-  Shield, 
-  Zap, 
-  Network, 
-  Code, 
+import {
+  Database,
+  Cloud,
+  Shield,
+  Zap,
+  Network,
+  Code,
   Layers,
-  GitBranch,
   Monitor,
   Lock,
   Activity,
-  Server
+  Server,
+  GitBranch,
+  ArrowRight,
+  Cpu,
+  Workflow,
 } from 'lucide-react';
 
+const layers = [
+  {
+    title: "Interface layer",
+    icon: Monitor,
+    description: "Web consoles, CLIs, and APIs that the rest of the platform exposes to developers and operators.",
+    technologies: ["React", "TypeScript", "Tailwind CSS", "REST APIs", "GraphQL"],
+    stats: { latency: "<150ms", surfaces: "Web · CLI · API" },
+  },
+  {
+    title: "Application layer",
+    icon: Code,
+    description: "Stateless microservices and event-driven workers that implement product logic and orchestration.",
+    technologies: ["Node.js", "Python", "Go", "Microservices", "Event streaming"],
+    stats: { latency: "<100ms", surfaces: "Stateless · Sharded" },
+  },
+  {
+    title: "Integration layer",
+    icon: Network,
+    description: "Gateway, message queues, and identity bridges that connect ADHAR to your existing tooling and SaaS.",
+    technologies: ["API Gateway", "Message queues", "Webhooks", "OAuth", "SAML"],
+    stats: { latency: "<50ms", surfaces: "API · MQ · Webhooks" },
+  },
+  {
+    title: "Data layer",
+    icon: Database,
+    description: "Polyglot persistence with strong defaults — relational, key-value, search, and analytics-ready storage.",
+    technologies: ["PostgreSQL", "Redis", "Elasticsearch", "Data lakes", "ETL pipelines"],
+    stats: { latency: "<10ms", surfaces: "OLTP · Cache · Search" },
+  },
+  {
+    title: "Infrastructure layer",
+    icon: Cloud,
+    description: "Cloud-native runtime with auto-scaling, multi-zone deployment, and consistent runtime across providers.",
+    technologies: ["Kubernetes", "Docker", "AWS · GCP · Azure", "Terraform", "CI/CD"],
+    stats: { latency: "Elastic", surfaces: "Multi-cloud · Multi-region" },
+  },
+  {
+    title: "Security layer",
+    icon: Shield,
+    description: "Zero-trust networking, fine-grained policies, encryption everywhere, and audit-grade traceability.",
+    technologies: ["Zero trust", "RBAC", "Encryption", "Audit logs", "Compliance"],
+    stats: { latency: "Always-on", surfaces: "mTLS · RBAC · OPA" },
+  },
+];
+
+const principles = [
+  { title: "Cloud native", description: "Built for the cloud with containerization and orchestration.", icon: Cloud },
+  { title: "Microservices", description: "Modular architecture enabling independent scaling and deployment.", icon: Layers },
+  { title: "Event-driven", description: "Asynchronous communication for better performance and reliability.", icon: Zap },
+  { title: "API-first", description: "Everything accessible through well-designed APIs.", icon: Network },
+  { title: "Security by design", description: "Security integrated at every layer, not bolted on.", icon: Lock },
+  { title: "Observable", description: "Comprehensive monitoring, logging, and tracing built in.", icon: Activity },
+];
+
+const requestFlow = [
+  { icon: Monitor, title: "Edge", description: "TLS termination, WAF, and global routing at the edge." },
+  { icon: Network, title: "Gateway", description: "Authn/authz, rate limiting, and request shaping." },
+  { icon: Workflow, title: "Service mesh", description: "mTLS, retries, circuit breakers, and traffic splitting." },
+  { icon: Cpu, title: "Workload", description: "Stateless service handles the request; emits events." },
+  { icon: Database, title: "Data plane", description: "Reads/writes with caching, indexes, and per-tenant isolation." },
+  { icon: Activity, title: "Observability", description: "Metrics, traces, and logs are correlated and retained." },
+];
+
+const specGroups = [
+  {
+    title: "Infrastructure",
+    icon: Server,
+    items: [
+      { label: "Compute", value: "Kubernetes · auto-scale · multi-zone · container-native" },
+      { label: "Storage", value: "Distributed FS · automated backups · encryption at rest · multi-region" },
+      { label: "Networking", value: "Service mesh · mTLS · global LB · private peering" },
+      { label: "Runtime", value: "AWS · GCP · Azure · on-prem · air-gapped" },
+    ],
+  },
+  {
+    title: "Security",
+    icon: Shield,
+    items: [
+      { label: "Authn", value: "MFA · SSO · OAuth 2.0 · SAML" },
+      { label: "Authz", value: "RBAC · ABAC · OPA policies" },
+      { label: "Data", value: "End-to-end encryption · KMS-backed · DLP" },
+      { label: "Audit", value: "Append-only logs · 7yr retention · SIEM-ready" },
+    ],
+  },
+  {
+    title: "Performance",
+    icon: Zap,
+    items: [
+      { label: "API", value: "<100ms p95 · 10k RPS per service" },
+      { label: "Page load", value: "<2s p95 globally · CDN-edge cached" },
+      { label: "Build", value: "<5 min full pipeline · incremental caching" },
+      { label: "Deploy", value: "<10 min canary · <60s rollback" },
+    ],
+  },
+  {
+    title: "Compliance",
+    icon: Lock,
+    items: [
+      { label: "Standards", value: "SOC 2 Type II · ISO 27001 · GDPR · HIPAA-ready" },
+      { label: "Data residency", value: "US · EU · APAC regions · per-tenant choice" },
+      { label: "Governance", value: "DPA · subprocessor list · DSAR · right to be forgotten" },
+      { label: "Continuous", value: "Annual pen-tests · quarterly audits · daily scans" },
+    ],
+  },
+];
+
 const Architecture = () => {
-  const layers = [
-    {
-      title: "Interface Layer",
-      icon: Monitor,
-      description: "Modern web interfaces and APIs for seamless user interaction",
-      technologies: ["React", "TypeScript", "Tailwind CSS", "REST APIs", "GraphQL"],
-      color: "from-blue-500 to-blue-600"
-    },
-    {
-      title: "Application Layer",
-      icon: Code,
-      description: "Core business logic and application orchestration",
-      technologies: ["Node.js", "Python", "Go", "Microservices", "Event Streaming"],
-      color: "from-green-500 to-green-600"
-    },
-    {
-      title: "Integration Layer",
-      icon: Network,
-      description: "Seamless connections with external systems and services",
-      technologies: ["API Gateway", "Message Queues", "Webhooks", "OAuth", "SAML"],
-      color: "from-purple-500 to-purple-600"
-    },
-    {
-      title: "Data Layer",
-      icon: Database,
-      description: "Scalable data storage and processing infrastructure",
-      technologies: ["PostgreSQL", "Redis", "Elasticsearch", "Data Lakes", "ETL Pipelines"],
-      color: "from-orange-500 to-orange-600"
-    },
-    {
-      title: "Infrastructure Layer",
-      icon: Cloud,
-      description: "Cloud-native infrastructure with auto-scaling capabilities",
-      technologies: ["Kubernetes", "Docker", "AWS/GCP/Azure", "Terraform", "CI/CD"],
-      color: "from-red-500 to-red-600"
-    },
-    {
-      title: "Security Layer",
-      icon: Shield,
-      description: "Enterprise-grade security across all layers",
-      technologies: ["Zero Trust", "RBAC", "Encryption", "Audit Logs", "Compliance"],
-      color: "from-gray-500 to-gray-600"
-    }
-  ];
-
-  const principles = [
-    {
-      title: "Cloud Native",
-      description: "Built for the cloud with containerization and orchestration",
-      icon: Cloud
-    },
-    {
-      title: "Microservices",
-      description: "Modular architecture enabling independent scaling and deployment",
-      icon: Layers
-    },
-    {
-      title: "Event-Driven",
-      description: "Asynchronous communication for better performance and reliability",
-      icon: Zap
-    },
-    {
-      title: "API-First",
-      description: "Everything accessible through well-designed APIs",
-      icon: Network
-    },
-    {
-      title: "Security by Design",
-      description: "Security integrated at every layer, not bolted on",
-      icon: Lock
-    },
-    {
-      title: "Observable",
-      description: "Comprehensive monitoring, logging, and tracing",
-      icon: Activity
-    }
-  ];
-
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-100 dark:from-gray-900 dark:via-blue-900/20 dark:to-indigo-900/30">
+    <div className="min-h-screen bg-background">
       <Navigation />
-      
-      <main className="pt-20">
-        {/* Hero Section */}
-        <section className="py-16 px-4 sm:px-6 lg:px-8">
-          <div className="max-w-4xl mx-auto text-center">
-            <div className="flex items-center justify-center gap-2 mb-6">
-              <Badge className="bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300">
-                Platform Architecture
-              </Badge>
-              <Badge variant="outline" className="bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-300">
-                Enterprise Ready
-              </Badge>
-            </div>
-            
-            <h1 className="text-4xl md:text-6xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent mb-6">
-              Platform Architecture
+
+      <main className="pt-16">
+        {/* Hero */}
+        <section className="relative section-padding container-padding overflow-hidden">
+          <div className="absolute inset-0 bg-mesh opacity-80 pointer-events-none" />
+          <div className="absolute inset-0 bg-grid bg-grid-fade opacity-40 dark:opacity-25 pointer-events-none" />
+          <div className="max-width-content relative text-center">
+            <span className="eyebrow mb-5">Architecture</span>
+            <h1 className="section-heading mt-5 text-foreground">
+              Cloud-native by design,
+              <br className="hidden sm:block" />
+              <span className="text-muted-foreground">enterprise-ready by default.</span>
             </h1>
-            <p className="text-xl text-gray-600 dark:text-gray-300 mb-8">
-              Discover how ADHAR's cloud-native, microservices architecture enables 
-              scalable, secure, and intelligent development workflows.
+            <p className="section-subheading mt-6">
+              ADHAR runs on a layered, microservices architecture. Every service is observable,
+              every interface is API-first, and every byte is encrypted — from your laptop to production.
             </p>
+
+            <div className="mt-8 flex flex-col sm:flex-row gap-3 justify-center">
+              <a href="#diagram" className="btn-primary-modern group inline-flex items-center justify-center gap-2 rounded-full px-6 h-11 text-[15px] font-medium">
+                <span>Explore the diagram</span>
+                <ArrowRight className="w-4 h-4 transition-transform group-hover:translate-x-0.5" />
+              </a>
+              <Link to="/security" className="w-full sm:w-auto">
+                <button type="button" className="btn-secondary-modern w-full sm:w-auto inline-flex items-center justify-center gap-2 rounded-full px-6 h-11 text-[15px] font-medium">
+                  <Shield className="w-4 h-4 text-muted-foreground" />
+                  <span>Security model</span>
+                </button>
+              </Link>
+            </div>
           </div>
         </section>
 
-        {/* Architecture Diagram */}
-        <section className="py-8 px-4 sm:px-6 lg:px-8">
-          <div className="max-w-7xl mx-auto">
-            <Card className="mb-12">
-              <CardHeader className="text-center">
-                <CardTitle className="text-2xl">System Overview</CardTitle>
-                <CardDescription>
-                  Interactive architecture diagram showing the complete ADHAR platform
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <ModernArchitectureDiagram />
-              </CardContent>
-            </Card>
+        {/* Diagram */}
+        <section id="diagram" className="container-padding pb-16">
+          <div className="max-width-content">
+            <ModernArchitectureDiagram />
           </div>
         </section>
 
-        {/* Architecture Layers */}
-        <section className="py-16 px-4 sm:px-6 lg:px-8">
-          <div className="max-w-6xl mx-auto">
-            <div className="text-center mb-12">
-              <h2 className="text-3xl font-bold text-gray-900 dark:text-white mb-4">
-                Architecture Layers
+        {/* Layers */}
+        <section className="relative section-padding container-padding bg-muted/30">
+          <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-border to-transparent" />
+          <div className="max-width-content">
+            <div className="text-center mb-14">
+              <span className="eyebrow mb-5">Layers</span>
+              <h2 className="section-heading mt-5 text-foreground">
+                Six layers,
+                <br className="hidden sm:block" />
+                <span className="text-muted-foreground">one coherent stack.</span>
               </h2>
-              <p className="text-lg text-gray-600 dark:text-gray-300 max-w-2xl mx-auto">
-                Our layered architecture ensures separation of concerns, scalability, and maintainability.
+              <p className="section-subheading mt-6">
+                Each layer has a single responsibility, clean contracts upward and downward, and is independently
+                scalable and replaceable.
               </p>
             </div>
-            
-            <div className="space-y-6">
-              {layers.map((layer, index) => (
-                <Card key={index} className="overflow-hidden hover:shadow-lg transition-all duration-300">
-                  <div className={`h-2 bg-gradient-to-r ${layer.color}`}></div>
-                  <CardContent className="p-6">
-                    <div className="flex items-start gap-4">
-                      <div className={`p-3 rounded-lg bg-gradient-to-r ${layer.color}`}>
-                        <layer.icon className="w-6 h-6 text-white" />
+
+            <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-px overflow-hidden rounded-2xl border border-border/70 bg-border/60">
+              {layers.map((layer, index) => {
+                const Icon = layer.icon;
+                return (
+                  <article key={index} className="group flex flex-col bg-card p-6 sm:p-7 transition-colors hover:bg-muted/30">
+                    <div className="flex items-center gap-3 mb-4">
+                      <div className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-border/70 bg-background text-primary shadow-[var(--shadow-xs)]">
+                        <Icon className="h-5 w-5" />
                       </div>
-                      <div className="flex-1">
-                        <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">
-                          {layer.title}
-                        </h3>
-                        <p className="text-gray-600 dark:text-gray-300 mb-4">
-                          {layer.description}
-                        </p>
-                        <div className="flex flex-wrap gap-2">
-                          {layer.technologies.map((tech, techIndex) => (
-                            <Badge key={techIndex} variant="outline" className="text-xs">
-                              {tech}
-                            </Badge>
-                          ))}
+                      <h3 className="text-base font-semibold text-foreground tracking-tight">{layer.title}</h3>
+                    </div>
+                    <p className="text-sm text-muted-foreground leading-relaxed">{layer.description}</p>
+
+                    <div className="mt-5 flex flex-wrap gap-1.5">
+                      {layer.technologies.map((tech) => (
+                        <span key={tech} className="inline-flex items-center px-2 py-0.5 rounded-full bg-muted text-[11px] font-medium text-muted-foreground">
+                          {tech}
+                        </span>
+                      ))}
+                    </div>
+
+                    <div className="mt-auto pt-5 border-t border-border/60 grid grid-cols-2 gap-3">
+                      <div>
+                        <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Latency</div>
+                        <div className="text-sm font-semibold text-foreground tracking-tight tabular">{layer.stats.latency}</div>
+                      </div>
+                      <div>
+                        <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Surfaces</div>
+                        <div className="text-sm font-semibold text-foreground tracking-tight">{layer.stats.surfaces}</div>
+                      </div>
+                    </div>
+                  </article>
+                );
+              })}
+            </div>
+          </div>
+        </section>
+
+        {/* Request flow */}
+        <section className="relative section-padding container-padding">
+          <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-border to-transparent" />
+          <div className="max-width-content">
+            <div className="text-center mb-14">
+              <span className="eyebrow mb-5">Data flow</span>
+              <h2 className="section-heading mt-5 text-foreground">
+                One request,
+                <br className="hidden sm:block" />
+                <span className="text-muted-foreground">six observable hops.</span>
+              </h2>
+              <p className="section-subheading mt-6">
+                Every request flows through the same well-known stages — making performance, security,
+                and reliability properties easy to reason about.
+              </p>
+            </div>
+
+            <div className="relative overflow-hidden rounded-2xl border border-border/70 bg-card p-6 sm:p-8">
+              <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                {requestFlow.map((step, idx) => {
+                  const Icon = step.icon;
+                  return (
+                    <div key={idx} className="relative rounded-xl border border-border/60 bg-background p-5">
+                      <div className="flex items-center gap-3 mb-2">
+                        <div className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-muted text-muted-foreground">
+                          <Icon className="h-4 w-4" />
+                        </div>
+                        <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground tabular">
+                          Step {idx + 1}
                         </div>
                       </div>
+                      <h3 className="text-sm font-semibold text-foreground tracking-tight">{step.title}</h3>
+                      <p className="mt-1.5 text-xs text-muted-foreground leading-relaxed">{step.description}</p>
                     </div>
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
-          </div>
-        </section>
-
-        {/* Design Principles */}
-        <section className="py-16 px-4 sm:px-6 lg:px-8 bg-white/50 dark:bg-gray-800/50">
-          <div className="max-w-6xl mx-auto">
-            <div className="text-center mb-12">
-              <h2 className="text-3xl font-bold text-gray-900 dark:text-white mb-4">
-                Design Principles
-              </h2>
-              <p className="text-lg text-gray-600 dark:text-gray-300 max-w-2xl mx-auto">
-                Core principles that guide our architectural decisions and ensure platform reliability.
-              </p>
-            </div>
-            
-            <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
-              {principles.map((principle, index) => (
-                <Card key={index} className="p-6 text-center hover:shadow-lg transition-all duration-300">
-                  <div className="flex justify-center mb-4">
-                    <div className="p-4 bg-gradient-to-r from-blue-100 to-purple-100 dark:from-blue-900/30 dark:to-purple-900/30 rounded-full">
-                      <principle.icon className="w-8 h-8 text-blue-600" />
-                    </div>
-                  </div>
-                  <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-3">
-                    {principle.title}
-                  </h3>
-                  <p className="text-gray-600 dark:text-gray-300">
-                    {principle.description}
-                  </p>
-                </Card>
-              ))}
-            </div>
-          </div>
-        </section>
-
-        {/* Technical Specifications */}
-        <section className="py-16 px-4 sm:px-6 lg:px-8">
-          <div className="max-w-6xl mx-auto">
-            <div className="text-center mb-12">
-              <h2 className="text-3xl font-bold text-gray-900 dark:text-white mb-4">
-                Technical Specifications
-              </h2>
-            </div>
-            
-            <Tabs defaultValue="infrastructure" className="w-full">
-              <TabsList className="grid w-full grid-cols-4">
-                <TabsTrigger value="infrastructure">Infrastructure</TabsTrigger>
-                <TabsTrigger value="security">Security</TabsTrigger>
-                <TabsTrigger value="performance">Performance</TabsTrigger>
-                <TabsTrigger value="compliance">Compliance</TabsTrigger>
-              </TabsList>
-              
-              <TabsContent value="infrastructure" className="mt-6">
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="flex items-center gap-2">
-                      <Server className="w-5 h-5" />
-                      Infrastructure Specifications
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent className="space-y-4">
-                    <div className="grid md:grid-cols-2 gap-6">
-                      <div>
-                        <h4 className="font-semibold mb-2">Compute</h4>
-                        <ul className="text-sm text-gray-600 dark:text-gray-300 space-y-1">
-                          <li>• Kubernetes orchestration</li>
-                          <li>• Auto-scaling based on demand</li>
-                          <li>• Multi-zone deployment</li>
-                          <li>• Container-native architecture</li>
-                        </ul>
-                      </div>
-                      <div>
-                        <h4 className="font-semibold mb-2">Storage</h4>
-                        <ul className="text-sm text-gray-600 dark:text-gray-300 space-y-1">
-                          <li>• Distributed file systems</li>
-                          <li>• Automated backups</li>
-                          <li>• Data encryption at rest</li>
-                          <li>• Multi-region replication</li>
-                        </ul>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              </TabsContent>
-              
-              <TabsContent value="security" className="mt-6">
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="flex items-center gap-2">
-                      <Shield className="w-5 h-5" />
-                      Security Features
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent className="space-y-4">
-                    <div className="grid md:grid-cols-2 gap-6">
-                      <div>
-                        <h4 className="font-semibold mb-2">Authentication</h4>
-                        <ul className="text-sm text-gray-600 dark:text-gray-300 space-y-1">
-                          <li>• Multi-factor authentication</li>
-                          <li>• SSO integration</li>
-                          <li>• OAuth 2.0 / SAML</li>
-                          <li>• Role-based access control</li>
-                        </ul>
-                      </div>
-                      <div>
-                        <h4 className="font-semibold mb-2">Data Protection</h4>
-                        <ul className="text-sm text-gray-600 dark:text-gray-300 space-y-1">
-                          <li>• End-to-end encryption</li>
-                          <li>• API rate limiting</li>
-                          <li>• Audit logging</li>
-                          <li>• Vulnerability scanning</li>
-                        </ul>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              </TabsContent>
-              
-              <TabsContent value="performance" className="mt-6">
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="flex items-center gap-2">
-                      <Zap className="w-5 h-5" />
-                      Performance Metrics
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent className="space-y-4">
-                    <div className="grid md:grid-cols-2 gap-6">
-                      <div>
-                        <h4 className="font-semibold mb-2">Response Times</h4>
-                        <ul className="text-sm text-gray-600 dark:text-gray-300 space-y-1">
-                          <li>• API: &lt; 100ms average</li>
-                          <li>• Page load: &lt; 2 seconds</li>
-                          <li>• Build times: &lt; 5 minutes</li>
-                          <li>• Deployment: &lt; 10 minutes</li>
-                        </ul>
-                      </div>
-                      <div>
-                        <h4 className="font-semibold mb-2">Scalability</h4>
-                        <ul className="text-sm text-gray-600 dark:text-gray-300 space-y-1">
-                          <li>• 99.9% uptime SLA</li>
-                          <li>• Horizontal auto-scaling</li>
-                          <li>• Global CDN distribution</li>
-                          <li>• Load balancing</li>
-                        </ul>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              </TabsContent>
-              
-              <TabsContent value="compliance" className="mt-6">
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="flex items-center gap-2">
-                      <Lock className="w-5 h-5" />
-                      Compliance & Standards
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent className="space-y-4">
-                    <div className="grid md:grid-cols-2 gap-6">
-                      <div>
-                        <h4 className="font-semibold mb-2">Certifications</h4>
-                        <ul className="text-sm text-gray-600 dark:text-gray-300 space-y-1">
-                          <li>• SOC 2 Type II</li>
-                          <li>• ISO 27001</li>
-                          <li>• GDPR compliant</li>
-                          <li>• HIPAA ready</li>
-                        </ul>
-                      </div>
-                      <div>
-                        <h4 className="font-semibold mb-2">Data Governance</h4>
-                        <ul className="text-sm text-gray-600 dark:text-gray-300 space-y-1">
-                          <li>• Data retention policies</li>
-                          <li>• Right to be forgotten</li>
-                          <li>• Data portability</li>
-                          <li>• Privacy by design</li>
-                        </ul>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              </TabsContent>
-            </Tabs>
-          </div>
-        </section>
-
-        {/* CTA Section */}
-        <section className="py-16 px-4 sm:px-6 lg:px-8">
-          <div className="max-w-4xl mx-auto text-center">
-            <Card className="p-8 bg-gradient-to-r from-blue-50 to-purple-50 dark:from-blue-900/20 dark:to-purple-900/20">
-              <h3 className="text-2xl font-bold text-gray-900 dark:text-white mb-4">
-                Ready to Build on ADHAR?
-              </h3>
-              <p className="text-gray-600 dark:text-gray-300 mb-6">
-                Experience the power of our architecture firsthand. Start building with our 
-                enterprise-grade platform today.
-              </p>
-              <div className="flex flex-col sm:flex-row gap-4 justify-center">
-                <Button className="bg-gradient-to-r from-blue-600 to-purple-600">
-                  <GitBranch className="w-4 h-4 mr-2" />
-                  Start Building
-                </Button>
-                <Button variant="outline">
-                  <Monitor className="w-4 h-4 mr-2" />
-                  View Demo
-                </Button>
+                  );
+                })}
               </div>
-            </Card>
+            </div>
+          </div>
+        </section>
+
+        {/* Principles */}
+        <section className="relative section-padding container-padding bg-muted/30">
+          <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-border to-transparent" />
+          <div className="max-width-content">
+            <div className="text-center mb-14">
+              <span className="eyebrow mb-5">Principles</span>
+              <h2 className="section-heading mt-5 text-foreground">
+                Decisions we
+                <br className="hidden sm:block" />
+                <span className="text-muted-foreground">refuse to compromise on.</span>
+              </h2>
+            </div>
+            <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-px overflow-hidden rounded-2xl border border-border/70 bg-border/60">
+              {principles.map((p, index) => {
+                const Icon = p.icon;
+                return (
+                  <article key={index} className="bg-card p-7 transition-colors hover:bg-muted/30">
+                    <div className="mb-5 inline-flex h-10 w-10 items-center justify-center rounded-xl border border-border/70 bg-background text-primary shadow-[var(--shadow-xs)]">
+                      <Icon className="h-5 w-5" />
+                    </div>
+                    <h3 className="text-base font-semibold text-foreground tracking-tight">{p.title}</h3>
+                    <p className="mt-2 text-sm text-muted-foreground leading-relaxed">{p.description}</p>
+                  </article>
+                );
+              })}
+            </div>
+          </div>
+        </section>
+
+        {/* Specs */}
+        <section className="relative section-padding container-padding">
+          <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-border to-transparent" />
+          <div className="max-width-content">
+            <div className="text-center mb-14">
+              <span className="eyebrow mb-5">Specifications</span>
+              <h2 className="section-heading mt-5 text-foreground">Technical specs.</h2>
+              <p className="section-subheading mt-5">
+                The numbers your security and platform teams want to see.
+              </p>
+            </div>
+
+            <div className="grid sm:grid-cols-2 gap-px overflow-hidden rounded-2xl border border-border/70 bg-border/60">
+              {specGroups.map((group, gi) => {
+                const Icon = group.icon;
+                return (
+                  <article key={gi} className="bg-card p-6 sm:p-7">
+                    <div className="flex items-center gap-3 mb-5">
+                      <div className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-border/70 bg-background text-primary shadow-[var(--shadow-xs)]">
+                        <Icon className="h-5 w-5" />
+                      </div>
+                      <h3 className="text-lg font-semibold text-foreground tracking-tight">{group.title}</h3>
+                    </div>
+                    <dl className="divide-y divide-border/60 border-t border-border/60">
+                      {group.items.map((item, ii) => (
+                        <div key={ii} className="grid grid-cols-3 gap-3 py-3">
+                          <dt className="text-xs font-medium uppercase tracking-wider text-muted-foreground">{item.label}</dt>
+                          <dd className="col-span-2 text-sm text-foreground">{item.value}</dd>
+                        </div>
+                      ))}
+                    </dl>
+                  </article>
+                );
+              })}
+            </div>
+          </div>
+        </section>
+
+        {/* Related */}
+        <section className="section-padding container-padding bg-muted/30">
+          <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-border to-transparent" />
+          <div className="max-width-content">
+            <div className="text-center mb-10">
+              <span className="eyebrow mb-5">Continue exploring</span>
+              <h2 className="section-heading mt-5 text-foreground">Related topics.</h2>
+            </div>
+
+            <div className="grid sm:grid-cols-3 gap-4">
+              {[
+                { to: "/capabilities", icon: Zap, title: "Capabilities", description: "What you can build, ship, and observe on the platform." },
+                { to: "/integrations", icon: Network, title: "Integrations", description: "Tools and services that plug in out of the box." },
+                { to: "/security", icon: Shield, title: "Security", description: "Defense in depth, from edge to data plane." },
+              ].map((card, idx) => {
+                const Icon = card.icon;
+                return (
+                  <Link key={idx} to={card.to} className="group block">
+                    <article className="card-interactive p-6 h-full">
+                      <div className="mb-5 inline-flex h-10 w-10 items-center justify-center rounded-xl border border-border/70 bg-background text-primary shadow-[var(--shadow-xs)]">
+                        <Icon className="h-5 w-5" />
+                      </div>
+                      <h3 className="text-base font-semibold text-foreground tracking-tight">{card.title}</h3>
+                      <p className="mt-2 text-sm text-muted-foreground leading-relaxed">{card.description}</p>
+                      <div className="mt-4 inline-flex items-center gap-1 text-xs font-medium text-primary">
+                        <span>Learn more</span>
+                        <ArrowRight className="w-3.5 h-3.5 transition-transform group-hover:translate-x-0.5" />
+                      </div>
+                    </article>
+                  </Link>
+                );
+              })}
+            </div>
+          </div>
+        </section>
+
+        {/* CTA */}
+        <section className="section-padding container-padding">
+          <div className="max-width-content">
+            <div className="relative isolate overflow-hidden rounded-3xl border border-border/70 bg-card">
+              <div className="absolute inset-0 bg-mesh opacity-90 pointer-events-none" />
+              <div className="absolute inset-0 bg-grid opacity-40 dark:opacity-25 pointer-events-none" />
+              <div className="relative px-6 py-14 sm:px-12 sm:py-16 text-center">
+                <span className="eyebrow mb-6">Get started</span>
+                <h2 className="section-heading mt-4 text-foreground">Ready to build on ADHAR?</h2>
+                <p className="section-subheading mt-5">
+                  Start a platform from zero in under 10 minutes. No infrastructure work required.
+                </p>
+                <div className="mt-8 flex flex-col sm:flex-row gap-3 justify-center">
+                  <button type="button" className="btn-primary-modern group inline-flex items-center justify-center gap-2 rounded-full px-6 h-11 text-[15px] font-medium">
+                    <GitBranch className="w-4 h-4" />
+                    <span>Start building</span>
+                    <ArrowRight className="w-4 h-4 transition-transform group-hover:translate-x-0.5" />
+                  </button>
+                  <button type="button" className="btn-secondary-modern inline-flex items-center justify-center gap-2 rounded-full px-6 h-11 text-[15px] font-medium">
+                    <Monitor className="w-4 h-4 text-muted-foreground" />
+                    <span>View demo</span>
+                  </button>
+                </div>
+              </div>
+            </div>
           </div>
         </section>
       </main>

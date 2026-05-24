@@ -8,7 +8,7 @@ interface PlatformToolsGridProps {
 
 const PlatformToolsGrid = ({ platformCategories }: PlatformToolsGridProps) => {
   return (
-    <div className="grid grid-cols-9 gap-6 mb-12">
+    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 lg:grid-cols-9 gap-3 sm:gap-4 lg:gap-6 mb-12">
       {platformCategories.map((category, categoryIndex) => (
         <div key={categoryIndex} className={`${category.color} p-4 rounded-2xl border border-gray-200 dark:border-gray-600 shadow-sm`}>
           <h4 className="text-xs font-bold text-gray-700 dark:text-gray-300 text-center mb-4 uppercase tracking-wide">

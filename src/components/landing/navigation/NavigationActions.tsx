@@ -1,5 +1,7 @@
 import { Button } from "@/components/ui/button";
-import { Moon, Sun, Github } from "lucide-react";
+import { Moon, Sun } from "lucide-react";
+import { Github } from "@/components/brand-icons";
+import { ADHAR_CONSOLE_LOGIN_URL } from "@/lib/config";
 
 interface NavigationActionsProps {
   isDarkMode: boolean;
@@ -18,7 +20,7 @@ const NavigationActions = ({ isDarkMode, toggleDarkMode }: NavigationActionsProp
         {isDarkMode ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
       </Button>
 
-      <a href="/coming-soon">
+      <a href={ADHAR_CONSOLE_LOGIN_URL}>
         <Button variant="ghost" className="text-foreground hover:text-primary hover:bg-accent/50 font-medium rounded-lg transition-all duration-300">
           Sign In
         </Button>

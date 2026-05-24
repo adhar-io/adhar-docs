@@ -138,10 +138,14 @@ const BlogAuth = () => {
               <Input id="password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="At least 8 characters" minLength={8} maxLength={72} required />
             </div>
 
-            <Button type="submit" className="w-full bg-gradient-to-r from-primary to-accent" disabled={busy}>
-              {busy && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
-              {mode === "signin" ? "Sign in" : "Create account"}
-            </Button>
+            <button
+              type="submit"
+              className="btn-primary-modern w-full inline-flex items-center justify-center gap-2 rounded-full h-10 text-sm font-medium disabled:opacity-60 disabled:cursor-not-allowed"
+              disabled={busy}
+            >
+              {busy && <Loader2 className="w-4 h-4 animate-spin" />}
+              <span>{mode === "signin" ? "Sign in" : "Create account"}</span>
+            </button>
           </form>
 
           <p className="text-sm text-muted-foreground text-center mt-6">

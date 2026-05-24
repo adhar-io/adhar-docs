@@ -19,7 +19,7 @@ const InfrastructureLayer = ({ infrastructureComponents }: InfrastructureLayerPr
       <div className="max-w-6xl mx-auto px-8">
         <h4 className="text-center text-sm font-bold text-gray-800 mb-4">Enterprise Infrastructure & Platform Services</h4>
         <div className="relative bg-white/90 backdrop-blur-sm rounded-xl border border-gray-200 p-6 shadow-md">
-          <div className="grid grid-cols-4 gap-8">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 sm:gap-8">
             {infrastructureComponents.map((component, index) => {
               const ComponentIcon = component.icon;
               return (

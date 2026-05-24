@@ -1,176 +1,177 @@
-
+import React from 'react';
 import Navigation from '@/components/landing/Navigation';
 import Footer from '@/components/landing/Footer';
-import { Card, CardContent } from "@/components/ui/card";
-import { Separator } from "@/components/ui/separator";
-import { Shield, Eye, Users, Database, Lock, FileText } from "lucide-react";
+import { Shield, Eye, Users, Database, Lock, FileText, ArrowRight } from "lucide-react";
 
 const Privacy = () => {
   const sections = [
     {
-      icon: <Database className="w-6 h-6" />,
-      title: "Information We Collect",
+      icon: Database,
+      title: "Information we collect",
       content: [
         "Account information (name, email, company details)",
         "Usage data and analytics",
         "Device and browser information",
         "Log files and performance metrics",
-        "Cookies and similar tracking technologies"
-      ]
+        "Cookies and similar tracking technologies",
+      ],
     },
     {
-      icon: <Eye className="w-6 h-6" />,
-      title: "How We Use Your Information",
+      icon: Eye,
+      title: "How we use your information",
       content: [
         "Provide and maintain our services",
         "Process transactions and billing",
         "Send important notifications and updates",
         "Improve our platform and develop new features",
-        "Ensure security and prevent fraud"
-      ]
+        "Ensure security and prevent fraud",
+      ],
     },
     {
-      icon: <Users className="w-6 h-6" />,
-      title: "Information Sharing",
+      icon: Users,
+      title: "Information sharing",
       content: [
         "We do not sell your personal information",
         "Share with service providers under strict agreements",
         "Comply with legal requirements when necessary",
         "Transfer data in case of business transactions",
-        "Aggregate, anonymized data for research purposes"
-      ]
+        "Aggregate, anonymized data for research purposes",
+      ],
     },
     {
-      icon: <Lock className="w-6 h-6" />,
-      title: "Data Security",
+      icon: Lock,
+      title: "Data security",
       content: [
         "End-to-end encryption for sensitive data",
         "Regular security audits and assessments",
         "Access controls and authentication measures",
         "Secure data centers with 24/7 monitoring",
-        "Employee training on data protection"
-      ]
+        "Employee training on data protection",
+      ],
     },
     {
-      icon: <Shield className="w-6 h-6" />,
-      title: "Your Rights",
+      icon: Shield,
+      title: "Your rights",
       content: [
         "Access your personal data",
         "Correct inaccurate information",
         "Delete your account and data",
         "Data portability and export",
-        "Opt-out of marketing communications"
-      ]
-    }
+        "Opt-out of marketing communications",
+      ],
+    },
   ];
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-100 dark:from-gray-900 dark:via-blue-900/20 dark:to-indigo-900/30">
+    <div className="min-h-screen bg-background">
       <Navigation />
-      
-      <main className="pt-20">
-        {/* Header */}
-        <section className="py-16">
-          <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
-            <h1 className="text-5xl font-bold mb-6">
-              <span className="bg-gradient-to-r from-blue-600 via-purple-600 to-teal-600 bg-clip-text text-transparent">
-                Privacy Policy
-              </span>
+
+      <main className="pt-16">
+        {/* Hero */}
+        <section className="relative section-padding container-padding overflow-hidden">
+          <div className="absolute inset-0 bg-mesh opacity-80 pointer-events-none" />
+          <div className="absolute inset-0 bg-grid bg-grid-fade opacity-40 dark:opacity-25 pointer-events-none" />
+          <div className="max-width-content relative text-center">
+            <span className="eyebrow mb-5"><Shield className="w-3 h-3 mr-1" />Privacy</span>
+            <h1 className="section-heading mt-5 text-foreground">
+              How we protect
+              <br className="hidden sm:block" />
+              <span className="text-muted-foreground">your data.</span>
             </h1>
-            <p className="text-xl text-gray-600 dark:text-gray-300 max-w-3xl mx-auto mb-8">
+            <p className="section-subheading mt-6">
               Your privacy is important to us. This policy explains how we collect, use, and protect your information.
             </p>
-            <p className="text-sm text-gray-500 dark:text-gray-400">
-              Last updated: January 15, 2026
-            </p>
+            <p className="mt-4 text-xs text-muted-foreground">Last updated: January 15, 2026</p>
           </div>
         </section>
 
-        {/* Privacy Sections */}
-        <section className="py-12">
-          <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div className="grid gap-8">
-              {sections.map((section, index) => (
-                <Card key={index} className="bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm">
-                  <CardContent className="p-8">
-                    <div className="flex items-center mb-6">
-                      <div className="p-3 bg-blue-100 dark:bg-blue-900/30 rounded-lg text-blue-600 dark:text-blue-400 mr-4">
-                        {section.icon}
+        {/* Sections */}
+        <section className="container-padding pb-16">
+          <div className="max-w-4xl mx-auto">
+            <div className="overflow-hidden rounded-2xl border border-border/70 bg-card divide-y divide-border/60">
+              {sections.map((section, index) => {
+                const Icon = section.icon;
+                return (
+                  <article key={index} className="p-7 sm:p-8 transition-colors hover:bg-muted/30">
+                    <div className="flex items-center gap-4 mb-5">
+                      <div className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-border/70 bg-background text-primary shadow-[var(--shadow-xs)] shrink-0">
+                        <Icon className="h-5 w-5" />
                       </div>
-                      <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
+                      <h2 className="text-lg sm:text-xl font-semibold text-foreground tracking-tight">
                         {section.title}
                       </h2>
                     </div>
-                    <ul className="space-y-3">
+                    <ul className="space-y-2.5 pl-0 sm:pl-14">
                       {section.content.map((item, idx) => (
-                        <li key={idx} className="flex items-start text-gray-600 dark:text-gray-300">
-                          <span className="w-2 h-2 bg-blue-500 rounded-full mr-3 mt-2 flex-shrink-0"></span>
-                          {item}
+                        <li key={idx} className="flex items-start gap-2.5 text-sm text-muted-foreground">
+                          <span className="w-1.5 h-1.5 rounded-full bg-primary/70 mt-2 shrink-0" />
+                          <span>{item}</span>
                         </li>
                       ))}
                     </ul>
-                  </CardContent>
-                </Card>
-              ))}
+                  </article>
+                );
+              })}
             </div>
           </div>
         </section>
 
-        {/* Additional Information */}
-        <section className="py-12">
-          <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
-            <Card className="bg-gradient-to-r from-blue-600 to-purple-600 text-white">
-              <CardContent className="p-8">
-                <div className="text-center">
-                  <FileText className="w-12 h-12 mx-auto mb-4 opacity-90" />
-                  <h2 className="text-2xl font-bold mb-4">Data Protection Compliance</h2>
-                  <p className="text-blue-100 mb-6">
-                    ADHAR is committed to compliance with GDPR, CCPA, and other data protection regulations. 
-                    We implement privacy-by-design principles in all our systems.
-                  </p>
-                  <div className="grid md:grid-cols-3 gap-4 text-center">
-                    <div>
-                      <div className="text-2xl font-bold">GDPR</div>
-                      <div className="text-sm text-blue-200">Compliant</div>
-                    </div>
-                    <div>
-                      <div className="text-2xl font-bold">CCPA</div>
-                      <div className="text-sm text-blue-200">Compliant</div>
-                    </div>
-                    <div>
-                      <div className="text-2xl font-bold">SOC 2</div>
-                      <div className="text-sm text-blue-200">Type II</div>
-                    </div>
-                  </div>
+        {/* Compliance */}
+        <section className="section-padding container-padding bg-muted/30">
+          <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-border to-transparent" />
+          <div className="max-w-4xl mx-auto">
+            <div className="relative isolate overflow-hidden rounded-3xl border border-border/70 bg-card">
+              <div className="absolute inset-0 bg-mesh opacity-90 pointer-events-none" />
+              <div className="absolute inset-0 bg-grid opacity-40 dark:opacity-25 pointer-events-none" />
+              <div className="relative px-6 py-14 sm:px-12 sm:py-16 text-center">
+                <div className="inline-flex h-12 w-12 items-center justify-center rounded-2xl border border-border/70 bg-background text-primary shadow-[var(--shadow-xs)] mb-6 mx-auto">
+                  <FileText className="h-6 w-6" />
                 </div>
-              </CardContent>
-            </Card>
+                <h2 className="section-heading mt-2 text-foreground">Data protection compliance.</h2>
+                <p className="section-subheading mt-5">
+                  ADHAR complies with GDPR, CCPA, and other data protection regulations.
+                  We implement privacy-by-design principles in all our systems.
+                </p>
+                <div className="mt-10 grid grid-cols-3 gap-px overflow-hidden rounded-2xl border border-border/60 bg-border/50 max-w-md mx-auto">
+                  {[
+                    { value: "GDPR", label: "Compliant" },
+                    { value: "CCPA", label: "Compliant" },
+                    { value: "SOC 2", label: "Type II" },
+                  ].map((m) => (
+                    <div key={m.value} className="bg-card/80 backdrop-blur-sm px-3 py-5">
+                      <div className="text-xl sm:text-2xl font-semibold text-foreground tracking-tight tabular">{m.value}</div>
+                      <div className="mt-0.5 text-xs text-muted-foreground">{m.label}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
           </div>
         </section>
 
-        {/* Contact Section */}
-        <section className="py-12">
-          <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
-            <Card>
-              <CardContent className="p-8 text-center">
-                <h2 className="text-2xl font-bold mb-4 text-gray-900 dark:text-white">
-                  Questions About Privacy?
-                </h2>
-                <p className="text-gray-600 dark:text-gray-300 mb-6">
-                  If you have any questions about this Privacy Policy or our data practices, 
-                  please don't hesitate to contact our privacy team.
-                </p>
-                <div className="flex flex-col sm:flex-row gap-4 justify-center">
-                  <div className="text-blue-600 dark:text-blue-400 font-medium">
-                    📧 privacy@adhar.dev
-                  </div>
-                  <div className="text-gray-400 hidden sm:block">|</div>
-                  <div className="text-blue-600 dark:text-blue-400 font-medium">
-                    📞 +1 (555) 123-4567
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
+        {/* Contact */}
+        <section className="section-padding container-padding">
+          <div className="max-w-3xl mx-auto text-center">
+            <span className="eyebrow mb-5">Get in touch</span>
+            <h2 className="section-heading mt-5 text-foreground">Questions about privacy?</h2>
+            <p className="section-subheading mt-5">
+              If you have questions about this Privacy Policy or our data practices, our privacy team is here to help.
+            </p>
+            <div className="mt-8 flex flex-col sm:flex-row gap-3 justify-center">
+              <a
+                href="mailto:privacy@adhar.dev"
+                className="btn-primary-modern group inline-flex items-center justify-center gap-2 rounded-full px-6 h-11 text-[15px] font-medium"
+              >
+                <span>privacy@adhar.dev</span>
+                <ArrowRight className="w-4 h-4 transition-transform group-hover:translate-x-0.5" />
+              </a>
+              <a
+                href="tel:+15551234567"
+                className="btn-secondary-modern inline-flex items-center justify-center gap-2 rounded-full px-6 h-11 text-[15px] font-medium"
+              >
+                <span>+1 (555) 123-4567</span>
+              </a>
+            </div>
           </div>
         </section>
       </main>

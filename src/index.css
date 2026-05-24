@@ -1,6 +1,6 @@
 @import "tailwindcss";
-@config "../tailwind.config.ts";
 @import "highlight.js/styles/atom-one-dark.css";
+@config "../tailwind.config.ts";
 
 /* Docs: code-block tuning so highlight.js + our shell agree */
 .docs-prose pre {
@@ -65,13 +65,19 @@
     --ring: 217 91% 60%;
     --radius: 0.75rem;
 
-    /* Premium design tokens */
-    --shadow-sm: 0 1px 2px 0 hsl(222 84% 5% / 0.04);
-    --shadow-md: 0 4px 12px -2px hsl(222 84% 5% / 0.08), 0 2px 4px -2px hsl(222 84% 5% / 0.04);
-    --shadow-lg: 0 12px 32px -8px hsl(222 84% 5% / 0.12), 0 4px 12px -4px hsl(222 84% 5% / 0.06);
-    --shadow-glow: 0 0 32px hsl(var(--primary) / 0.18);
+    /* Premium design tokens — refined */
+    --shadow-xs: 0 1px 2px 0 hsl(222 47% 11% / 0.04);
+    --shadow-sm: 0 1px 2px 0 hsl(222 47% 11% / 0.05), 0 1px 3px 0 hsl(222 47% 11% / 0.03);
+    --shadow-md: 0 2px 6px -1px hsl(222 47% 11% / 0.06), 0 4px 12px -3px hsl(222 47% 11% / 0.05);
+    --shadow-lg: 0 8px 24px -8px hsl(222 47% 11% / 0.1), 0 4px 12px -4px hsl(222 47% 11% / 0.05);
+    --shadow-xl: 0 24px 48px -12px hsl(222 47% 11% / 0.14), 0 12px 24px -8px hsl(222 47% 11% / 0.06);
+    --shadow-glow: 0 0 0 1px hsl(var(--primary) / 0.06), 0 8px 32px -8px hsl(var(--primary) / 0.28);
+    --shadow-inset-top: inset 0 1px 0 0 hsl(0 0% 100% / 0.12);
     --gradient-primary: linear-gradient(135deg, hsl(var(--primary)) 0%, hsl(var(--accent)) 100%);
     --gradient-subtle: linear-gradient(180deg, hsl(var(--background)) 0%, hsl(var(--muted) / 0.4) 100%);
+    --gradient-mesh: radial-gradient(at 20% 10%, hsl(var(--primary) / 0.10) 0px, transparent 50%),
+                     radial-gradient(at 80% 0%, hsl(var(--accent) / 0.08) 0px, transparent 50%),
+                     radial-gradient(at 0% 60%, hsl(var(--primary) / 0.06) 0px, transparent 50%);
     --transition-smooth: cubic-bezier(0.16, 1, 0.3, 1);
 
 
@@ -84,17 +90,17 @@
     --sidebar-border: 220 13% 91%;
     --sidebar-ring: 217.2 91.2% 59.8%;
 
-    /* Blog tokens — light (aligned with app palette) */
-    --blog-bg: 0 0% 100%;
-    --blog-surface: 210 40% 98%;
-    --blog-border: 214 32% 91%;
-    --blog-muted: 215 16% 35%;
-    --blog-subtle: 215 16% 47%;
-    --blog-heading: 222 47% 11%;
-    --blog-accent: 217 91% 60%;
-    --blog-accent-soft: 271 91% 55%;
-    --blog-code-bg: 210 40% 96%;
-    --blog-inline-code-bg: 217 91% 94%;
+    /* Blog tokens — unified with main app tokens */
+    --blog-bg: var(--background);
+    --blog-surface: var(--muted);
+    --blog-border: var(--border);
+    --blog-muted: var(--muted-foreground);
+    --blog-subtle: var(--muted-foreground);
+    --blog-heading: var(--foreground);
+    --blog-accent: var(--primary);
+    --blog-accent-soft: var(--primary);
+    --blog-code-bg: var(--muted);
+    --blog-inline-code-bg: var(--muted);
   }
 
   .dark {
@@ -126,17 +132,8 @@
     --sidebar-border: 240 3.7% 15.9%;
     --sidebar-ring: 217.2 91.2% 59.8%;
 
-    /* Blog tokens — dark (aligned with app palette) */
-    --blog-bg: 222 84% 4.9%;
-    --blog-surface: 217 33% 12%;
-    --blog-border: 217 33% 20%;
-    --blog-muted: 215 20% 70%;
-    --blog-subtle: 215 16% 55%;
-    --blog-heading: 210 40% 98%;
-    --blog-accent: 217 91% 60%;
-    --blog-accent-soft: 271 91% 70%;
-    --blog-code-bg: 217 33% 10%;
-    --blog-inline-code-bg: 217 33% 20%;
+    /* Blog tokens inherit from --blog-* aliases in :root, which themselves
+       reference the main palette — so dark mode is picked up automatically. */
   }
 }
 
@@ -406,13 +403,19 @@
   .animate-float-slow { animation: floatSlow 7s ease-in-out infinite; }
   .animate-status-blink { animation: statusBlink 2s ease-in-out infinite; }
 
-  /* Glass morphism effect */
+  /* Glass morphism effect — refined for 2026 */
   .glass-effect {
-    @apply bg-card/80 backdrop-blur-xl border border-border/50 shadow-lg;
+    background-color: hsl(var(--card) / 0.7);
+    backdrop-filter: saturate(180%) blur(20px);
+    -webkit-backdrop-filter: saturate(180%) blur(20px);
+    border: 1px solid hsl(var(--border) / 0.6);
   }
 
   .glass-effect-dark {
-    @apply bg-card/60 backdrop-blur-xl border border-border/30;
+    background-color: hsl(var(--card) / 0.5);
+    backdrop-filter: saturate(180%) blur(20px);
+    -webkit-backdrop-filter: saturate(180%) blur(20px);
+    border: 1px solid hsl(var(--border) / 0.4);
   }
 
   /* Enhanced gradients with design tokens */
@@ -432,11 +435,18 @@
 
   /* Interactive states */
   .interactive-lift {
-    @apply transition-all duration-300 ease-out hover:-translate-y-0.5 hover:shadow-lg hover:shadow-primary/10;
+    transition: transform 0.4s var(--transition-smooth), box-shadow 0.4s var(--transition-smooth);
+  }
+  .interactive-lift:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-lg);
   }
 
   .interactive-glow {
-    @apply transition-all duration-300 ease-out hover:shadow-lg hover:shadow-primary/25;
+    transition: box-shadow 0.4s var(--transition-smooth);
+  }
+  .interactive-glow:hover {
+    box-shadow: var(--shadow-glow);
   }
 
   /* Typography enhancements */
@@ -448,15 +458,132 @@
     @apply bg-gradient-to-br from-foreground via-primary to-foreground bg-clip-text text-transparent tracking-tight;
   }
 
-  /* Card improvements */
+  /* Card improvements — modern, restrained */
   .card-elevated {
-    @apply bg-card/80 backdrop-blur-sm border border-border/60 shadow-md hover:shadow-xl hover:border-border transition-all duration-300 ease-out;
+    background-color: hsl(var(--card));
+    border: 1px solid hsl(var(--border) / 0.7);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow-sm);
+    transition: border-color 0.3s var(--transition-smooth),
+                box-shadow 0.3s var(--transition-smooth),
+                transform 0.3s var(--transition-smooth);
+  }
+  .card-elevated:hover {
+    border-color: hsl(var(--border));
+    box-shadow: var(--shadow-md);
   }
 
   .card-interactive {
-    @apply bg-card/80 backdrop-blur-sm border border-border/60 shadow-md hover:shadow-xl transition-all duration-300 ease-out hover:-translate-y-0.5 hover:border-primary/40 cursor-pointer;
+    background-color: hsl(var(--card));
+    border: 1px solid hsl(var(--border) / 0.7);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow-sm);
+    cursor: pointer;
+    transition: border-color 0.3s var(--transition-smooth),
+                box-shadow 0.3s var(--transition-smooth),
+                transform 0.3s var(--transition-smooth);
+  }
+  .card-interactive:hover {
+    border-color: hsl(var(--primary) / 0.4);
+    box-shadow: var(--shadow-md);
+    transform: translateY(-2px);
   }
 
+  /* Modern surface — subtle bordered card with mesh hint */
+  .surface-modern {
+    position: relative;
+    background-color: hsl(var(--card));
+    border: 1px solid hsl(var(--border) / 0.7);
+    border-radius: calc(var(--radius) + 0.25rem);
+    overflow: hidden;
+  }
+  .surface-modern::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: var(--gradient-mesh);
+    opacity: 0.6;
+    pointer-events: none;
+  }
+
+  /* Subtle "section eyebrow" — used above section headings */
+  .eyebrow {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.375rem 0.75rem;
+    border-radius: 9999px;
+    background-color: hsl(var(--muted) / 0.6);
+    border: 1px solid hsl(var(--border) / 0.7);
+    color: hsl(var(--muted-foreground));
+    font-size: 0.75rem;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+  }
+  .eyebrow::before {
+    content: '';
+    width: 0.375rem;
+    height: 0.375rem;
+    border-radius: 9999px;
+    background-color: hsl(var(--primary));
+    box-shadow: 0 0 0 3px hsl(var(--primary) / 0.18);
+  }
+
+  /* Primary CTA button — refined modern gradient + inset highlight */
+  .btn-primary-modern {
+    position: relative;
+    isolation: isolate;
+    background: linear-gradient(180deg, hsl(var(--primary) / 0.95), hsl(var(--primary)));
+    color: hsl(var(--primary-foreground));
+    border: 1px solid hsl(var(--primary));
+    box-shadow: var(--shadow-inset-top), var(--shadow-sm);
+    transition: transform 0.25s var(--transition-smooth),
+                box-shadow 0.25s var(--transition-smooth),
+                background 0.25s var(--transition-smooth);
+  }
+  .btn-primary-modern:hover {
+    transform: translateY(-1px);
+    box-shadow: var(--shadow-inset-top), var(--shadow-md), 0 0 0 3px hsl(var(--primary) / 0.18);
+  }
+  .btn-primary-modern:active {
+    transform: translateY(0);
+  }
+
+  .btn-secondary-modern {
+    background-color: hsl(var(--background));
+    color: hsl(var(--foreground));
+    border: 1px solid hsl(var(--border));
+    box-shadow: var(--shadow-xs);
+    transition: transform 0.25s var(--transition-smooth),
+                box-shadow 0.25s var(--transition-smooth),
+                background-color 0.25s var(--transition-smooth),
+                border-color 0.25s var(--transition-smooth);
+  }
+  .btn-secondary-modern:hover {
+    transform: translateY(-1px);
+    background-color: hsl(var(--muted) / 0.5);
+    border-color: hsl(var(--foreground) / 0.18);
+    box-shadow: var(--shadow-sm);
+  }
+
+  /* Section heading — large balanced display */
+  .section-heading {
+    font-size: clamp(2.25rem, 5vw, 3.75rem);
+    line-height: 1.05;
+    letter-spacing: -0.025em;
+    font-weight: 600;
+    text-wrap: balance;
+  }
+
+  /* Section subheading */
+  .section-subheading {
+    font-size: clamp(1rem, 1.5vw, 1.125rem);
+    line-height: 1.65;
+    color: hsl(var(--muted-foreground));
+    max-width: 42rem;
+    margin-inline: auto;
+    text-wrap: pretty;
+  }
 }
 
 @layer utilities {
@@ -498,34 +625,42 @@
   .scrollbar-hide::-webkit-scrollbar {
     display: none;
   }
+
+  /* Modern background utilities */
+  .bg-grid {
+    background-image:
+      linear-gradient(to right, hsl(var(--foreground) / 0.06) 1px, transparent 1px),
+      linear-gradient(to bottom, hsl(var(--foreground) / 0.06) 1px, transparent 1px);
+    background-size: 56px 56px;
+  }
+
+  .bg-grid-fade {
+    -webkit-mask-image: radial-gradient(ellipse 60% 50% at 50% 0%, #000 50%, transparent 90%);
+    mask-image: radial-gradient(ellipse 60% 50% at 50% 0%, #000 50%, transparent 90%);
+  }
+
+  .bg-mesh {
+    background: var(--gradient-mesh);
+  }
+
+  /* Soft fade-out for top and bottom edges of decorative sections */
+  .mask-fade-y {
+    -webkit-mask-image: linear-gradient(to bottom, transparent, #000 12%, #000 88%, transparent);
+    mask-image: linear-gradient(to bottom, transparent, #000 12%, #000 88%, transparent);
+  }
 }
 
 /* ===========================
-   Blog editorial typography
+   Blog typography (unified with main app)
    =========================== */
+/* Legacy class — now inherits the main app's sans font. Kept so older
+   markup that still references it doesn't switch to monospace. */
 .font-mono-display {
-  font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-feature-settings: "tnum" 1, "ss01" 1;
+  font-family: inherit;
+  font-feature-settings: "tnum" 1;
 }
 
-/* Drop cap on the first paragraph of a blog article body */
-.blog-article-body > p:first-of-type::first-letter {
-  float: left;
-  font-family: 'Instrument Serif', serif;
-  font-style: italic;
-  color: hsl(var(--blog-accent-soft));
-  font-size: 5.25rem;
-  line-height: 0.78;
-  padding-right: 0.85rem;
-  padding-top: 0.45rem;
-  font-weight: 400;
-}
-
-/* Refined article prose accents */
-.blog-prose h2 { font-feature-settings: "liga" 1, "calt" 1; }
-.blog-prose blockquote { quotes: "\201C" "\201D"; }
-
-/* Subtle vertical rhythm for editorial cards */
+/* Subtle vertical rhythm for editorial cards (image-only effect) */
 .editorial-card .editorial-thumb {
   transition: transform 0.7s cubic-bezier(0.16, 1, 0.3, 1),
               filter 0.5s ease;
@@ -537,45 +672,67 @@
 
 /* =========================================================
    Global Responsive Safety Net (mobile/tablet)
-   Caps oversized type, padding, and prevents horizontal scroll
+   Caps oversized type, padding, decorative backdrops, and
+   prevents horizontal scroll.
    ========================================================= */
 
 /* Prevent any horizontal scroll across the app */
 html, body { max-width: 100%; overflow-x: hidden; }
 img, video, svg, canvas { max-width: 100%; height: auto; }
 pre { max-width: 100%; overflow-x: auto; }
-table { display: block; max-width: 100%; overflow-x: auto; }
+table { max-width: 100%; }
 
-/* Phones (<= 640px): rein in the biggest type & padding */
+/* Phones (<= 640px) */
 @media (max-width: 640px) {
+  /* Display type — cap the biggest sizes */
   .text-5xl { font-size: 2.25rem !important; line-height: 1.1 !important; }
   .text-6xl { font-size: 2.5rem !important; line-height: 1.05 !important; }
   .text-7xl { font-size: 2.75rem !important; line-height: 1.05 !important; }
   .text-8xl { font-size: 3rem !important; line-height: 1.02 !important; }
   .text-9xl { font-size: 3.25rem !important; line-height: 1.02 !important; }
 
-  /* Cap section padding on small screens */
+  /* Section padding — keep them visually distinct but not wasteful */
   .py-20, .py-24, .py-32 { padding-top: 3rem !important; padding-bottom: 3rem !important; }
   .py-16 { padding-top: 2.5rem !important; padding-bottom: 2.5rem !important; }
   .px-12, .px-16, .px-20, .px-24 { padding-left: 1.25rem !important; padding-right: 1.25rem !important; }
   .p-12, .p-16, .p-20, .p-24 { padding: 1.5rem !important; }
   .gap-12, .gap-16, .gap-20 { gap: 2rem !important; }
 
-  /* Blog drop cap shrink */
-  .blog-article-body > p:first-of-type::first-letter { font-size: 3.5rem !important; }
+  /* Touch targets — meet 44x44 minimum for accessible tap */
+  button, [role="button"], a.btn, .btn,
+  .btn-primary-modern, .btn-secondary-modern {
+    min-height: 2.5rem;
+  }
+
+  /* Reduce intensity of decorative mesh/grid on small screens */
+  .bg-mesh { background-size: 100% 100%; opacity: 0.75; }
+  .bg-grid { background-size: 36px 36px !important; opacity: 0.5; }
 }
 
-/* Small phones (<= 414px): even tighter */
+/* Small phones (<= 414px) */
 @media (max-width: 414px) {
   .text-4xl { font-size: 1.875rem !important; line-height: 1.15 !important; }
   .text-5xl { font-size: 2rem !important; }
   .text-6xl { font-size: 2.25rem !important; }
   .text-7xl, .text-8xl, .text-9xl { font-size: 2.5rem !important; }
   h1, h2 { word-break: break-word; hyphens: auto; }
+
+  /* Inline padding-left for TOC items needs a smaller bump on tiny screens */
+  .container-padding { padding-left: 1rem !important; padding-right: 1rem !important; }
 }
 
-/* Tablets portrait (641-1024px): soften gigantic display type */
+/* Tablets portrait (641-1024px) */
 @media (min-width: 641px) and (max-width: 1024px) {
   .text-8xl { font-size: 4.5rem !important; line-height: 1 !important; }
   .text-9xl { font-size: 5rem !important; line-height: 1 !important; }
+}
+
+/* All non-desktop viewports — keep decorative blurs from eating the viewport.
+   Any element with a fixed pixel width >= 600 and blur class gets clamped. */
+@media (max-width: 768px) {
+  /* Common decorative blur sizes used in this codebase */
+  [class*="w-["][class*="px"][class*="blur-3xl"],
+  [class*="w-["][class*="px"][class*="blur-2xl"] {
+    max-width: 100vw;
+  }
 }

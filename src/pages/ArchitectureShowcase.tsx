@@ -4,32 +4,34 @@ import ArchitectureSummary from '../components/architecture/ArchitectureSummary'
 
 const ArchitectureShowcase = () => {
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-blue-50 dark:from-gray-900 dark:to-gray-800 p-8">
-      <div className="max-w-7xl mx-auto space-y-8">
-        {/* Page Header */}
-        <div className="text-center mb-12">
-          <h1 className="text-5xl font-bold text-gray-800 dark:text-white mb-4">
-            Enhanced Architecture Diagram
-          </h1>
-          <p className="text-xl text-gray-600 dark:text-gray-300 max-w-3xl mx-auto">
-            A comprehensive visual representation of the ADHAR Internal Developer Platform 
-            with modern design patterns, premium styling, and enhanced user experience.
+    <div className="min-h-screen bg-background">
+      <main className="container-padding py-12 sm:py-16">
+        <div className="max-width-content">
+          {/* Header */}
+          <div className="text-center mb-12 lg:mb-16">
+            <span className="eyebrow mb-5">Architecture showcase</span>
+            <h1 className="section-heading mt-5 text-foreground">
+              The ADHAR platform,
+              <br className="hidden sm:block" />
+              <span className="text-muted-foreground">visualized.</span>
+            </h1>
+            <p className="section-subheading mt-6">
+              A comprehensive visual representation of the Internal Developer Platform —
+              modern design patterns, premium styling, and refined user experience.
+            </p>
+          </div>
+
+          <ArchitectureSummary />
+
+          <div className="mt-10 lg:mt-12">
+            <InteractiveArchitecture />
+          </div>
+
+          <p className="mt-10 pt-8 border-t border-border/60 text-center text-xs text-muted-foreground">
+            Enhanced with modern design patterns, advanced animations, and comprehensive platform coverage.
           </p>
         </div>
-
-        {/* Enhancement Summary */}
-        <ArchitectureSummary />
-
-        {/* Main Architecture Diagram */}
-        <InteractiveArchitecture />
-
-        {/* Footer */}
-        <div className="text-center py-8">
-          <p className="text-gray-500 dark:text-gray-400">
-            Enhanced with modern design patterns, advanced animations, and comprehensive platform coverage
-          </p>
-        </div>
-      </div>
+      </main>
     </div>
   );
 };

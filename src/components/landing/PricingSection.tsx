@@ -1,73 +1,93 @@
-
+import React from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Award, Star, CheckCircle, MessageSquare } from "lucide-react";
+import { Star, Check, MessageSquare, ArrowRight } from "lucide-react";
 import { pricingPlans } from "@/data/landingPageData";
 
 const PricingSection = () => {
   return (
-    <section id="pricing" className="py-24 bg-gray-50 dark:bg-gray-900">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="text-center mb-20">
-          <Badge className="mb-6 bg-green-100 text-green-700 border-green-200 dark:bg-green-900/30 dark:text-green-300 dark:border-green-700/50">
-            <Award className="w-4 h-4 mr-2" />
-            Enterprise Pricing
-          </Badge>
-          <h2 className="text-4xl md:text-5xl font-bold text-gray-900 dark:text-white mb-6">
-            Transparent, Scalable Pricing
+    <section id="pricing" className="relative section-padding container-padding bg-muted/30">
+      <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-border to-transparent" />
+
+      <div className="max-width-content">
+        <div className="text-center mb-14 lg:mb-16">
+          <span className="eyebrow mb-5">Pricing</span>
+          <h2 className="section-heading mt-5 text-foreground">
+            Transparent,
+            <br className="hidden sm:block" />
+            <span className="text-muted-foreground">scalable pricing.</span>
           </h2>
-          <p className="text-xl text-gray-600 dark:text-gray-300 max-w-3xl mx-auto">
-            Start free and scale with confidence. No hidden fees, no vendor lock-in. 
+          <p className="section-subheading mt-6">
+            Start free and scale with confidence. No hidden fees, no vendor lock-in.
             Enterprise features available from day one.
           </p>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-8 md:gap-6 lg:gap-8">
-          {pricingPlans.map((plan, index) => (
-            <Card key={index} className={`relative ${plan.popular ? 'border-blue-500 shadow-2xl md:scale-105 bg-white dark:bg-gray-800 dark:border-blue-400' : 'border-gray-200 bg-white dark:bg-gray-800 dark:border-gray-700'} transition-all duration-300 hover:shadow-xl hover:-translate-y-1`}>
-              {plan.popular && (
-                <div className="absolute -top-4 left-1/2 transform -translate-x-1/2">
-                  <Badge className="bg-gradient-to-r from-blue-500 to-purple-500 text-white px-6 py-2 shadow-lg">
-                    <Star className="w-4 h-4 mr-2" />
-                    Most Popular
-                  </Badge>
-                </div>
-              )}
-              <CardHeader className="text-center p-8">
-                <CardTitle className="text-2xl font-bold mb-4 dark:text-white">{plan.name}</CardTitle>
-                <div className="text-5xl font-bold text-gray-900 dark:text-white mb-2">
-                  {plan.price}
-                  {plan.period && <span className="text-lg text-gray-600 dark:text-gray-400 font-normal">{plan.period}</span>}
-                </div>
-                <CardDescription className="text-gray-600 dark:text-gray-300 leading-relaxed">{plan.description}</CardDescription>
-              </CardHeader>
-              <CardContent className="p-8 pt-0">
-                <ul className="space-y-4 mb-8">
-                  {plan.features.map((feature, idx) => (
-                    <li key={idx} className="flex items-start">
-                      <CheckCircle className="w-5 h-5 text-green-500 mr-3 mt-0.5 flex-shrink-0" />
-                      <span className="text-gray-700 dark:text-gray-300">{feature}</span>
-                    </li>
-                  ))}
-                </ul>
-                <Button 
-                  className={`w-full ${plan.popular ? 'bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700' : 'bg-gray-800 hover:bg-gray-900 dark:bg-gray-700 dark:hover:bg-gray-600'} shadow-lg`}
-                  size="lg"
-                >
-                  {plan.cta}
-                </Button>
-              </CardContent>
-            </Card>
-          ))}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+          {pricingPlans.map((plan, index) => {
+            const isPopular = plan.popular;
+            return (
+              <Card
+                key={index}
+                className={`relative flex flex-col rounded-2xl border bg-card transition-colors ${
+                  isPopular
+                    ? 'border-primary/60 ring-1 ring-primary/30 shadow-[var(--shadow-md)]'
+                    : 'border-border/70 hover:border-border shadow-[var(--shadow-xs)]'
+                }`}
+              >
+                {isPopular && (
+                  <div className="absolute -top-3 left-1/2 -translate-x-1/2 z-10">
+                    <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-primary text-primary-foreground text-[10px] font-semibold uppercase tracking-wider shadow-[var(--shadow-xs)]">
+                      <Star className="w-3 h-3" />
+                      Most popular
+                    </span>
+                  </div>
+                )}
+                <CardHeader className="text-center pt-10 pb-6 px-7">
+                  <CardTitle className="text-2xl font-semibold tracking-tight text-foreground">{plan.name}</CardTitle>
+                  <div className="mt-5 text-4xl font-semibold tracking-tight tabular text-foreground">
+                    {plan.price}
+                    {plan.period && (
+                      <span className="text-base text-muted-foreground font-normal ml-1">{plan.period}</span>
+                    )}
+                  </div>
+                  <CardDescription className="mt-3 text-sm text-muted-foreground leading-relaxed">
+                    {plan.description}
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="flex-1 flex flex-col px-7 pb-7">
+                  <ul className="space-y-3 mb-7 border-t border-border/60 pt-6">
+                    {plan.features.map((feature, idx) => (
+                      <li key={idx} className="flex items-start gap-2.5 text-sm text-muted-foreground">
+                        <Check className="mt-0.5 h-4 w-4 flex-shrink-0 text-primary/80" strokeWidth={2.5} />
+                        <span>{feature}</span>
+                      </li>
+                    ))}
+                  </ul>
+                  <button
+                    type="button"
+                    className={`mt-auto inline-flex items-center justify-center gap-2 rounded-full h-11 text-[15px] font-medium ${
+                      isPopular ? 'btn-primary-modern' : 'btn-secondary-modern'
+                    }`}
+                  >
+                    <span>{plan.cta}</span>
+                    <ArrowRight className="w-4 h-4" />
+                  </button>
+                </CardContent>
+              </Card>
+            );
+          })}
         </div>
 
-        <div className="text-center mt-16">
-          <p className="text-gray-600 dark:text-gray-300 mb-6">Need a custom solution? We're here to help.</p>
-          <Button variant="outline" size="lg" className="border-2 border-gray-300 hover:border-blue-400 dark:border-gray-600 dark:hover:border-blue-400 dark:text-gray-200">
-            <MessageSquare className="w-5 h-5 mr-2" />
-            Contact Enterprise Sales
-          </Button>
+        <div className="text-center mt-14">
+          <p className="text-sm text-muted-foreground mb-5">Need a custom solution? We're here to help.</p>
+          <button
+            type="button"
+            className="btn-secondary-modern group inline-flex items-center justify-center gap-2 rounded-full px-5 h-11 text-sm font-medium"
+          >
+            <MessageSquare className="w-4 h-4 text-muted-foreground" />
+            <span>Contact enterprise sales</span>
+            <ArrowRight className="w-3.5 h-3.5 transition-transform group-hover:translate-x-0.5" />
+          </button>
         </div>
       </div>
     </section>

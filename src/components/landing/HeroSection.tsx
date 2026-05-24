@@ -26,29 +26,30 @@ const HeroSection = () => {
   }, []);
 
   return (
-    <section className="relative min-h-screen pt-20 pb-16 container-padding bg-gradient-to-b from-background via-background/95 to-background overflow-hidden w-full">
-      {/* Clean modern gradient overlays */}
+    <section className="relative min-h-screen pt-16 pb-16 container-padding bg-background overflow-hidden w-full">
+      {/* Cohesive mesh + grid backdrop */}
       <div className="absolute inset-0 pointer-events-none">
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,hsl(var(--primary)/0.08),transparent_50%)]"></div>
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_bottom_left,hsl(var(--accent)/0.06),transparent_50%)]"></div>
-        {/* Refined dot pattern */}
-        <div className="absolute inset-0 opacity-[0.02] dark:opacity-[0.03]" style={{
-          backgroundImage: 'radial-gradient(circle, hsl(var(--foreground)) 1px, transparent 1px)',
-          backgroundSize: '48px 48px'
-        }}></div>
+        <div className="absolute inset-0 bg-mesh"></div>
+        <div className="absolute inset-0 bg-grid bg-grid-fade opacity-50 dark:opacity-30"></div>
+        {/* Subtle top spotlight */}
+        <div
+          className="absolute -top-24 sm:-top-32 left-1/2 -translate-x-1/2 w-[min(1100px,100vw)] h-[400px] sm:h-[500px] lg:h-[600px] rounded-full blur-3xl opacity-30 dark:opacity-40"
+          style={{ background: 'radial-gradient(closest-side, hsl(var(--primary) / 0.5), transparent)' }}
+        ></div>
+        {/* Soft bottom fade into next section */}
+        <div className="absolute inset-x-0 bottom-0 h-32 bg-gradient-to-b from-transparent to-background"></div>
       </div>
-      
-      {/* Background elements */}
+
+      {/* Background elements (kept, mouse-reactive) */}
       <div className="hw-accelerate">
         <BackgroundElements mousePosition={mousePosition} />
-        <FloatingParticles />
       </div>
-      
+
       {/* Main content */}
       <div className="max-width-content relative z-10 py-12 lg:py-20 w-full">
         <HeroContent isVisible={isVisible} />
       </div>
-      
+
       {/* Scroll indicator */}
       <ScrollIndicator isVisible={isVisible} />
     </section>

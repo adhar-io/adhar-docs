@@ -78,13 +78,18 @@ const CodeExample = ({ examples, className = "" }: CodeExampleProps) => {
           />
         ) : (
           <Tabs defaultValue={examples[0].id} className="w-full">
-            <TabsList className="grid w-full" style={{ gridTemplateColumns: `repeat(${examples.length}, 1fr)` }}>
-              {examples.map((example) => (
-                <TabsTrigger key={example.id} value={example.id} className="text-sm">
-                  {example.title}
-                </TabsTrigger>
-              ))}
-            </TabsList>
+            <div className="overflow-x-auto -mx-1 px-1 scrollbar-hide">
+              <TabsList
+                className="grid w-max sm:w-full min-w-full"
+                style={{ gridTemplateColumns: `repeat(${examples.length}, minmax(7rem, 1fr))` }}
+              >
+                {examples.map((example) => (
+                  <TabsTrigger key={example.id} value={example.id} className="text-xs sm:text-sm whitespace-nowrap">
+                    {example.title}
+                  </TabsTrigger>
+                ))}
+              </TabsList>
+            </div>
             {examples.map((example) => (
               <TabsContent key={example.id} value={example.id} className="mt-4">
                 <SingleExample 
