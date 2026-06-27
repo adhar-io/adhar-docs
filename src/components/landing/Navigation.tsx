@@ -1,7 +1,8 @@
 
 import { useState, useEffect } from "react";
-import { Link } from "react-router-dom";
+import { Link } from "@tanstack/react-router";
 import { LogIn } from "lucide-react";
+import { useTheme } from "next-themes";
 import NavigationLogo from "./navigation/NavigationLogo";
 import DesktopNavigationMenu from "./navigation/DesktopNavigationMenu";
 import NavigationActions from "./navigation/NavigationActions";
@@ -11,28 +12,24 @@ import { ADHAR_CONSOLE_LOGIN_URL, ADHAR_UI_URL } from "@/lib/config";
 
 const Navigation = () => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const [isDarkMode, setIsDarkMode] = useState(() => {
-    if (typeof window !== 'undefined') {
-      return document.documentElement.classList.contains('dark') || 
-             localStorage.getItem('theme') === 'dark' ||
-             (!localStorage.getItem('theme') && window.matchMedia('(prefers-color-scheme: dark)').matches);
-    }
-    return false;
-  });
-
-  useEffect(() => {
-    if (isDarkMode) {
-      document.documentElement.classList.add('dark');
-      localStorage.setItem('theme', 'dark');
-    } else {
-      document.documentElement.classList.remove('dark');
-      localStorage.setItem('theme', 'light');
-    }
-  }, [isDarkMode]);
+  // Single source of truth: next-themes (configured in App.tsx). next-themes
+  // applies the theme class before paint, so deriving from resolvedTheme is safe.
+  const { resolvedTheme, setTheme } = useTheme();
+  const isDarkMode = resolvedTheme === "dark";
 
   const toggleDarkMode = () => {
-    setIsDarkMode(!isDarkMode);
+    setTheme(isDarkMode ? "light" : "dark");
   };
+
+  // Close the mobile menu on Escape for keyboard users.
+  useEffect(() => {
+    if (!mobileMenuOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setMobileMenuOpen(false);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [mobileMenuOpen]);
 
   const closeMenu = () => {
     setMobileMenuOpen(false);

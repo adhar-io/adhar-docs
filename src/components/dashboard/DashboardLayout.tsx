@@ -1,6 +1,6 @@
 
 import React from 'react';
-import { Outlet, useNavigate } from 'react-router-dom';
+import { Outlet, useNavigate } from "@tanstack/react-router";
 import { SidebarProvider } from '@/components/ui/sidebar';
 import { DashboardSidebar } from './DashboardSidebar';
 import { DashboardHeader } from './DashboardHeader';
@@ -12,7 +12,7 @@ const DashboardLayout = () => {
   React.useEffect(() => {
     const isAuthenticated = localStorage.getItem('isAuthenticated');
     if (!isAuthenticated || isAuthenticated !== 'true') {
-      navigate('/login');
+      navigate({ to: '/login' });
     }
   }, [navigate]);
 

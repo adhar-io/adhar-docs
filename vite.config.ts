@@ -1,22 +1,24 @@
 import { defineConfig } from "vite";
-import react from "@vitejs/plugin-react-swc";
+import { tanstackStart } from "@tanstack/react-start/plugin/vite";
+import viteReact from "@vitejs/plugin-react";
+import tailwindcss from "@tailwindcss/vite";
 import path from "path";
-import { componentTagger } from "lovable-tagger";
 
-// https://vitejs.dev/config/
-export default defineConfig(({ mode }) => ({
+// https://tanstack.com/start — SPA mode (SSR disabled) so the existing
+// client-only components keep working while we run on Start + the server-route API.
+export default defineConfig({
   server: {
     host: "::",
     port: 8080,
   },
-  plugins: [
-    react(),
-    mode === 'development' &&
-    componentTagger(),
-  ].filter(Boolean),
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),
     },
   },
-}));
+  plugins: [
+    tailwindcss(),
+    tanstackStart({ spa: { enabled: true } }),
+    viteReact(),
+  ],
+});

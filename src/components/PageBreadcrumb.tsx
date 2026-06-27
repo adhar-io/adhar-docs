@@ -1,5 +1,5 @@
 
-import { useNavigate } from 'react-router-dom';
+import { useNavigate } from "@tanstack/react-router";
 import {
   Breadcrumb,
   BreadcrumbList,
@@ -28,7 +28,7 @@ const PageBreadcrumb = ({ currentPage, parentPage }: PageBreadcrumbProps) => {
             <>
               <BreadcrumbItem>
                 <BreadcrumbLink 
-                  onClick={() => navigate(parentPage.path)}
+                  onClick={() => navigate({ to: parentPage.path })}
                   className="cursor-pointer hover:text-blue-600 dark:hover:text-blue-400"
                 >
                   {parentPage.name}

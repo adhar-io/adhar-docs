@@ -15,6 +15,7 @@ const NavigationActions = ({ isDarkMode, toggleDarkMode }: NavigationActionsProp
         variant="ghost"
         size="sm"
         onClick={toggleDarkMode}
+        aria-label={isDarkMode ? 'Switch to light mode' : 'Switch to dark mode'}
         className="text-muted-foreground hover:text-primary hover:bg-accent/50 p-2 rounded-lg transition-all duration-300"
       >
         {isDarkMode ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}

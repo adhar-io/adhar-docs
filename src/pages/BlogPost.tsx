@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Link, useNavigate, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams } from "@tanstack/react-router";
 import Navigation from "@/components/landing/Navigation";
 import Footer from "@/components/landing/Footer";
 import BlogMarkdown from "@/components/blog/BlogMarkdown";
@@ -17,8 +17,31 @@ import {
   Share2,
 } from "lucide-react";
 import { Linkedin, Twitter } from "@/components/brand-icons";
+import { useQuery } from "@tanstack/react-query";
+import { api, type ApiPost } from "@/lib/api";
 import { blogPosts, type BlogPost as Post } from "@/data/blogData";
-import { getDraftBySlug, listDrafts } from "@/lib/blogDrafts";
+
+function formatPostDate(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return iso;
+  return d.toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" });
+}
+
+function toPost(p: ApiPost): Post {
+  return {
+    id: p.id,
+    title: p.title,
+    slug: p.slug,
+    excerpt: p.excerpt,
+    content: p.content,
+    category: p.category,
+    author: p.author,
+    date: formatPostDate(p.date),
+    readTime: p.readTime,
+    image: p.image,
+    featured: p.featured,
+  };
+}
 import {
   addClap,
   buildShareUrl,
@@ -64,51 +87,35 @@ function extractToc(body: string): TocItem[] {
 }
 
 const BlogPost = () => {
-  const { slug } = useParams<{ slug: string }>();
+  const { slug } = useParams({ strict: false });
   const navigate = useNavigate();
   const { toast } = useToast();
 
+  // Single post + the full published list come from the Postgres-backed API,
+  // with static blogData as a fallback for first paint / API outage.
+  const { data: postData } = useQuery({
+    queryKey: ["post", slug],
+    queryFn: () => api.posts.get(slug as string),
+    enabled: !!slug,
+    retry: false,
+  });
+  const { data: listData } = useQuery({
+    queryKey: ["posts", "published"],
+    queryFn: () => api.posts.list(),
+  });
+
   const post = useMemo<Post | null>(() => {
+    if (postData?.post) return toPost(postData.post);
     if (!slug) return null;
-    const draft = getDraftBySlug(slug);
-    if (draft && draft.status === "published") {
-      return {
-        id: draft.id,
-        title: draft.title || "Untitled",
-        slug: draft.slug!,
-        excerpt: draft.excerpt || "",
-        content: draft.content || "",
-        category: draft.category || "Platform Updates",
-        author: draft.author || "ADHAR Team",
-        date: draft.date || new Date(draft.updatedAt).toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" }),
-        readTime: draft.readTime || `${readingTimeMinutes(draft.content || "")} min read`,
-        image: draft.image || "",
-        featured: draft.featured || false,
-      };
-    }
     return blogPosts.find((p) => p.slug === slug) || null;
-  }, [slug]);
+  }, [postData, slug]);
 
   const allPosts = useMemo<Post[]>(() => {
-    const drafts = listDrafts()
-      .filter((d) => d.status === "published" && d.title && d.slug && d.content)
-      .map<Post>((d) => ({
-        id: d.id,
-        title: d.title!,
-        slug: d.slug!,
-        excerpt: d.excerpt || "",
-        content: d.content!,
-        category: d.category || "Platform Updates",
-        author: d.author || "ADHAR Team",
-        date: d.date || new Date(d.updatedAt).toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" }),
-        readTime: d.readTime || `${readingTimeMinutes(d.content || "")} min read`,
-        image: d.image || "",
-        featured: d.featured || false,
-      }));
-    return [...blogPosts, ...drafts].sort(
+    const source = listData?.posts?.length ? listData.posts.map(toPost) : blogPosts;
+    return [...source].sort(
       (a, b) => parsePostDate(a.date).getTime() - parsePostDate(b.date).getTime(),
     );
-  }, []);
+  }, [listData]);
 
   const toc = useMemo(() => (post ? extractToc(post.content) : []), [post]);
   const tags = useMemo(() => (post ? tagsForPost(post) : []), [post]);
@@ -230,7 +237,7 @@ const BlogPost = () => {
             The article you're looking for doesn't exist or was moved.
           </p>
           <button
-            onClick={() => navigate("/blog")}
+            onClick={() => navigate({ to: "/blog" })}
             className="btn-primary-modern inline-flex items-center justify-center gap-2 rounded-full px-5 h-10 text-sm font-medium"
           >
             <ArrowLeft className="w-4 h-4" />
@@ -590,6 +597,8 @@ const BlogPost = () => {
                     <div className="aspect-[16/10] bg-muted overflow-hidden">
                       <img
                         src={p.image}
+                        loading="lazy"
+                        decoding="async"
                         alt={p.title}
                         className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-[1.03]"
                       />

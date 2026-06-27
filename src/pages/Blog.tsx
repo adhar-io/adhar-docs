@@ -1,5 +1,7 @@
 import { useMemo, useState } from "react";
-import { Link, useSearchParams } from "react-router-dom";
+import { Link, useNavigate, useLocation } from "@tanstack/react-router";
+import { useQuery } from "@tanstack/react-query";
+import { api } from "@/lib/api";
 import Navigation from "@/components/landing/Navigation";
 import Footer from "@/components/landing/Footer";
 import {
@@ -14,15 +16,27 @@ import {
   X,
 } from "lucide-react";
 import { blogPosts, type BlogPost } from "@/data/blogData";
-import { listDrafts } from "@/lib/blogDrafts";
 import { initials, listBookmarks, parsePostDate, tagsForPost } from "@/lib/blogExtras";
 import BlogSearch from "@/components/blog/BlogSearch";
 
 const CATEGORIES = ["All Stories", "Platform Updates", "DevOps", "Security", "AI/ML", "Community"];
 const DEFAULT_CAT = "All Stories";
 
+/** Render an API ISO date as a friendly "Month DD, YYYY" string. */
+function formatPostDate(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return iso;
+  return d.toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" });
+}
+
 const Blog = () => {
-  const [searchParams, setSearchParams] = useSearchParams();
+  const navigate = useNavigate();
+  const location = useLocation();
+  const searchParams = new URLSearchParams(
+    typeof (location as { searchStr?: string }).searchStr === "string"
+      ? (location as { searchStr?: string }).searchStr
+      : ""
+  );
   const cat = searchParams.get("category") || DEFAULT_CAT;
   const tag = searchParams.get("tag") || "";
   const q = searchParams.get("q") || "";
@@ -31,34 +45,40 @@ const Blog = () => {
     const next = new URLSearchParams(searchParams);
     if (!value || value === defaultValue) next.delete(key);
     else next.set(key, value);
-    setSearchParams(next, { replace: true });
+    navigate({ to: "/blog", search: Object.fromEntries(next), replace: true });
   };
 
   const setCat = (c: string) => updateParam("category", c, DEFAULT_CAT);
   const setTag = (t: string) => updateParam("tag", t);
-  const resetFilters = () => setSearchParams({}, { replace: true });
+  const resetFilters = () => navigate({ to: "/blog", search: {}, replace: true });
   const hasActiveFilters = cat !== DEFAULT_CAT || q.trim() !== "" || tag.trim() !== "";
 
+  // Published posts now come from the Postgres-backed API. Static blogData is
+  // kept only as a fallback for first paint / when the API is unreachable.
+  const { data } = useQuery({
+    queryKey: ["posts", "published"],
+    queryFn: () => api.posts.list(),
+  });
+
   const allPosts = useMemo<BlogPost[]>(() => {
-    const drafts = listDrafts()
-      .filter((d) => d.status === "published" && d.title && d.slug && d.content)
-      .map((d) => ({
-        id: d.id,
-        title: d.title!,
-        slug: d.slug!,
-        excerpt: d.excerpt || "",
-        content: d.content!,
-        category: d.category || "Platform Updates",
-        author: d.author || "ADHAR Team",
-        date: d.date || new Date(d.updatedAt).toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" }),
-        readTime: d.readTime || "5 min read",
-        image: d.image || "https://images.unsplash.com/photo-1518770660439-4636190af475?w=1200&q=80",
-        featured: d.featured || false,
-      }));
-    return [...drafts, ...blogPosts].sort(
+    const fromApi = (data?.posts ?? []).map((p) => ({
+      id: p.id,
+      title: p.title,
+      slug: p.slug,
+      excerpt: p.excerpt,
+      content: p.content,
+      category: p.category,
+      author: p.author,
+      date: formatPostDate(p.date),
+      readTime: p.readTime,
+      image: p.image,
+      featured: p.featured,
+    }));
+    const source = fromApi.length ? fromApi : blogPosts;
+    return [...source].sort(
       (a, b) => parsePostDate(b.date).getTime() - parsePostDate(a.date).getTime(),
     );
-  }, []);
+  }, [data]);
 
   const tagsByPost = useMemo(() => {
     const map = new Map<string, string[]>();
@@ -298,6 +318,8 @@ const Blog = () => {
                         <div className="relative aspect-[16/10] overflow-hidden bg-muted">
                           <img
                             src={p.image}
+                            loading="lazy"
+                            decoding="async"
                             alt={p.title}
                             className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-[1.03]"
                           />

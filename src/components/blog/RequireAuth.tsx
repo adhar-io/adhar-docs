@@ -1,5 +1,5 @@
 import { ReactNode } from "react";
-import { Navigate, useLocation } from "react-router-dom";
+import { Navigate, useLocation } from "@tanstack/react-router";
 import { useAuth } from "@/hooks/useAuth";
 import LoadingScreen from "@/components/LoadingScreen";
 
@@ -15,7 +15,7 @@ const RequireAuth = ({ children, moderatorOnly = false }: Props) => {
 
   if (loading) return <LoadingScreen />;
   if (!isAuthenticated) {
-    return <Navigate to="/blog/auth" state={{ from: location.pathname }} replace />;
+    return <Navigate to="/blog/auth" search={{ redirect: location.pathname }} replace />;
   }
   if (moderatorOnly && !isModerator) {
     return <Navigate to="/blog/admin" replace />;

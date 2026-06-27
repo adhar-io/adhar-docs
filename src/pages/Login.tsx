@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from "@tanstack/react-router";
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -31,7 +31,7 @@ const Login = () => {
       });
       localStorage.setItem('isAuthenticated', 'true');
       localStorage.setItem('userEmail', email);
-      navigate('/blog-author');
+      navigate({ to: '/blog-author' });
     } else {
       toast({
         title: 'Login failed',

@@ -16,6 +16,7 @@ import {
   Zap,
   CheckCircle2,
   ArrowRight,
+  Loader2,
 } from 'lucide-react';
 import { Github, Twitter, Linkedin } from '@/components/brand-icons';
 import { useToast } from '@/components/ui/use-toast';
@@ -29,14 +30,40 @@ const Contact = () => {
     category: 'General Question',
     message: '',
   });
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    toast({
-      title: 'Message sent',
-      description: "We'll get back to you within 24 hours.",
-    });
-    setFormData({ name: '', email: '', subject: '', category: 'General Question', message: '' });
+    if (isSubmitting) return;
+
+    // Lightweight client-side validation with actionable feedback.
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
+      toast({
+        title: 'Check your email address',
+        description: 'Please enter a valid email so we can reply.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    setIsSubmitting(true);
+    try {
+      // Simulate the network request until a real endpoint is wired up.
+      await new Promise((resolve) => setTimeout(resolve, 900));
+      toast({
+        title: 'Message sent',
+        description: "We'll get back to you within 24 hours.",
+      });
+      setFormData({ name: '', email: '', subject: '', category: 'General Question', message: '' });
+    } catch {
+      toast({
+        title: 'Something went wrong',
+        description: 'Your message could not be sent. Please try again.',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const contactMethods = [
@@ -204,10 +231,21 @@ const Contact = () => {
 
                   <button
                     type="submit"
-                    className="btn-primary-modern group w-full inline-flex items-center justify-center gap-2 rounded-full h-11 text-[15px] font-medium"
+                    disabled={isSubmitting}
+                    aria-busy={isSubmitting}
+                    className="btn-primary-modern group w-full inline-flex items-center justify-center gap-2 rounded-full h-11 text-[15px] font-medium disabled:opacity-70 disabled:cursor-not-allowed disabled:translate-y-0"
                   >
-                    <Send className="w-4 h-4 transition-transform group-hover:translate-x-0.5" />
-                    <span>Send message</span>
+                    {isSubmitting ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        <span>Sending…</span>
+                      </>
+                    ) : (
+                      <>
+                        <Send className="w-4 h-4 transition-transform group-hover:translate-x-0.5" />
+                        <span>Send message</span>
+                      </>
+                    )}
                   </button>
                 </form>
               </div>
@@ -248,12 +286,18 @@ const Contact = () => {
                     <h3 className="text-base font-semibold text-foreground tracking-tight">Connect with us</h3>
                     <p className="mt-1 text-sm text-muted-foreground">Follow us on social media.</p>
                     <div className="mt-4 flex gap-1.5">
-                      {[Github, Twitter, Linkedin].map((Icon, i) => (
+                      {[
+                        { Icon: Github, label: 'GitHub', href: 'https://github.com/adhar-io/adhar' },
+                        { Icon: Twitter, label: 'Twitter / X', href: 'https://twitter.com/adhar_io' },
+                        { Icon: Linkedin, label: 'LinkedIn', href: 'https://www.linkedin.com/company/adhar-io' },
+                      ].map(({ Icon, label, href }) => (
                         <a
-                          key={i}
-                          href="#"
+                          key={label}
+                          href={href}
+                          target="_blank"
+                          rel="noopener noreferrer"
                           className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-border/70 text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
-                          aria-label="Social"
+                          aria-label={`Follow ADHAR on ${label}`}
                         >
                           <Icon className="w-4 h-4" />
                         </a>

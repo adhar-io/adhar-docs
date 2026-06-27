@@ -1,0 +1,22 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: adhar-docs-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: adhar
+      POSTGRES_PASSWORD: adhar
+      POSTGRES_DB: adhar_docs
+    # Host port 5433 to avoid clashing with a local Postgres on 5432.
+    ports:
+      - "5433:5432"
+    volumes:
+      - adhar_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U adhar -d adhar_docs"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  adhar_pgdata:

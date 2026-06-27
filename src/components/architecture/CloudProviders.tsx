@@ -31,6 +31,8 @@ const CloudProviders = ({ cloudProviders }: CloudProvidersProps) => {
                 {provider.icon.startsWith('http') ? (
                   <img 
                     src={provider.icon} 
+                    loading="lazy"
+                    decoding="async"
                     alt={provider.name}
                     className="w-10 h-10 object-contain transition-all duration-300 group-hover:scale-125 filter drop-shadow-lg"
                     onError={(e) => {

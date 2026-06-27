@@ -1,6 +1,6 @@
 import React from "react";
 import { Hexagon, ArrowRight } from "lucide-react";
-import { Link } from "react-router-dom";
+import { Link } from "@tanstack/react-router";
 
 const IntegrationsSection = () => {
   const integrations = [
@@ -94,6 +94,8 @@ const IntegrationsSection = () => {
               <div className="inline-flex h-12 w-12 items-center justify-center rounded-2xl border border-border/70 bg-background shadow-[var(--shadow-xs)] mb-4">
                 <img
                   src={integration.icon}
+                  loading="lazy"
+                  decoding="async"
                   alt={integration.name}
                   className="w-7 h-7 object-contain"
                   onError={(e) => {

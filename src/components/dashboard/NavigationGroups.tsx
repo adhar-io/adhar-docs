@@ -1,6 +1,6 @@
 
 import React from 'react';
-import { NavLink, useLocation } from 'react-router-dom';
+import { Link, useLocation } from "@tanstack/react-router";
 import { 
   BarChart3, 
   Settings, 
@@ -125,14 +125,13 @@ export function NavigationGroups() {
               {group.items.map((item) => (
                 <SidebarMenuItem key={item.title}>
                   <SidebarMenuButton asChild>
-                    <NavLink 
+                    <Link 
                       to={item.url} 
-                      end={item.url === '/dashboard'}
                       className={`flex items-center px-4 py-2 text-sm rounded-lg mx-2 transition-all duration-200 ${getNavCls(isActive(item.url))}`}
                     >
                       <item.icon className="w-4 h-4 mr-3" />
                       <span>{item.title}</span>
-                    </NavLink>
+                    </Link>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
               ))}

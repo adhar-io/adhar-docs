@@ -1,5 +1,5 @@
 import { useMemo, useState, useEffect } from "react";
-import { Link, NavLink, useLocation } from "react-router-dom";
+import { Link, useLocation } from "@tanstack/react-router";
 import {
   Search, ChevronRight, BookOpen, Rocket, Package, Coffee, Layers,
   GraduationCap, Code2, Shield, Settings, Sparkles, ArrowRight, Hash,
@@ -193,16 +193,18 @@ const DocsShell = ({ registry, brand, versions }: DocsShellProps) => {
                       <ul className="space-y-0.5">
                         {sec.items.map((item) => (
                           <li key={item.path}>
-                            <NavLink
+                            <Link
                               to={item.path}
-                              end={item.path === registry.base}
-                              className={({ isActive }) =>
-                                `flex items-center justify-between gap-2 pl-3 pr-2 py-1.5 rounded-md transition-all group ${
-                                  isActive
-                                    ? "bg-gradient-to-r from-primary/10 to-accent/5 text-foreground font-medium border-l-2 border-primary"
-                                    : "text-muted-foreground hover:text-foreground hover:bg-muted/40 border-l-2 border-transparent hover:border-primary/30"
-                                }`
-                              }
+                              activeOptions={{ exact: item.path === registry.base }}
+                              className="flex items-center justify-between gap-2 pl-3 pr-2 py-1.5 rounded-md transition-all group border-l-2"
+                              activeProps={{
+                                className:
+                                  "bg-gradient-to-r from-primary/10 to-accent/5 text-foreground font-medium border-primary",
+                              }}
+                              inactiveProps={{
+                                className:
+                                  "text-muted-foreground hover:text-foreground hover:bg-muted/40 border-transparent hover:border-primary/30",
+                              }}
                             >
                               <span className="truncate text-[13px]">{item.meta.title}</span>
                               {item.meta.badge && (
@@ -213,7 +215,7 @@ const DocsShell = ({ registry, brand, versions }: DocsShellProps) => {
                                   {item.meta.badge}
                                 </Badge>
                               )}
-                            </NavLink>
+                            </Link>
                           </li>
                         ))}
                       </ul>

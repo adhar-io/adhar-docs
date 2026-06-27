@@ -403,6 +403,49 @@
   .animate-float-slow { animation: floatSlow 7s ease-in-out infinite; }
   .animate-status-blink { animation: statusBlink 2s ease-in-out infinite; }
 
+  /* Page/route transition — subtle fade + slight rise, retriggered per route */
+  @keyframes routeFadeIn {
+    from { opacity: 0; transform: translate3d(0, 8px, 0); }
+    to   { opacity: 1; transform: translate3d(0, 0, 0); }
+  }
+  .route-fade-in {
+    animation: routeFadeIn 0.32s cubic-bezier(0.16, 1, 0.3, 1) both;
+  }
+
+  /* Scroll-reveal — elements start hidden and animate in when in view.
+     The .is-visible class is toggled by the useInView hook / <Reveal>. */
+  .reveal {
+    opacity: 0;
+    transform: translate3d(0, 20px, 0);
+    transition: opacity 0.6s cubic-bezier(0.16, 1, 0.3, 1),
+                transform 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+    will-change: opacity, transform;
+  }
+  .reveal.is-visible {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+  /* Directional variants */
+  .reveal-left  { transform: translate3d(-24px, 0, 0); }
+  .reveal-right { transform: translate3d(24px, 0, 0); }
+  .reveal-scale { transform: scale(0.96); }
+  .reveal-left.is-visible,
+  .reveal-right.is-visible,
+  .reveal-scale.is-visible { transform: translate3d(0, 0, 0) scale(1); }
+
+  /* Honor reduced-motion: reveal content immediately, no transform */
+  @media (prefers-reduced-motion: reduce) {
+    .reveal,
+    .reveal-left,
+    .reveal-right,
+    .reveal-scale {
+      opacity: 1 !important;
+      transform: none !important;
+      transition: none !important;
+    }
+    .route-fade-in { animation: none !important; }
+  }
+
   /* Glass morphism effect — refined for 2026 */
   .glass-effect {
     background-color: hsl(var(--card) / 0.7);

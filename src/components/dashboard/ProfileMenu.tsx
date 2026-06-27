@@ -1,6 +1,6 @@
 
 import React from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate } from "@tanstack/react-router";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -54,7 +54,7 @@ export function ProfileMenu({ children }: ProfileMenuProps) {
     });
     
     // Redirect to login page
-    navigate('/login');
+    navigate({ to: '/login' });
   };
 
   const handleMenuAction = (action: string) => {

@@ -1,18 +1,31 @@
-import { useEffect, useMemo, useState } from "react";
-import { Link, useNavigate, useParams } from "react-router-dom";
+import { useEffect, useRef, useState } from "react";
+import { Link, useNavigate, useParams } from "@tanstack/react-router";
+import { useQuery } from "@tanstack/react-query";
 import Navigation from "@/components/landing/Navigation";
 import Footer from "@/components/landing/Footer";
 import BlogMarkdown from "@/components/blog/BlogMarkdown";
 import MarkdownToolbar from "@/components/blog/MarkdownToolbar";
 import {
-  ArrowLeft, Save, Send, Eye, Columns2, FileText, Sparkles, Check,
+  ArrowLeft, Save, Send, Eye, Columns2, FileText, Sparkles, Check, Loader2,
 } from "lucide-react";
-import {
-  saveDraft, getDraft, type BlogDraft, slugify,
-} from "@/lib/blogDrafts";
+import { api, ApiError } from "@/lib/api";
+import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
 
 const CATEGORIES = ["Platform Updates", "Security", "DevOps", "AI/ML", "Community", "Tutorial", "Case Study"];
+
+function slugify(s: string): string {
+  return s
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/(^-|-$)/g, "");
+}
+
+function errMsg(err: unknown): string {
+  if (err instanceof ApiError) return err.message;
+  if (err instanceof Error) return err.message;
+  return "Something went wrong";
+}
 
 type Mode = "split" | "write" | "preview";
 
@@ -52,90 +65,133 @@ Close with a call to action: where should the reader go next?
 
 const BlogCompose = () => {
   const navigate = useNavigate();
-  const { id } = useParams<{ id: string }>();
+  const { id } = useParams({ strict: false });
   const { toast } = useToast();
+  const { isModerator } = useAuth();
 
-  const initial = useMemo<BlogDraft | undefined>(() => (id ? getDraft(id) : undefined), [id]);
+  // Load an existing post when editing (id is the post's UUID).
+  const { data: existing, isLoading: loadingExisting } = useQuery({
+    queryKey: ["post-edit", id],
+    queryFn: () => api.posts.get(id as string),
+    enabled: !!id,
+    retry: false,
+  });
 
-  const [draftId, setDraftId] = useState<string | undefined>(initial?.id);
-  const [title, setTitle] = useState(initial?.title || "");
-  const [slug, setSlug] = useState(initial?.slug || "");
-  const [excerpt, setExcerpt] = useState(initial?.excerpt || "");
-  const [author, setAuthor] = useState(initial?.author || "ADHAR Team");
-  const [category, setCategory] = useState(initial?.category || "Platform Updates");
-  const [image, setImage] = useState(initial?.image || "");
-  const [featured, setFeatured] = useState(initial?.featured || false);
-  const [content, setContent] = useState(initial?.content || SAMPLE);
+  const [draftId, setDraftId] = useState<string | undefined>(id);
+  const [title, setTitle] = useState("");
+  const [slug, setSlug] = useState("");
+  const [excerpt, setExcerpt] = useState("");
+  const [category, setCategory] = useState("Platform Updates");
+  const [image, setImage] = useState("");
+  const [featured, setFeatured] = useState(false);
+  const [content, setContent] = useState(id ? "" : SAMPLE);
   const [mode, setMode] = useState<Mode>("split");
-  const [savedAt, setSavedAt] = useState<string | null>(initial?.updatedAt || null);
+  const [savedAt, setSavedAt] = useState<string | null>(null);
+  const [busy, setBusy] = useState<"idle" | "saving" | "publishing">("idle");
+  const hydrated = useRef(false);
 
-  // Auto-slug
+  // Populate the form once the existing post arrives.
   useEffect(() => {
-    if (!initial && title && !slug) setSlug(slugify(title));
-  }, [title, slug, initial]);
+    if (existing?.post && !hydrated.current) {
+      const p = existing.post;
+      hydrated.current = true;
+      setDraftId(p.id);
+      setTitle(p.title);
+      setSlug(p.slug);
+      setExcerpt(p.excerpt);
+      setCategory(p.category);
+      setImage(p.image);
+      setFeatured(p.featured);
+      setContent(p.content);
+      setSavedAt(p.updatedAt);
+    }
+  }, [existing]);
 
-  // Auto-save every 8s when content changes
+  // Auto-slug for new posts.
   useEffect(() => {
-    if (!title && !content) return;
-    const t = setTimeout(() => {
-      const next = saveDraft({
-        id: draftId,
-        title, slug: slug || slugify(title || "untitled"),
-        excerpt, author, category, image, featured, content,
-        status: "draft",
-      });
-      setDraftId(next.id);
-      setSavedAt(next.updatedAt);
-    }, 8000);
-    return () => clearTimeout(t);
-  }, [title, slug, excerpt, author, category, image, featured, content, draftId]);
+    if (!id && title && !slug) setSlug(slugify(title));
+  }, [title, slug, id]);
 
-  const persist = (status: "draft" | "published") => {
+  const payload = () => ({
+    title,
+    slug: slug || slugify(title || "untitled"),
+    excerpt,
+    category,
+    image,
+    featured,
+    content,
+  });
+
+  /** Create (if new) or update the post on the server. Never changes status
+   *  unless `publish` is requested. */
+  const saveServer = async (publish: boolean): Promise<{ slug: string; status: string } | null> => {
+    let post;
+    if (!draftId) {
+      const res = await api.posts.create({ ...payload(), status: "draft" });
+      post = res.post;
+      setDraftId(post.id);
+    } else {
+      const res = await api.posts.update(draftId, payload());
+      post = res.post;
+    }
+    if (publish) {
+      // Authors submit for review (pending); moderators publish directly.
+      const nextStatus = isModerator ? "published" : "pending";
+      const res = await api.posts.update(post.id, { status: nextStatus });
+      post = res.post;
+    }
+    setSavedAt(new Date().toISOString());
+    return { slug: post.slug, status: post.status };
+  };
+
+  const onSave = async () => {
     if (!title.trim()) {
       toast({ title: "Add a title", description: "Your story needs a title before saving.", variant: "destructive" });
-      return null;
+      return;
     }
-    const words = content.trim() ? content.trim().split(/\s+/).length : 0;
-    const readTime = `${Math.max(1, Math.ceil(words / 200))} min read`;
-    const next = saveDraft({
-      id: draftId,
-      title,
-      slug: slug || slugify(title),
-      excerpt,
-      author,
-      category,
-      image,
-      featured,
-      content,
-      readTime,
-      date: new Date().toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" }),
-      status,
-    });
-    setDraftId(next.id);
-    setSavedAt(next.updatedAt);
-    return next;
+    setBusy("saving");
+    try {
+      await saveServer(false);
+      toast({ title: "Draft saved", description: "Your story is saved to the server." });
+    } catch (err) {
+      toast({ title: "Couldn't save", description: errMsg(err), variant: "destructive" });
+    } finally {
+      setBusy("idle");
+    }
   };
 
-  const onSave = () => {
-    const r = persist("draft");
-    if (r) toast({ title: "Draft saved", description: "Your story is saved locally." });
-  };
-
-  const onPublish = () => {
+  const onPublish = async () => {
+    if (!title.trim()) {
+      toast({ title: "Add a title", description: "Your story needs a title before publishing.", variant: "destructive" });
+      return;
+    }
     if (!content.trim()) {
       toast({ title: "Add some content", description: "Write something before publishing.", variant: "destructive" });
       return;
     }
-    const r = persist("published");
-    if (r) {
-      toast({ title: "Published", description: "Your story is now live on the Journal." });
-      navigate(`/blog/${r.slug}`);
+    setBusy("publishing");
+    try {
+      const result = await saveServer(true);
+      if (!result) return;
+      if (result.status === "published") {
+        toast({ title: "Published", description: "Your story is now live on the Journal." });
+        navigate({ to: `/blog/${result.slug}` });
+      } else {
+        toast({ title: "Submitted for review", description: "A moderator will review your story before it goes live." });
+        navigate({ to: "/blog/admin" });
+      }
+    } catch (err) {
+      toast({ title: "Couldn't publish", description: errMsg(err), variant: "destructive" });
+    } finally {
+      setBusy("idle");
     }
   };
 
-  const lastSavedLabel = savedAt
-    ? `Saved ${new Date(savedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`
-    : "Not saved";
+  const lastSavedLabel = loadingExisting
+    ? "Loading…"
+    : savedAt
+      ? `Saved ${new Date(savedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`
+      : "Not saved yet";
 
   return (
     <div className="min-h-screen bg-[hsl(var(--blog-bg))] text-[hsl(var(--blog-muted))]">
@@ -183,15 +239,18 @@ const BlogCompose = () => {
               </div>
               <button
                 onClick={onSave}
-                className="inline-flex items-center gap-2 px-4 py-2.5 border border-[hsl(var(--blog-border))] hover:border-[hsl(var(--blog-accent))] text-xs font-bold uppercase tracking-[0.2em] text-[hsl(var(--blog-muted))] hover:text-[hsl(var(--blog-heading))] transition-colors"
+                disabled={busy !== "idle"}
+                className="inline-flex items-center gap-2 px-4 py-2.5 border border-[hsl(var(--blog-border))] hover:border-[hsl(var(--blog-accent))] text-xs font-bold uppercase tracking-[0.2em] text-[hsl(var(--blog-muted))] hover:text-[hsl(var(--blog-heading))] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                <Save className="w-3.5 h-3.5" /> Save Draft
+                {busy === "saving" ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />} Save Draft
               </button>
               <button
                 onClick={onPublish}
-                className="inline-flex items-center gap-2 px-5 py-2.5 bg-[hsl(var(--blog-accent))] hover:bg-[hsl(var(--blog-accent-soft))] text-white text-xs font-bold uppercase tracking-[0.2em] transition-colors"
+                disabled={busy !== "idle"}
+                className="inline-flex items-center gap-2 px-5 py-2.5 bg-[hsl(var(--blog-accent))] hover:bg-[hsl(var(--blog-accent-soft))] text-white text-xs font-bold uppercase tracking-[0.2em] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                <Send className="w-3.5 h-3.5" /> Publish
+                {busy === "publishing" ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />}
+                {isModerator ? "Publish" : "Submit for review"}
               </button>
             </div>
           </header>
@@ -237,15 +296,7 @@ const BlogCompose = () => {
                 className="w-full bg-[hsl(var(--blog-surface))] ring-1 ring-[hsl(var(--blog-border))] focus:ring-[hsl(var(--blog-accent))] outline-none text-sm text-[hsl(var(--blog-muted))] px-4 py-3 transition-colors resize-none"
               />
             </div>
-            <div className="lg:col-span-3 space-y-2">
-              <label className="text-[10px] uppercase tracking-[0.25em] text-[hsl(var(--blog-subtle))] font-bold">Author</label>
-              <input
-                value={author}
-                onChange={(e) => setAuthor(e.target.value)}
-                className="w-full bg-[hsl(var(--blog-surface))] ring-1 ring-[hsl(var(--blog-border))] focus:ring-[hsl(var(--blog-accent))] outline-none text-sm text-[hsl(var(--blog-muted))] px-3 py-2.5 transition-colors"
-              />
-            </div>
-            <div className="lg:col-span-3 space-y-2">
+            <div className="lg:col-span-6 space-y-2">
               <label className="text-[10px] uppercase tracking-[0.25em] text-[hsl(var(--blog-subtle))] font-bold">Cover Image URL</label>
               <input
                 value={image}

@@ -1,7 +1,7 @@
 
 import { Button } from "@/components/ui/button";
 import { Menu, X, Moon, Sun, ExternalLink } from "lucide-react";
-import { Link } from "react-router-dom";
+import { Link } from "@tanstack/react-router";
 
 interface MobileNavigationProps {
   mobileMenuOpen: boolean;

@@ -2,7 +2,7 @@ import React from 'react';
 import Navigation from '@/components/landing/Navigation';
 import Footer from '@/components/landing/Footer';
 import { Shield, CheckCircle, FileText, Lock, Award, Users, Globe, AlertCircle, ArrowRight } from "lucide-react";
-import { Link } from "react-router-dom";
+import { Link } from "@tanstack/react-router";
 
 const Compliance = () => {
   const certifications = [

@@ -13,29 +13,34 @@ import PricingSection from '@/components/landing/PricingSection';
 import FAQSection from '@/components/landing/FAQSection';
 import CTASection from '@/components/landing/CTASection';
 import Footer from '@/components/landing/Footer';
+import Reveal from '@/components/Reveal';
 
 const Index = () => {
   return (
     <div className="min-h-screen bg-background text-foreground overflow-x-hidden w-full antialiased">
       {/* Navigation */}
       <Navigation />
-      
-      {/* Hero Section */}
+
+      {/* Hero Section — above the fold, keeps its own entrance animation */}
       <HeroSection />
-      
+
       {/* Demo Video Section */}
-      <DemoVideoSection />
-      
+      <Reveal>
+        <DemoVideoSection />
+      </Reveal>
+
       {/* Features Section */}
-      <FeaturesSection />
-      
+      <Reveal>
+        <FeaturesSection />
+      </Reveal>
+
       {/* Modern Architecture Section */}
       <section className="relative section-padding container-padding bg-muted/30 overflow-hidden w-full">
         {/* Topline divider */}
         <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-border to-transparent" />
 
         <div className="max-width-content">
-          <div className="text-center mb-16 lg:mb-20">
+          <Reveal className="text-center mb-16 lg:mb-20">
             <span className="eyebrow mb-5">Architecture</span>
             <h2 className="section-heading mt-5 text-foreground">
               Built for scale,
@@ -46,26 +51,26 @@ const Index = () => {
               An enterprise-grade platform tuned for scalability, security, and performance —
               consistent across any cloud you run on.
             </p>
-          </div>
+          </Reveal>
 
           {/* Architecture diagram */}
-          <div className="w-full overflow-hidden hw-accelerate">
+          <Reveal direction="scale" className="w-full overflow-hidden hw-accelerate">
             <ModernArchitectureDiagram />
-          </div>
+          </Reveal>
         </div>
       </section>
-      
+
       {/* Enhanced section spacing and animations */}
       <div className="space-y-section">
-        <CapabilitiesSection />
-        <FluentAISection />
-        <IntegrationsSection />
-        <TestimonialsSection />
-        <PricingSection />
-        <FAQSection />
-        <CTASection />
+        <Reveal><CapabilitiesSection /></Reveal>
+        <Reveal><FluentAISection /></Reveal>
+        <Reveal><IntegrationsSection /></Reveal>
+        <Reveal><TestimonialsSection /></Reveal>
+        <Reveal><PricingSection /></Reveal>
+        <Reveal><FAQSection /></Reveal>
+        <Reveal><CTASection /></Reveal>
       </div>
-      
+
       {/* Footer */}
       <Footer />
     </div>

@@ -6,7 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Search, ChevronDown, Moon, Sun } from "lucide-react";
 import { Github } from "@/components/brand-icons";
-import { Link } from "react-router-dom";
+import { Link } from "@tanstack/react-router";
 
 interface DocumentationHeaderProps {
   selectedVersion: string;

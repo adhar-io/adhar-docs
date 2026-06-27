@@ -1,4 +1,4 @@
-import { useLocation, Link } from 'react-router-dom';
+import { useLocation, Link } from "@tanstack/react-router";
 import { useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { ArrowLeft, Home } from 'lucide-react';

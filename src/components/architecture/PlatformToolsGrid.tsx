@@ -24,6 +24,8 @@ const PlatformToolsGrid = ({ platformCategories }: PlatformToolsGridProps) => {
                 {tool.icon.startsWith('http') ? (
                   <img 
                     src={tool.icon} 
+                    loading="lazy"
+                    decoding="async"
                     alt={tool.name}
                     className="w-8 h-8 object-contain group-hover:scale-110 transition-transform duration-200"
                     onError={(e) => {

@@ -58,6 +58,8 @@ const TestimonialsCarousel = () => {
             <div className="flex justify-center mb-8">
               <img
                 src={currentTestimonial.logo}
+                loading="lazy"
+                decoding="async"
                 alt={`${currentTestimonial.company} logo`}
                 className="w-16 h-16 rounded-2xl object-cover border border-border/70 shadow-[var(--shadow-xs)]"
               />
@@ -149,6 +151,8 @@ const TestimonialsCarousel = () => {
             >
               <img
                 src={testimonial.logo}
+                loading="lazy"
+                decoding="async"
                 alt={`${testimonial.company} logo`}
                 className={`w-10 h-10 rounded-lg object-cover border transition-all ${
                   index === activeIndex

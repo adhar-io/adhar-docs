@@ -72,6 +72,8 @@ const CloudProvidersGrid = () => {
               ) : (
                 <img 
                   src={provider.logo} 
+                  loading="lazy"
+                  decoding="async"
                   alt={provider.alt}
                   className="max-w-full max-h-full object-contain filter grayscale opacity-70 group-hover:grayscale-0 group-hover:opacity-100 transition-all duration-300"
                   onError={(e) => {

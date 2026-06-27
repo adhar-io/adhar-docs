@@ -1,5 +1,5 @@
 import React from 'react';
-import { Link } from 'react-router-dom';
+import { Link } from "@tanstack/react-router";
 import adharSymbol from '@/assets/adhar-symbol.png';
 
 interface LogoProps {

@@ -1,6 +1,6 @@
 
 import React from 'react';
-import { Link } from 'react-router-dom';
+import { Link } from "@tanstack/react-router";
 import { BookOpen, ArrowRight } from 'lucide-react';
 import { ADHAR_CONSOLE_LOGIN_URL } from '@/lib/config';
 

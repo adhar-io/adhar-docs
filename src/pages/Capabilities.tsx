@@ -20,7 +20,7 @@ import {
   Check,
   type LucideIcon,
 } from "lucide-react";
-import { Link } from "react-router-dom";
+import { Link } from "@tanstack/react-router";
 import { ADHAR_CONSOLE_LOGIN_URL } from "@/lib/config";
 
 interface Capability {
