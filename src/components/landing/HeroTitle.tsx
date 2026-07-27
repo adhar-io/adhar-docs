@@ -1,6 +1,6 @@
 import React from 'react';
 import { Link } from "@tanstack/react-router";
-import adharSymbol from '@/assets/adhar-symbol.png';
+import adharSymbol from '@/assets/branding/symbol-color.svg';
 
 interface HeroTitleProps {
   isVisible: boolean;

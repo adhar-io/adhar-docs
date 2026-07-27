@@ -1,5 +1,5 @@
 import React from 'react';
-import adharSymbol from '@/assets/adhar-symbol.png';
+import adharSymbol from '@/assets/branding/symbol-color.svg';
 
 const LoadingScreen = () => {
   return (

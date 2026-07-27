@@ -1,5 +1,5 @@
 import React from 'react';
-import adharLogo from '@/assets/adhar-logo.png';
+import adharLogo from '@/assets/branding/adhar-logo.svg';
 
 const AICore = () => {
   return (

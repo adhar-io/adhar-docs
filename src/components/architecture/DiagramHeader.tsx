@@ -1,7 +1,7 @@
 
 import React from 'react';
 import { Play, Pause } from "lucide-react";
-import adharLogo from '@/assets/adhar-logo.png';
+import adharLogo from '@/assets/branding/adhar-logo.svg';
 
 interface DiagramHeaderProps {
   isPlaying: boolean;
