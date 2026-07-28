@@ -15,12 +15,13 @@ const HeroContent = ({ isVisible }: HeroContentProps) => {
     <div className={`text-center transition-all duration-800 ease-out hw-accelerate ${isVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-8'}`}>
       <HeroTitle isVisible={isVisible} />
 
+      {/* Primary actions sit right under the value proposition, above the fold */}
+      <HeroCTA isVisible={isVisible} />
+
       {/* Enhanced Terminal Demo with smoother container animations */}
       <div className={`mb-12 transition-all duration-1000 delay-800 ease-out hw-accelerate ${isVisible ? 'opacity-100 translate-y-0 scale-100' : 'opacity-0 translate-y-8 scale-95'}`}>
         <TerminalDemo />
       </div>
-      
-      <HeroCTA isVisible={isVisible} />
 
       {/* Real-time Metrics Dashboard */}
       <div className={`mb-12 transition-all duration-1000 delay-900 ease-out hw-accelerate ${isVisible ? 'opacity-100 translate-y-0 scale-100' : 'opacity-0 translate-y-8 scale-95'}`}>

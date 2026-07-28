@@ -86,6 +86,21 @@ const Careers = () => {
     { title: "Global impact", description: "Our work enables developers worldwide to build better software faster." },
   ];
 
+  const cultureStats = [
+    { value: "100%", label: "Remote-first" },
+    { value: "12", label: "Countries" },
+    { value: "∞", label: "PTO days" },
+    { value: "$2k", label: "Learning budget" },
+  ];
+
+  const hiringSteps = [
+    { step: "01", title: "Application", description: "Send your resume and a note on what excites you about Adhar. We read every one." },
+    { step: "02", title: "Intro call", description: "A 30-minute conversation with our team to get to know each other." },
+    { step: "03", title: "Technical deep-dive", description: "A practical, collaborative session on real problems — no trick puzzles." },
+    { step: "04", title: "Meet the team", description: "Talk with the people you'll work with and see how we operate day to day." },
+    { step: "05", title: "Offer", description: "We move fast — expect a decision within a week of your final round." },
+  ];
+
   return (
     <div className="min-h-screen bg-background">
       <Navigation />
@@ -134,6 +149,20 @@ const Careers = () => {
               >
                 <span>Learn about our culture</span>
               </button>
+            </div>
+          </div>
+        </section>
+
+        {/* Culture stats */}
+        <section className="container-padding pb-4">
+          <div className="max-width-content">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-px overflow-hidden rounded-2xl border border-border/70 bg-border/60">
+              {cultureStats.map((s) => (
+                <div key={s.label} className="bg-card px-5 py-6 text-center">
+                  <div className="text-2xl sm:text-3xl font-semibold text-foreground tracking-tight tabular">{s.value}</div>
+                  <div className="mt-1 text-xs sm:text-sm text-muted-foreground">{s.label}</div>
+                </div>
+              ))}
             </div>
           </div>
         </section>
@@ -236,6 +265,31 @@ const Careers = () => {
                 </article>
               ))}
             </div>
+          </div>
+        </section>
+
+        {/* How we hire */}
+        <section className="relative section-padding container-padding">
+          <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-border to-transparent" />
+          <div className="max-width-content">
+            <div className="text-center mb-12">
+              <span className="eyebrow mb-5">Hiring</span>
+              <h2 className="section-heading mt-5 text-foreground">How we hire.</h2>
+              <p className="section-subheading mt-5">
+                A transparent, respectful process designed to help us both make a great decision.
+              </p>
+            </div>
+            <ol className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
+              {hiringSteps.map((s) => (
+                <li key={s.step} className="relative rounded-2xl border border-border/70 bg-card p-6 transition-colors hover:bg-muted/30">
+                  <div className="text-2xl font-semibold tabular bg-gradient-to-br from-primary to-accent bg-clip-text text-transparent">
+                    {s.step}
+                  </div>
+                  <h3 className="mt-3 text-base font-semibold text-foreground tracking-tight">{s.title}</h3>
+                  <p className="mt-1.5 text-sm text-muted-foreground leading-relaxed">{s.description}</p>
+                </li>
+              ))}
+            </ol>
           </div>
         </section>
 

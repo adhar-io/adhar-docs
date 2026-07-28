@@ -84,6 +84,20 @@ const About = () => {
     { label: "Funding Raised", value: "$25M", icon: Rocket }
   ];
 
+  const milestones = [
+    { year: "2022", title: "The beginning", text: "Adhar starts as an internal tool to tame cloud-native sprawl across teams and clouds." },
+    { year: "2023", title: "Open sourced", text: "We release Adhar under Apache 2.0 and welcome our first community contributors." },
+    { year: "2024", title: "50+ integrations", text: "GitOps, security, observability and data services ship as one curated, production-grade stack." },
+    { year: "2025", title: "Adhar 1.0", text: "A complete internal developer platform, deployable to any cloud in a single command." },
+  ];
+
+  const openSource = [
+    { label: "GitHub stars", value: "12k+" },
+    { label: "Contributors", value: "300+" },
+    { label: "Integrated services", value: "50+" },
+    { label: "License", value: "Apache 2.0" },
+  ];
+
   return (
     <div className="min-h-screen bg-background">
       <Navigation />
@@ -123,6 +137,60 @@ const About = () => {
                   </div>
                 );
               })}
+            </div>
+          </div>
+        </section>
+
+        {/* Story + Milestones */}
+        <section className="relative section-padding container-padding">
+          <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-border to-transparent" />
+          <div className="max-width-content grid lg:grid-cols-2 gap-12 lg:gap-16 items-start">
+            <div>
+              <span className="eyebrow mb-5">Our story</span>
+              <h2 className="mt-5 text-3xl sm:text-4xl font-semibold tracking-tight text-foreground text-balance">
+                From a shared frustration to an open foundation.
+              </h2>
+              <div className="mt-6 space-y-4 text-muted-foreground leading-relaxed">
+                <p>
+                  Adhar began where most platforms do — with friction. Teams were stitching together dozens
+                  of tools just to ship software safely, and every company kept rebuilding the same internal
+                  platform from scratch.
+                </p>
+                <p>
+                  We believed there was a better way: a single, opinionated foundation that bundles the best of
+                  the cloud-native ecosystem — GitOps, security, observability, data and self-service
+                  infrastructure — and provisions it in minutes, on any cloud.
+                </p>
+                <p>
+                  Today Adhar is 100% open source under Apache 2.0, shaped in the open by a growing community of
+                  engineers who believe developer freedom and organizational governance shouldn't be a trade-off.
+                </p>
+              </div>
+              <div className="mt-8 grid grid-cols-2 sm:grid-cols-4 gap-px overflow-hidden rounded-2xl border border-border/70 bg-border/60">
+                {openSource.map((s) => (
+                  <div key={s.label} className="bg-card px-4 py-4 text-center">
+                    <div className="text-lg font-semibold text-foreground tracking-tight tabular">{s.value}</div>
+                    <div className="mt-0.5 text-[11px] text-muted-foreground">{s.label}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Milestones timeline */}
+            <div className="relative rounded-3xl border border-border/70 bg-card p-7 sm:p-8 shadow-[var(--shadow-sm)]">
+              <div className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground mb-6">Milestones</div>
+              <ol className="relative ml-1.5 space-y-7 border-l border-border/70">
+                {milestones.map((m) => (
+                  <li key={m.year} className="relative pl-6">
+                    <span className="absolute -left-[7px] top-1 h-3.5 w-3.5 rounded-full border-2 border-primary bg-background" />
+                    <div className="flex items-baseline gap-2">
+                      <span className="text-sm font-semibold text-primary tabular">{m.year}</span>
+                      <span className="text-sm font-semibold text-foreground">{m.title}</span>
+                    </div>
+                    <p className="mt-1 text-sm text-muted-foreground leading-relaxed">{m.text}</p>
+                  </li>
+                ))}
+              </ol>
             </div>
           </div>
         </section>

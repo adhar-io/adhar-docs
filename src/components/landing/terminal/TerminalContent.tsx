@@ -13,7 +13,7 @@ interface TerminalContentProps {
 
 const TerminalContent = ({ commands, currentCommandIndex, typingIndex }: TerminalContentProps) => {
   return (
-    <div className="p-6 font-mono text-sm bg-gray-950 h-[456px] text-left">
+    <div className="flex flex-col justify-end p-6 font-mono text-sm bg-gray-950 h-[240px] overflow-hidden text-left [&>*:last-child]:mb-0">
       {commands.map((cmd, idx) => {
         const shouldShow = idx <= currentCommandIndex;
         const isCurrentCommand = idx === currentCommandIndex;

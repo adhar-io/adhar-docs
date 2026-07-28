@@ -81,7 +81,7 @@ const TerminalDemo = () => {
 
   return (
     <div className="max-w-4xl mx-auto">
-      <div className="bg-zinc-950 dark:bg-zinc-950 rounded-2xl overflow-hidden shadow-[var(--shadow-lg)] border border-zinc-800/70 h-[500px] transition-all duration-300">
+      <div className="bg-zinc-950 dark:bg-zinc-950 rounded-2xl overflow-hidden shadow-[var(--shadow-lg)] border border-zinc-800/70 transition-all duration-300">
         <TerminalHeader />
         <TerminalContent 
           commands={commands} 

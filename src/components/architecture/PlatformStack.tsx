@@ -7,66 +7,27 @@ interface PlatformStackProps {
 }
 
 const PlatformStack = ({ platformCategories }: PlatformStackProps) => {
-  // Add 2 more platform categories to make the grid even
+  // Two more categories complete the 12-category Adhar stack grid.
+  const TILE = "bg-white shadow-sm ring-1 ring-black/5";
   const additionalCategories: PlatformCategory[] = [
     {
-      name: "Security & Compliance",
-      color: "bg-gradient-to-br from-red-50 via-orange-50 to-red-100 dark:from-red-900/30 dark:via-orange-900/20 dark:to-red-800/30",
+      name: "Automation & Chaos",
+      color: "bg-gradient-to-br from-orange-50 to-amber-50",
       tools: [
-        {
-          name: "HashiCorp Vault",
-          icon: "🔐",
-          color: "bg-gradient-to-br from-yellow-400 to-orange-500 text-white shadow-lg",
-          description: "Secrets management and encryption"
-        },
-        {
-          name: "OAuth 2.0",
-          icon: "🛡️",
-          color: "bg-gradient-to-br from-blue-400 to-cyan-500 text-white shadow-lg",
-          description: "Authentication and authorization"
-        },
-        {
-          name: "RBAC",
-          icon: "👥",
-          color: "bg-gradient-to-br from-purple-400 to-indigo-500 text-white shadow-lg",
-          description: "Role-based access control"
-        },
-        {
-          name: "SSL/TLS",
-          icon: "🔒",
-          color: "bg-gradient-to-br from-green-400 to-emerald-500 text-white shadow-lg",
-          description: "Transport layer security"
-        }
+        { name: "n8n", icon: "https://cdn.jsdelivr.net/gh/simple-icons/simple-icons/icons/n8n.svg", color: TILE, description: "Workflow automation" },
+        { name: "Chaos Mesh", icon: "https://cdn.jsdelivr.net/gh/chaos-mesh/chaos-mesh/static/logo.svg", color: TILE, description: "Chaos engineering" },
+        { name: "k6", icon: "https://cdn.jsdelivr.net/gh/simple-icons/simple-icons/icons/k6.svg", color: TILE, description: "Load & performance testing" },
+        { name: "Baserow", icon: "https://cdn.jsdelivr.net/gh/simple-icons/simple-icons/icons/baserow.svg", color: TILE, description: "No-code database" }
       ]
     },
     {
-      name: "Analytics & ML",
-      color: "bg-gradient-to-br from-pink-50 via-rose-50 to-pink-100 dark:from-pink-900/30 dark:via-rose-900/20 dark:to-pink-800/30",
+      name: "Observability",
+      color: "bg-gradient-to-br from-blue-50 to-indigo-50",
       tools: [
-        {
-          name: "TensorFlow",
-          icon: "https://cdn.jsdelivr.net/gh/devicons/devicon/icons/tensorflow/tensorflow-original.svg",
-          color: "bg-gradient-to-br from-orange-400 to-red-500 text-white shadow-lg",
-          description: "Machine learning framework"
-        },
-        {
-          name: "Apache Spark",
-          icon: "⚡",
-          color: "bg-gradient-to-br from-orange-500 to-red-600 text-white shadow-lg",
-          description: "Big data processing engine"
-        },
-        {
-          name: "Grafana",
-          icon: "https://cdn.jsdelivr.net/gh/devicons/devicon/icons/grafana/grafana-original.svg",
-          color: "bg-gradient-to-br from-orange-400 to-yellow-500 text-white shadow-lg",
-          description: "Analytics and monitoring"
-        },
-        {
-          name: "Jupyter",
-          icon: "📊",
-          color: "bg-gradient-to-br from-orange-500 to-amber-600 text-white shadow-lg",
-          description: "Data science notebooks"
-        }
+        { name: "Prometheus", icon: "https://cdn.jsdelivr.net/gh/devicons/devicon/icons/prometheus/prometheus-original.svg", color: TILE, description: "Metrics & alerting" },
+        { name: "Grafana", icon: "https://cdn.jsdelivr.net/gh/devicons/devicon/icons/grafana/grafana-original.svg", color: TILE, description: "Dashboards & visualization" },
+        { name: "Pixie", icon: "https://cdn.jsdelivr.net/gh/cncf/artwork/projects/pixie/icon/color/pixie-icon-color.svg", color: TILE, description: "eBPF observability" },
+        { name: "Headlamp", icon: "https://cdn.jsdelivr.net/gh/cncf/artwork/projects/headlamp/icon/color/headlamp-icon-color.svg", color: TILE, description: "Kubernetes web UI" }
       ]
     }
   ];
@@ -127,7 +88,7 @@ const PlatformStack = ({ platformCategories }: PlatformStackProps) => {
                     >
                       {/* Tool Icon */}
                       <div className="relative">
-                        {tool.icon.startsWith('http') ? (
+                        {(tool.icon.startsWith('http') || tool.icon.startsWith('/')) ? (
                           <img 
                             src={tool.icon} 
                             alt={tool.name}

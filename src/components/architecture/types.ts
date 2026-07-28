@@ -39,4 +39,6 @@ export interface Provider {
   name: string;
   icon: string;
   color: string;
+  /** When the logo is a wordmark that already contains the name, hide the text label. */
+  hideName?: boolean;
 }

@@ -1,0 +1,29 @@
+# Netlify — static SPA deploy for the Adhar docs/marketing site.
+# The app is a TanStack Start SPA: `vite build` emits a fully static client
+# bundle (with the markdown docs compiled in at build time) into dist/client.
+# No Netlify Functions / serverless services are used — everything ships as
+# static assets and the app runs entirely in the browser.
+
+[build]
+  command = "npm run build"
+  publish = "dist/client"
+
+[build.environment]
+  # Vite 8 / Rolldown require a modern Node runtime.
+  NODE_VERSION = "22"
+  # Skip optional dev-only postinstall noise; it already no-ops on Linux.
+  NPM_FLAGS = "--no-audit --no-fund"
+
+# Long-cache the fingerprinted build assets.
+[[headers]]
+  for = "/assets/*"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"
+
+# SPA fallback: serve the prerendered app shell for any route that isn't a
+# real file on disk (client-side routing takes over from there). `force`
+# defaults to false, so static assets and prerendered pages win first.
+[[redirects]]
+  from = "/*"
+  to = "/_shell.html"
+  status = 200

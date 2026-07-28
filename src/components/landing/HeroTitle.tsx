@@ -8,9 +8,9 @@ interface HeroTitleProps {
 
 const HeroTitle = ({ isVisible }: HeroTitleProps) => {
   return (
-    <div className={`mb-16 transition-all duration-1000 ease-out will-change-transform ${isVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-8'}`}>
+    <div className={`mb-10 transition-all duration-1000 ease-out will-change-transform ${isVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-8'}`}>
       {/* Refined status pill — links to the v1.0 announcement */}
-      <div className={`flex justify-center mb-10 transition-all duration-700 ${isVisible ? 'opacity-100 translate-y-0' : 'opacity-0 -translate-y-2'}`}>
+      <div className={`flex justify-center mb-8 transition-all duration-700 ${isVisible ? 'opacity-100 translate-y-0' : 'opacity-0 -translate-y-2'}`}>
         <Link
           to="/blog/introducing-adhar-1-0"
           className="group inline-flex items-center gap-2 rounded-full border border-border/70 bg-card/60 backdrop-blur-md px-3 py-1 text-xs font-medium text-muted-foreground hover:text-foreground hover:border-border transition-colors"
@@ -27,20 +27,20 @@ const HeroTitle = ({ isVisible }: HeroTitleProps) => {
       {/* Unified hero stack — logo, wordmark, tagline share the same width */}
       <div className="mx-auto w-full max-w-[920px] flex flex-col items-stretch">
         {/* Hero symbol — clean, no orbital rings */}
-        <div className={`relative flex justify-center mb-10 transition-all duration-1000 delay-100 ${isVisible ? 'opacity-100 scale-100' : 'opacity-0 scale-90'}`}>
-          <div className="relative w-32 h-32 sm:w-36 sm:h-36 flex items-center justify-center">
+        <div className={`relative flex justify-center mb-6 transition-all duration-1000 delay-100 ${isVisible ? 'opacity-100 scale-100' : 'opacity-0 scale-90'}`}>
+          <div className="relative w-28 h-28 sm:w-32 sm:h-32 flex items-center justify-center">
             <div className="absolute inset-0 rounded-full bg-gradient-to-br from-primary/25 via-accent/15 to-transparent blur-2xl animate-float-slow" />
             <img
               src={adharSymbol}
               alt="ADHAR symbol"
-              className="relative w-24 h-24 sm:w-28 sm:h-28 object-contain drop-shadow-[0_8px_24px_hsl(var(--primary)/0.4)]"
+              className="relative w-20 h-20 sm:w-24 sm:h-24 object-contain drop-shadow-[0_8px_24px_hsl(var(--primary)/0.4)]"
             />
           </div>
         </div>
 
         {/* Wordmark */}
         <div className="relative w-full mb-4">
-          <h1 className="w-full text-center font-bold leading-[0.9] tracking-[0.08em] text-[clamp(3rem,9vw,5.75rem)]">
+          <h1 className="w-full text-center font-bold leading-[0.9] tracking-[0.08em] text-[clamp(2.75rem,8vw,5.25rem)]">
             <span className="inline-block bg-gradient-to-b from-foreground to-foreground/70 bg-clip-text text-transparent">
               ADHAR
             </span>
@@ -48,7 +48,7 @@ const HeroTitle = ({ isVisible }: HeroTitleProps) => {
         </div>
 
         {/* Foundation label */}
-        <div className="flex items-center justify-center mb-10">
+        <div className="flex items-center justify-center mb-8">
           <span className="text-xs sm:text-sm font-semibold uppercase text-foreground/70 tracking-[0.28em]">
             Open Cloud-Native Foundation
           </span>
