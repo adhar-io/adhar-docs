@@ -21,7 +21,7 @@ export const Route = createRootRoute({
       {
         name: "description",
         content:
-          "ADHAR streamlines cloud-native application development with integrated Define, Design, Develop, Deploy, and Discover workflows.",
+          "ADHAR streamlines cloud-native application development with integrated Define, Design, Develop, Deliver, Discover, and Decide workflows.",
       },
       { name: "author", content: "ADHAR Platform" },
       { property: "og:title", content: "ADHAR - The Open Foundation" },
@@ -96,8 +96,10 @@ function AppShell() {
 }
 
 function RootDocument({ children }: Readonly<{ children: ReactNode }>) {
+  // next-themes stamps the theme class on <html> before hydration, so the server
+  // and client markup intentionally differ there — suppressHydrationWarning silences it.
   return (
-    <html lang="en">
+    <html lang="en" suppressHydrationWarning>
       <head>
         <HeadContent />
       </head>

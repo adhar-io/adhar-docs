@@ -48,7 +48,7 @@ adhar deploy --env dev
 
 - [Configure integrations](../integrations/argocd-setup)
 - [Set up monitoring](../operations/monitoring-observability)
-- [Learn about the 5 D's framework](../core-concepts/5-ds-framework)
+- [Learn about the 6 D's framework](/docs/core-concepts/ds-framework)
 
 ## Troubleshooting
 

@@ -100,6 +100,6 @@ WAF      JWT/OIDC   mTLS    RBAC     Encrypted at rest
 
 ## Further reading
 
-- [5 D's framework](/docs/core-concepts/5-ds-framework)
+- [6 D's framework](/docs/core-concepts/ds-framework)
 - [Security model](/docs/security/security-best-practices)
 - [Observability](/docs/operations/observability)

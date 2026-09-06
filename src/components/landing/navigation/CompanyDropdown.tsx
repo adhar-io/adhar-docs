@@ -36,7 +36,7 @@ const CompanyDropdown = () => {
       <NavigationMenuTrigger className="h-9 rounded-full bg-transparent px-3.5 text-sm font-medium text-muted-foreground hover:bg-muted hover:text-foreground data-[state=open]:bg-muted data-[state=open]:text-foreground transition-colors">
         Company
       </NavigationMenuTrigger>
-      <NavigationMenuContent>
+      <NavigationMenuContent className="right-0">
         <div className="w-[420px] p-3 bg-card/95 backdrop-blur-xl border border-border/70 shadow-[var(--shadow-lg)] rounded-2xl">
           <div className="px-3 pt-2 pb-3">
             <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">Company</div>

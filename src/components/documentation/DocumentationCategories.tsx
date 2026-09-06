@@ -27,7 +27,7 @@ const DocumentationCategories = ({ searchQuery }: DocumentationCategoriesProps) 
       color: "bg-purple-500",
       docs: [
         { title: "Platform Architecture", description: "Understanding ADHAR's architecture", slug: "platform-architecture" },
-        { title: "The 5 D's Framework", description: "Define, Design, Develop, Deploy, Discover", slug: "5-ds-framework" },
+        { title: "The 6 D's Framework", description: "Define, Design, Develop, Deliver, Discover, Decide", slug: "ds-framework" },
         { title: "Integration Patterns", description: "How ADHAR integrates with open source tools", slug: "integration-patterns" },
         { title: "Developer Workflows", description: "Streamlined development processes", slug: "developer-workflows" }
       ]

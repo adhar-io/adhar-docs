@@ -100,7 +100,7 @@ const Contact = () => {
   const offices = [
     { city: 'Singapore', address: '123 Innovation Drive, Suite 400', timezone: 'SGT (UTC+8)', type: 'Headquarters' },
     { city: 'India', address: '456 Tech Boulevard', timezone: 'IST (UTC+5:30)', type: 'Engineering hub' },
-    { city: 'USA', address: '789 Digital Street, EC2A 4BX', timezone: 'EST (UTC-5)', type: 'European office' },
+    { city: 'United Kingdom', address: '789 Digital Street, London EC2A 4BX', timezone: 'GMT (UTC+0)', type: 'European office' },
   ];
 
   const supportCategories = [

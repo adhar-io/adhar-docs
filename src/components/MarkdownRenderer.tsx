@@ -73,7 +73,7 @@ const MarkdownRenderer = ({ content, className }: MarkdownRendererProps) => {
           h1: ({ children, id }) => (
             <h1
               id={id}
-              className="text-4xl sm:text-5xl font-bold tracking-tight mb-4 bg-gradient-to-r from-primary via-primary to-accent bg-clip-text text-transparent"
+              className="text-4xl sm:text-5xl font-bold tracking-tight mb-4 text-foreground"
             >
               {children}
             </h1>

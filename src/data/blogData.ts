@@ -95,7 +95,7 @@ This is just the beginning. We're already working on ADHAR 1.1 with features lik
 Thank you to our community for making this release possible!`,
     category: 'Platform Updates',
     author: 'Sarah Chen',
-    date: 'December 14, 2024',
+    date: 'August 28, 2026',
     readTime: '8 min read',
     image: blogHeroAdhar,
     featured: true

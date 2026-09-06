@@ -21,7 +21,7 @@ practices that keep it humming.
 |------|----------|
 | 🚀 **[Installation](/docs/getting-started/installation)** | First time on the platform |
 | ⚡ **[Quick start](/docs/getting-started/quick-start)** | Deploy your first service |
-| 🧭 **[5 D's framework](/docs/core-concepts/5-ds-framework)** | Understand the methodology |
+| 🧭 **[6 D's framework](/docs/core-concepts/ds-framework)** | Understand the methodology |
 | 🛡️ **[Security best practices](/docs/security/security-best-practices)** | Identity, network, data |
 | 🏗️ **[Architecture overview](/docs/core-concepts/architecture)** | How Adhar fits together |
 | 🔭 **[Observability](/docs/operations/observability)** | Tracing, metrics, logs |

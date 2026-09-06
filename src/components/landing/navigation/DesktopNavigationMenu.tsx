@@ -63,7 +63,7 @@ const DesktopNavigationMenu = () => {
           <NavigationMenuTrigger className="h-9 rounded-full bg-transparent px-3.5 text-sm font-medium text-muted-foreground hover:bg-muted hover:text-foreground data-[state=open]:bg-muted data-[state=open]:text-foreground transition-colors">
             Platform
           </NavigationMenuTrigger>
-          <NavigationMenuContent>
+          <NavigationMenuContent className="left-0">
             <div className="w-[640px] p-3 bg-card/95 backdrop-blur-xl border border-border/70 shadow-[var(--shadow-lg)] rounded-2xl">
               {/* Header strip */}
               <div className="flex items-center justify-between px-3 pt-2 pb-3">
@@ -128,27 +128,27 @@ const DesktopNavigationMenu = () => {
         </NavigationMenuItem>
 
         <NavigationMenuItem>
-          <Link to="/docs">
-            <NavigationMenuLink className={linkClasses}>Documentation</NavigationMenuLink>
-          </Link>
+          <NavigationMenuLink asChild className={linkClasses}>
+            <Link to="/docs">Documentation</Link>
+          </NavigationMenuLink>
         </NavigationMenuItem>
 
         <NavigationMenuItem>
-          <a href={ADHAR_UI_URL} target="_blank" rel="noopener noreferrer">
-            <NavigationMenuLink className={linkClasses}>Adhar UI</NavigationMenuLink>
-          </a>
+          <NavigationMenuLink asChild className={linkClasses}>
+            <a href={ADHAR_UI_URL} target="_blank" rel="noopener noreferrer">Adhar UI</a>
+          </NavigationMenuLink>
         </NavigationMenuItem>
 
         <NavigationMenuItem>
-          <Link to="/adhar-kit">
-            <NavigationMenuLink className={linkClasses}>Adhar Kit</NavigationMenuLink>
-          </Link>
+          <NavigationMenuLink asChild className={linkClasses}>
+            <Link to="/adhar-kit">Adhar Kit</Link>
+          </NavigationMenuLink>
         </NavigationMenuItem>
 
         <NavigationMenuItem>
-          <Link to="/blog">
-            <NavigationMenuLink className={linkClasses}>Blog</NavigationMenuLink>
-          </Link>
+          <NavigationMenuLink asChild className={linkClasses}>
+            <Link to="/blog">Blog</Link>
+          </NavigationMenuLink>
         </NavigationMenuItem>
 
         <CompanyDropdown />
