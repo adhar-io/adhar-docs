@@ -9,17 +9,17 @@ interface HeroTitleProps {
 const HeroTitle = ({ isVisible }: HeroTitleProps) => {
   return (
     <div className={`mb-10 transition-all duration-1000 ease-out will-change-transform ${isVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-8'}`}>
-      {/* Refined status pill — links to the v1.0 announcement */}
+      {/* Refined status pill — links to the ADHAR Platform post */}
       <div className={`flex justify-center mb-8 transition-all duration-700 ${isVisible ? 'opacity-100 translate-y-0' : 'opacity-0 -translate-y-2'}`}>
         <Link
-          to="/blog/introducing-adhar-1-0"
+          to="/blog/adhar-platform"
           className="group inline-flex items-center gap-2 rounded-full border border-border/70 bg-card/60 backdrop-blur-md px-3 py-1 text-xs font-medium text-muted-foreground hover:text-foreground hover:border-border transition-colors"
         >
           <span className="inline-flex items-center gap-1.5 rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-primary">
             <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-status-blink" />
             New
           </span>
-          <span>Introducing ADHAR 1.0 — Internal Developer Platform</span>
+          <span>Introducing the ADHAR — Internal Developer Platform</span>
           <span aria-hidden className="ml-1 text-muted-foreground/60 transition-transform group-hover:translate-x-0.5">→</span>
         </Link>
       </div>

@@ -1,5 +1,5 @@
 
-import blogHeroAdhar from '@/assets/blog-hero-adhar.jpg';
+import adharBanner from '@/assets/branding/blog-banner-adhar-logo.svg';
 
 export interface BlogPost {
   id: string;
@@ -9,6 +9,10 @@ export interface BlogPost {
   content: string;
   category: string;
   author: string;
+  /** Optional byline role, e.g. "Creator of Adhar". Falls back to "Contributor". */
+  authorRole?: string;
+  /** Optional author bio blurb shown in the post footer. */
+  authorBio?: string;
   date: string;
   readTime: string;
   image: string;
@@ -18,86 +22,121 @@ export interface BlogPost {
 export const blogPosts: BlogPost[] = [
   {
     id: '1',
-    title: 'Introducing ADHAR 1.0: The Future of Cloud-Native Development',
-    slug: 'introducing-adhar-1-0',
-    excerpt: 'We\'re excited to announce the release of ADHAR 1.0, featuring enhanced AI-powered development tools, improved security, and streamlined deployment workflows.',
-    content: `# Introducing ADHAR 1.0: The Future of Cloud-Native Development
+    title: 'Introducing the ADHAR — Internal Developer Platform',
+    slug: 'adhar-platform',
+    excerpt: 'Meet ADHAR — the open, cloud-native internal developer platform that ends the trade-off between developer freedom and organizational governance. Deploy a complete platform on any cloud in under 10 minutes, with 50+ services pre-integrated.',
+    content: `# Introducing the ADHAR — Internal Developer Platform
 
-We're thrilled to announce the release of ADHAR 1.0, our first major release. This represents months of development and feedback from our amazing community of developers and organizations worldwide.
+Every engineering org eventually hits the same wall: developers want to move fast, and the organization needs security, compliance, and cost control. Too often one wins at the other's expense — teams either drown in tickets and approvals, or ship quickly by routing around the guardrails.
 
-## What's in ADHAR 1.0
+ADHAR is our answer to that trade-off. The name comes from the Sanskrit **अधार (Adhāra) — "foundation"**, and that's exactly what it is: an open, cloud-native **internal developer platform (IDP)** that gives every team a paved road from code to production, with governance built into the road itself rather than bolted on afterward.
 
-### AI-Powered Development
-ADHAR 1.0 introduces an AI assistant that can help you:
-- Generate boilerplate code and configurations
-- Suggest architectural improvements
-- Automatically detect and fix security vulnerabilities
-- Optimize performance bottlenecks
+> Developer freedom and organizational governance shouldn't be a trade-off. ADHAR is built so you get both — standardization as enablement, not constraint.
 
-### Streamlined Deployment Workflows
-Our deployment engine makes it easier than ever to get your applications from development to production:
+## Why an internal developer platform?
+
+Most companies rebuild the same platform from scratch: wiring together Kubernetes, CI/CD, secrets, observability, and a dozen other tools — then maintaining that glue forever. It's slow, expensive, and drifts out of sync across teams.
+
+An IDP consolidates that work into a single, self-service layer. Developers get golden paths and sensible defaults; platform teams get one place to enforce policy. ADHAR ships that layer pre-integrated and production-hardened, so you can adopt it in an afternoon instead of building it over quarters — and spend your time on business value, not undifferentiated infrastructure work.
+
+## Built on the 6 D's
+
+ADHAR organizes the delivery lifecycle around a simple framework — the [6 D's](/docs/core-concepts/ds-framework). Each phase builds on the one before it:
+
+| Phase | What it covers |
+|-------|----------------|
+| **Define** | Requirements, service boundaries, and API contracts |
+| **Design** | Architecture, security model, and governance |
+| **Develop** | Paved-road development with pre-wired tooling |
+| **Deliver** | GitOps deployments, progressive delivery, and rollbacks |
+| **Discover** | Observability, analytics, and continuous improvement |
+| **Decide** | Turning insights into strategy and roadmap |
+
+## Deploy on any cloud
+
+A single \`adhar up\` command provisions a complete platform in under 10 minutes — on your laptop or any major cloud. No infrastructure tickets, no integration project. The same workflow and the same guardrails apply everywhere, so there's no vendor lock-in and no per-cloud rewrite.
+
+| Environment | Provider key | Best for |
+|-------------|--------------|----------|
+| **Local (Kind)** | \`KIND\` | Development and evaluation |
+| **Amazon** | \`AWS_EKS\` | Production on AWS |
+| **Google** | \`GCP_GKE\` | Production on GCP |
+| **Azure** | \`AZURE_AKS\` | Production on Azure |
+| **DigitalOcean** | \`DIGITALOCEAN_DOKS\` | Lean managed production |
+| **Civo** | \`CIVO_K3S\` | Fast, low-cost K3s |
+
+## 50+ services, pre-integrated
+
+ADHAR bundles battle-tested open-source projects into one curated, security-hardened stack — wired together and managed declaratively through GitOps. A sample of the 50+ components:
+
+| Layer | Tools |
+|-------|-------|
+| **Core & infrastructure** | Kubernetes, Crossplane, ArgoCD, Backstage, Cilium, Gitea, Harbor |
+| **Security & compliance** | Vault, Keycloak, Kyverno, Trivy, Falco, cert-manager |
+| **Observability** | Prometheus, Grafana, Loki, Tempo, Hubble, OpenTelemetry |
+| **App delivery** | Argo Rollouts, Tekton, FluxCD, Knative, Coder |
+| **Data & AI/ML** | PostgreSQL, Kafka, MinIO, Airbyte, Kubeflow, Metabase |
+
+You get the ecosystem's best tools without paying the integration tax.
+
+## What you get
+
+- **Self-service with guardrails** — instant provisioning inside security and compliance boundaries, no approval workflows
+- **Golden paths** — pre-built patterns for microservices, microfrontends, data pipelines, and ML workflows
+- **GitOps-native delivery** — declarative infrastructure and apps via Git and ArgoCD; Argo Rollouts handles canary and blue-green releases
+- **Security built in** — zero-trust networking, secrets vault, vulnerability scanning, and policy enforcement, on by default
+- **Complete observability** — metrics, logs, traces, and network flows auto-instrumented out of the box
+- **100% open source** — Apache 2.0 licensed, no vendor lock-in, shaped in the open
+
+## Getting started
+
+Spin up a full local platform in under five minutes. You'll need **Docker** (20.10+) and **kubectl** (1.24+) installed, with 8GB+ RAM recommended.
 
 \`\`\`bash
-# One command deployment
-adhar deploy --environment production --auto-scale
+# 1. Install the Adhar CLI
+curl -fsSL https://raw.githubusercontent.com/adhar-io/adhar/main/scripts/install.sh | bash
 
-# Zero-downtime updates
-adhar update --strategy blue-green
+# 2. Create a local cluster with the core platform services
+adhar up
 
-# Rollback in case of issues
-adhar rollback --to-version v1.0.0
+# 3. Open the Adhar Console
+open https://console.adhar.localtest.me:8443
+
+# 4. Retrieve platform credentials
+adhar get secrets
+
+# 5. Tear it all down when you're done
+adhar down
 \`\`\`
 
-### Security Framework
-Security is at the heart of everything we do. ADHAR 1.0 includes:
-
-\`\`\`yaml
-# Security configuration
-apiVersion: v1
-kind: SecurityPolicy
-metadata:
-  name: adhar-security
-spec:
-  rbac:
-    enabled: true
-    strictMode: true
-  scanning:
-    vulnerabilities: true
-    compliance: true
-  encryption:
-    inTransit: true
-    atRest: true
-\`\`\`
-
-## Getting Started
-
-Spin up your first ADHAR platform in under 10 minutes:
+Ready for production? Point ADHAR at your cloud with a config file:
 
 \`\`\`bash
-# Install the CLI
-npm install -g @adhar/cli
+# Provision a managed cluster (AWS_EKS, GCP_GKE, AZURE_AKS, and more)
+adhar up -f adhar-config.yaml
 
-# Create a new platform
-adhar create my-platform
-
-# Deploy it
-adhar deploy
+# Verify the rollout
+adhar get status
 \`\`\`
 
-## What's Next
+From there, the [documentation](/docs) walks you through your first project, and the [architecture overview](/architecture) shows how the pieces fit together. When you're ready for a team, [pricing](/pricing) starts free and open source.
 
-This is just the beginning. We're already working on ADHAR 1.1 with features like:
-- Multi-cloud orchestration
-- Advanced observability
-- GraphQL federation
-- Edge computing support
+## What's next
 
-Thank you to our community for making this release possible!`,
+ADHAR is in active development, and we're just getting started. On the roadmap:
+- Deeper multi-cloud orchestration
+- Cost insights alongside observability
+- More golden paths for data and AI/ML teams
+- An ever-expanding catalog of pre-integrated services
+
+ADHAR is 100% open source, shaped in the open by the people who build on it. [Star us on GitHub](https://github.com/adhar-io/adhar) and come build the foundation modern engineering teams deserve.`,
     category: 'Platform Updates',
-    author: 'Sarah Chen',
+    author: 'Tapas Jena',
+    authorRole: 'Creator of Adhar',
+    authorBio: 'Tapas Jena is the creator of ADHAR, building the open foundation for cloud-native platform engineering.',
     date: 'August 28, 2026',
-    readTime: '8 min read',
-    image: blogHeroAdhar,
+    readTime: '5 min read',
+    image: adharBanner,
     featured: true
   },
   {

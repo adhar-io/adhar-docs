@@ -56,7 +56,7 @@ const FluentAISection = () => {
 
       <div className="max-width-content">
         <div className="text-center mb-14 lg:mb-16">
-          <span className="eyebrow mb-5"><Brain className="w-3 h-3 mr-1" />Fluent AI</span>
+          <span className="eyebrow mb-5"><Brain className="w-3 h-3 mr-1" />Adhar AI</span>
           <h2 className="section-heading mt-5 text-foreground">
             Integrated data &amp;
             <br className="hidden sm:block" />
@@ -64,7 +64,7 @@ const FluentAISection = () => {
           </h2>
           <p className="section-subheading mt-6">
             Transform raw data into strategic decisions with AI that understands context, not just numbers.
-            Fluent AI changes how you discover, understand, and act on intelligence.
+            Adhar AI changes how you discover, understand, and act on intelligence.
           </p>
         </div>
 
@@ -137,10 +137,10 @@ const FluentAISection = () => {
             <Brain className="w-6 h-6" />
           </div>
           <h3 className="text-xl sm:text-2xl font-semibold text-foreground tracking-tight">
-            Experience Fluent AI in action.
+            Experience Adhar AI in action.
           </h3>
           <p className="mt-3 text-sm text-muted-foreground leading-relaxed max-w-xl mx-auto">
-            See how Fluent AI transforms complex data queries into simple conversations.
+            See how Adhar AI transforms complex data queries into simple conversations.
             Try our interactive demo to experience the future of data intelligence.
           </p>
           <div className="mt-7">

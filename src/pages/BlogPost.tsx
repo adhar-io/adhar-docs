@@ -36,6 +36,8 @@ function toPost(p: ApiPost): Post {
     content: p.content,
     category: p.category,
     author: p.author,
+    authorRole: (p as { authorRole?: string }).authorRole,
+    authorBio: (p as { authorBio?: string }).authorBio,
     date: formatPostDate(p.date),
     readTime: p.readTime,
     image: p.image,
@@ -355,7 +357,7 @@ const BlogPost = () => {
                 </div>
                 <div className="text-left">
                   <p className="text-foreground font-semibold text-sm tracking-tight">{post.author}</p>
-                  <p className="text-muted-foreground text-xs">Contributor</p>
+                  <p className="text-muted-foreground text-xs">{post.authorRole || "Contributor"}</p>
                 </div>
               </div>
             </header>
@@ -518,7 +520,7 @@ const BlogPost = () => {
                         {post.author}
                       </h3>
                       <p className="text-sm text-muted-foreground leading-relaxed mt-2">
-                        Writes about cloud-native platforms, developer experience, and the craft of platform engineering.
+                        {post.authorBio || "Writes about cloud-native platforms, developer experience, and the craft of platform engineering."}
                       </p>
                       <Link
                         to={`/blog?q=${encodeURIComponent(post.author)}`}

@@ -1,5 +1,5 @@
 import React from "react";
-import { Hexagon, ArrowRight } from "lucide-react";
+import { ArrowRight } from "lucide-react";
 import { Link } from "@tanstack/react-router";
 
 const IntegrationsSection = () => {
@@ -20,6 +20,20 @@ const IntegrationsSection = () => {
     { value: "Auto", label: "Scaling" },
     { value: "Zero", label: "Downtime" },
     { value: "Multi", label: "Cloud" },
+  ];
+
+  // The real cloud-native tools ADHAR is built on (logos loaded from CDN).
+  const builtOn = [
+    { name: "Kubernetes", icon: "https://cdn.jsdelivr.net/gh/devicons/devicon/icons/kubernetes/kubernetes-plain.svg" },
+    { name: "ArgoCD", icon: "https://cdn.jsdelivr.net/gh/simple-icons/simple-icons/icons/argo.svg" },
+    { name: "Istio", icon: "https://cdn.jsdelivr.net/gh/simple-icons/simple-icons/icons/istio.svg" },
+    { name: "Helm", icon: "https://cdn.jsdelivr.net/gh/devicons/devicon/icons/helm/helm-original.svg" },
+    { name: "Prometheus", icon: "https://cdn.jsdelivr.net/gh/devicons/devicon/icons/prometheus/prometheus-original.svg" },
+    { name: "Grafana", icon: "https://cdn.jsdelivr.net/gh/devicons/devicon/icons/grafana/grafana-original.svg" },
+    { name: "Backstage", icon: "https://cdn.jsdelivr.net/gh/simple-icons/simple-icons/icons/backstage.svg" },
+    { name: "Keycloak", icon: "https://cdn.jsdelivr.net/gh/simple-icons/simple-icons/icons/keycloak.svg" },
+    { name: "Harbor", icon: "https://cdn.jsdelivr.net/gh/simple-icons/simple-icons/icons/harbor.svg" },
+    { name: "Tekton", icon: "https://cdn.jsdelivr.net/gh/simple-icons/simple-icons/icons/tekton.svg" },
   ];
 
   return (
@@ -47,8 +61,14 @@ const IntegrationsSection = () => {
             <div className="absolute inset-0 bg-grid opacity-40 dark:opacity-25 pointer-events-none" />
             <div className="relative px-6 py-12 sm:px-10 sm:py-14">
               <div className="flex flex-col sm:flex-row items-start sm:items-center gap-5">
-                <div className="inline-flex h-12 w-12 items-center justify-center rounded-2xl border border-border/70 bg-background text-primary shadow-[var(--shadow-xs)] shrink-0">
-                  <Hexagon className="w-6 h-6" />
+                <div className="inline-flex h-12 w-12 items-center justify-center rounded-2xl border border-border/70 bg-white shadow-[var(--shadow-xs)] shrink-0">
+                  <img
+                    src="https://cdn.jsdelivr.net/gh/devicons/devicon/icons/kubernetes/kubernetes-plain.svg"
+                    alt="Kubernetes"
+                    loading="lazy"
+                    decoding="async"
+                    className="w-7 h-7 object-contain"
+                  />
                 </div>
                 <div>
                   <h3 className="text-2xl sm:text-3xl font-semibold tracking-tight text-foreground">
@@ -72,6 +92,35 @@ const IntegrationsSection = () => {
                     <div className="mt-1 text-xs text-muted-foreground">{m.label}</div>
                   </div>
                 ))}
+              </div>
+
+              {/* Real cloud-native toolchain ADHAR runs on */}
+              <div className="mt-8">
+                <div className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground mb-4">
+                  Built on the cloud-native stack
+                </div>
+                <div className="flex flex-wrap gap-2.5">
+                  {builtOn.map((tool) => (
+                    <div
+                      key={tool.name}
+                      title={tool.name}
+                      className="inline-flex items-center gap-2 rounded-xl border border-border/60 bg-white px-3 py-2 shadow-[var(--shadow-xs)]"
+                    >
+                      <img
+                        src={tool.icon}
+                        alt={tool.name}
+                        loading="lazy"
+                        decoding="async"
+                        className="w-5 h-5 object-contain"
+                        onError={(e) => {
+                          const chip = (e.target as HTMLImageElement).parentElement;
+                          if (chip) chip.style.display = 'none';
+                        }}
+                      />
+                      <span className="text-xs font-medium text-slate-700">{tool.name}</span>
+                    </div>
+                  ))}
+                </div>
               </div>
             </div>
           </div>
