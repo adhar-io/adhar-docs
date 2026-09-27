@@ -1,128 +1,77 @@
 ---
 title: "Observability"
 section: "Operations"
-order: 1
+order: 4
 path: "/docs/operations/observability"
 ---
 
 # Observability
 
-Adhar treats observability as a **first-class platform concern**. Every
-service ships with traces, metrics, and structured logs the moment it's
-created — no per-team setup.
+Adhar is **observable by construction** — every component's metrics, logs, and traces land in the standard pipeline without per-component setup. Enable a package and Grafana already sees it.
 
-## The three pillars
+## At a glance
 
-| Pillar | Pipeline | Backend (default) |
-|--------|----------|-------------------|
-| **Traces** | OpenTelemetry SDK → OTLP | Tempo |
-| **Metrics** | Micrometer → Prometheus / OTLP | Prometheus + Mimir |
-| **Logs** | SLF4J → JSON → stdout → Vector | Loki |
+| | |
+|---|---|
+| **Collection** | OpenTelemetry via Grafana Alloy; Beyla/Pixie (eBPF); Hubble (network) |
+| **Storage** | Prometheus + Mimir (metrics), Loki (logs), Tempo (traces), Pyroscope (profiles) |
+| **UX** | Grafana — one pane for metrics, logs, traces, cost |
+| **Fleet (T3)** | Hub-and-spoke — data planes ship to the management-cluster hub |
+| **For your apps** | Auto-instrumented — no per-service setup |
+| **Cost** | OpenCost attribution |
 
-All three carry the same correlation IDs (`trace_id`, `span_id`,
-`service.name`) so you can pivot between them in Grafana.
+## The stack
 
-## Tracing
+Adhar standardizes on **OpenTelemetry** as the collection contract and the **Grafana LGTM** stack for storage and UX:
 
-Every HTTP, JDBC, and Kafka call is instrumented automatically.
+| Layer | Tools | Role |
+|---|---|---|
+| **Collection** | Grafana Alloy (OTel), Beyla/Pixie (eBPF auto-instrumentation), Hubble (network) | Ship metrics, logs, traces — no code changes needed |
+| **Storage** | Prometheus (cluster-local), Mimir (long-term), Loki (logs), Tempo (traces), Pyroscope (profiles) | Object-storage-backed in production — retention is policy, not disk size |
+| **UX** | Grafana (dashboards, Explore, alerting), Alertmanager / Grafana OnCall, OpenCost | One pane of glass; alert routing; cost attribution |
 
-```java
-@Traced("checkout.complete")
-public Receipt checkout(Cart cart) {
-    var payment = payments.charge(cart);
-    var fulfilment = warehouse.reserve(cart);
-    return new Receipt(payment, fulfilment);
-}
+## Topology
+
+- **Local & single-cluster (T1/T2):** the full stack runs in-cluster.
+- **Fleet (T3):** hub-and-spoke — data planes run only collectors (Alloy); the management cluster hosts storage and query, giving one pane of glass across every environment.
+
+## Using it
+
+Open Grafana and sign in with Keycloak SSO:
+
+```text
+https://grafana.<your-host>          # dashboards, logs (Loki), traces (Tempo), cost
+https://prometheus.<your-host>       # raw metric queries
+https://hubble.<your-host>           # live network flows
 ```
 
-The Kit emits one parent span (`checkout.complete`) and child spans for
-every downstream call.
+Quick network debugging from the CLI:
 
-### Sampling
-
-| Profile | Default sample rate |
-|---------|---------------------|
-| `dev` | 100% |
-| `stage` | 25% |
-| `prod` | 5% (always 100% for errors) |
-
-Override per service:
-
-```yaml
-adhar:
-  observability:
-    sampling:
-      ratio: 0.10
-      always_sample_errors: true
+```bash
+cilium status
+hubble observe --since 5m --namespace <ns>
 ```
 
-## Metrics
+## What you get automatically
 
-Two flavours, both via Micrometer:
+- **Metrics** for every platform component and your workloads (Prometheus → Mimir).
+- **Logs** aggregated in Loki, correlated with traces.
+- **Traces** in Tempo; eBPF auto-instrumentation via Beyla means no code changes for basic spans.
+- **Network flows** via Hubble (Cilium) — see every connection and policy verdict.
+- **Cost** attributed by OpenCost (enable the package).
 
-- **Platform metrics** — JVM, HTTP, DB pool, GC — emitted automatically.
-- **Business metrics** — domain counters / gauges / timers you define.
+## Production notes
 
-```java
-@Inject MetricRegistry metrics;
+- Point Mimir/Loki/Tempo at real **object storage** so retention is a policy decision, not a disk limit.
+- Alert on the signals that predict outages: MinIO PVC usage > 80%, CNPG `lastFailedBackup`, and the autoscaler's `lastReason` sitting at `maxWorkers reached`.
 
-void onOrder(Order o) {
-    metrics.counter("orders.placed", "region", o.region()).increment();
-    metrics.timer("orders.fulfilment").record(o.fulfilmentDuration());
-}
+## Production readiness scorecards
+
+The `application/scorecards` package grades every service 0–100 (A–F) from in-cluster signals; a CronJob runs every 30 minutes. Run it on demand:
+
+```bash
+kubectl -n adhar-system create job --from=cronjob/adhar-scorecard-scorer scorecard-now
+kubectl -n adhar-system get configmap adhar-scorecards -o jsonpath='{.data.summary\.json}' | jq .
 ```
 
-## Structured logging
-
-Every log line is JSON with trace correlation:
-
-```json
-{
-  "ts": "2026-05-23T10:14:22.114Z",
-  "level": "INFO",
-  "logger": "com.example.OrdersService",
-  "msg": "order placed",
-  "order_id": "o-7281",
-  "trace_id": "4bf92f3577b34da6a3ce929d0e0e4736",
-  "span_id": "00f067aa0ba902b7"
-}
-```
-
-## SLOs
-
-Define SLOs in `service.yaml`. The platform calculates burn rate and
-opens an incident automatically when fast-burn thresholds are hit.
-
-```yaml
-slos:
-  - name: availability
-    objective: 99.9
-    window: 30d
-    indicator:
-      type: http
-      good: status < 500
-      total: status > 0
-  - name: latency
-    objective: 99.0
-    window: 7d
-    indicator:
-      type: http
-      good: latency_p99 < 250ms
-      total: status > 0
-```
-
-## Dashboards
-
-Out of the box, every service gets:
-
-- **RED dashboard** — Rate, Errors, Duration per endpoint
-- **USE dashboard** — Utilisation, Saturation, Errors per resource
-- **SLO dashboard** — Burn rate, error budget remaining
-
-Custom dashboards live alongside the code in `dashboards/*.json` and are
-versioned with the service.
-
-## Further reading
-
-- [Incident response](/docs/incident-response)
-- [Monitoring & logging](/docs/monitoring-and-logging)
+See [Platform Services](/docs/core-concepts/platform-services) for the full observability package list.

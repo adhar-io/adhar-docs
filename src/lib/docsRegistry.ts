@@ -126,15 +126,19 @@ export function buildRegistry(cfg: RegistryConfig): Registry {
   const byPath = new Map(entries.map((e) => [e.path, e]));
 
   const SECTION_ORDER = [
+    // Platform docs (/docs)
+    "Getting Started",
+    "Core Concepts",
+    "Cloud Providers",
+    "Operations",
+    "Security",
+    "Reference",
+    // Adhar Kit docs (/adhar-kit)
     "Get Started",
     "Frameworks",
     "Modules",
     "Guides",
     "API Reference",
-    "Getting Started",
-    "Core Concepts",
-    "Security",
-    "Operations",
   ];
   const sectionRank = (s: string) => {
     const i = SECTION_ORDER.indexOf(s);

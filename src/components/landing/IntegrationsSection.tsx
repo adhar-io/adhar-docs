@@ -2,43 +2,89 @@ import React from "react";
 import { ArrowRight } from "lucide-react";
 import { Link } from "@tanstack/react-router";
 
+const DEV = "https://cdn.jsdelivr.net/gh/devicons/devicon/icons";
+const SI = "https://cdn.jsdelivr.net/gh/simple-icons/simple-icons/icons";
+const cncf = (p: string) =>
+  `https://cdn.jsdelivr.net/gh/cncf/artwork@main/projects/${p}/icon/color/${p}-icon-color.svg`;
+
+// The foundational, most-recognisable tools ADHAR is built on — the ones we
+// spotlight. Logos mirror the /integrations catalogue exactly.
+const highlights = [
+  { name: "Kubernetes", role: "Orchestration", icon: `${DEV}/kubernetes/kubernetes-original.svg`, isFoundation: true },
+  { name: "Cilium", role: "eBPF networking", icon: `${SI}/cilium.svg` },
+  { name: "Crossplane", role: "Control plane", icon: cncf("crossplane") },
+  { name: "ArgoCD", role: "GitOps delivery", icon: `${SI}/argo.svg` },
+  { name: "Gitea", role: "Git server", icon: `${SI}/gitea.svg` },
+  { name: "Keycloak", role: "SSO & identity", icon: `${SI}/keycloak.svg` },
+  { name: "Backstage", role: "Developer portal", icon: `${SI}/backstage.svg` },
+  { name: "Harbor", role: "Container registry", icon: `${SI}/harbor.svg` },
+  { name: "Grafana", role: "Observability", icon: `${DEV}/grafana/grafana-original.svg` },
+  { name: "Prometheus", role: "Metrics", icon: `${DEV}/prometheus/prometheus-original.svg` },
+  { name: "Kyverno", role: "Policy engine", icon: cncf("kyverno") },
+  { name: "OpenBao", role: "Secrets", icon: `${SI}/openbao.svg` },
+];
+
+// The wider stack — scrolled as a marquee below the spotlight grid.
+const marquee = [
+  { name: "Helm", icon: `${DEV}/helm/helm-original.svg` },
+  { name: "Trivy", icon: `${SI}/trivy.svg` },
+  { name: "cert-manager", icon: cncf("cert-manager") },
+  { name: "Falco", icon: `${SI}/falco.svg` },
+  { name: "OpenTelemetry", icon: `${SI}/opentelemetry.svg` },
+  { name: "Loki", icon: `${DEV}/grafana/grafana-original.svg` },
+  { name: "Tempo", icon: `${DEV}/grafana/grafana-original.svg` },
+  { name: "Tekton", icon: `${SI}/tekton.svg` },
+  { name: "Knative", icon: `${SI}/knative.svg` },
+  { name: "KEDA", icon: cncf("keda") },
+  { name: "DAPR", icon: `${SI}/dapr.svg` },
+  { name: "CloudNativePG", icon: cncf("cloudnativepg") },
+  { name: "PostgreSQL", icon: `${DEV}/postgresql/postgresql-original.svg` },
+  { name: "MinIO", icon: `${SI}/minio.svg` },
+  { name: "Apache Kafka", icon: `${SI}/apachekafka.svg` },
+  { name: "Trino", icon: `${SI}/trino.svg` },
+  { name: "ClickHouse", icon: `${SI}/clickhouse.svg` },
+  { name: "Velero", icon: cncf("velero") },
+  { name: "Buildpacks", icon: cncf("buildpacks") },
+  { name: "Coder", icon: `${SI}/coder.svg` },
+  { name: "Penpot", icon: `${SI}/penpot.svg` },
+  { name: "Headlamp", icon: cncf("headlamp") },
+  { name: "FluxCD", icon: cncf("flux") },
+  { name: "vLLM", icon: `${SI}/vllm.svg` },
+];
+
+const kubeMetrics = [
+  { value: "90+", label: "Integrations" },
+  { value: "7", label: "Categories" },
+  { value: "100%", label: "Open source" },
+  { value: "Multi", label: "Cloud" },
+];
+
+const hideOnError = (e: React.SyntheticEvent<HTMLImageElement>) => {
+  const chip = (e.target as HTMLImageElement).closest("[data-logo-chip]") as HTMLElement | null;
+  if (chip) chip.style.display = "none";
+  else (e.target as HTMLImageElement).style.display = "none";
+};
+
 const IntegrationsSection = () => {
-  const integrations = [
-    { name: "Kubernetes", icon: "https://cdn.jsdelivr.net/gh/devicons/devicon/icons/kubernetes/kubernetes-plain.svg", description: "Container orchestration platform", isFoundation: true },
-    { name: "Docker", icon: "https://cdn.jsdelivr.net/gh/devicons/devicon/icons/docker/docker-original.svg", description: "Containerization platform" },
-    { name: "Jenkins", icon: "https://cdn.jsdelivr.net/gh/devicons/devicon/icons/jenkins/jenkins-original.svg", description: "CI/CD automation server" },
-    { name: "GitLab", icon: "https://cdn.jsdelivr.net/gh/devicons/devicon/icons/gitlab/gitlab-original.svg", description: "DevOps platform" },
-    { name: "Prometheus", icon: "https://cdn.jsdelivr.net/gh/devicons/devicon/icons/prometheus/prometheus-original.svg", description: "Monitoring & alerting" },
-    { name: "Grafana", icon: "https://cdn.jsdelivr.net/gh/devicons/devicon/icons/grafana/grafana-original.svg", description: "Analytics & visualization" },
-    { name: "Terraform", icon: "https://cdn.jsdelivr.net/gh/devicons/devicon/icons/terraform/terraform-original.svg", description: "Infrastructure as code" },
-    { name: "Helm", icon: "https://cdn.jsdelivr.net/gh/devicons/devicon/icons/helm/helm-original.svg", description: "Kubernetes package manager" },
-    { name: "ArgoCD", icon: "https://cdn.jsdelivr.net/gh/simple-icons/simple-icons/icons/argo.svg", description: "GitOps continuous delivery" },
-  ];
-
-  const kubeMetrics = [
-    { value: "99.9%", label: "Uptime SLA" },
-    { value: "Auto", label: "Scaling" },
-    { value: "Zero", label: "Downtime" },
-    { value: "Multi", label: "Cloud" },
-  ];
-
-  // The real cloud-native tools ADHAR is built on (logos loaded from CDN).
-  const builtOn = [
-    { name: "Kubernetes", icon: "https://cdn.jsdelivr.net/gh/devicons/devicon/icons/kubernetes/kubernetes-plain.svg" },
-    { name: "ArgoCD", icon: "https://cdn.jsdelivr.net/gh/simple-icons/simple-icons/icons/argo.svg" },
-    { name: "Istio", icon: "https://cdn.jsdelivr.net/gh/simple-icons/simple-icons/icons/istio.svg" },
-    { name: "Helm", icon: "https://cdn.jsdelivr.net/gh/devicons/devicon/icons/helm/helm-original.svg" },
-    { name: "Prometheus", icon: "https://cdn.jsdelivr.net/gh/devicons/devicon/icons/prometheus/prometheus-original.svg" },
-    { name: "Grafana", icon: "https://cdn.jsdelivr.net/gh/devicons/devicon/icons/grafana/grafana-original.svg" },
-    { name: "Backstage", icon: "https://cdn.jsdelivr.net/gh/simple-icons/simple-icons/icons/backstage.svg" },
-    { name: "Keycloak", icon: "https://cdn.jsdelivr.net/gh/simple-icons/simple-icons/icons/keycloak.svg" },
-    { name: "Harbor", icon: "https://cdn.jsdelivr.net/gh/simple-icons/simple-icons/icons/harbor.svg" },
-    { name: "Tekton", icon: "https://cdn.jsdelivr.net/gh/simple-icons/simple-icons/icons/tekton.svg" },
-  ];
-
   return (
     <section id="integrations" className="relative section-padding container-padding bg-background">
       <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-border to-transparent" />
+
+      <style>{`
+        @keyframes adhar-marquee {
+          from { transform: translateX(0); }
+          to { transform: translateX(-50%); }
+        }
+        .adhar-marquee-track {
+          display: flex;
+          width: max-content;
+          animation: adhar-marquee 46s linear infinite;
+        }
+        .adhar-marquee:hover .adhar-marquee-track { animation-play-state: paused; }
+        @media (prefers-reduced-motion: reduce) {
+          .adhar-marquee-track { animation: none; }
+        }
+      `}</style>
 
       <div className="max-width-content">
         <div className="text-center mb-14 lg:mb-16">
@@ -49,8 +95,8 @@ const IntegrationsSection = () => {
             <span className="text-muted-foreground">open source.</span>
           </h2>
           <p className="section-subheading mt-6">
-            Built on the shoulders of giants. ADHAR leverages the most trusted open-source tools in the
-            cloud-native ecosystem, enhanced for enterprise reliability and seamless integration.
+            Built on the shoulders of giants. ADHAR unifies 90+ of the most trusted cloud-native
+            projects — wired together, hardened, and upgraded as one platform.
           </p>
         </div>
 
@@ -63,7 +109,7 @@ const IntegrationsSection = () => {
               <div className="flex flex-col sm:flex-row items-start sm:items-center gap-5">
                 <div className="inline-flex h-12 w-12 items-center justify-center rounded-2xl border border-border/70 bg-white shadow-[var(--shadow-xs)] shrink-0">
                   <img
-                    src="https://cdn.jsdelivr.net/gh/devicons/devicon/icons/kubernetes/kubernetes-plain.svg"
+                    src={`${DEV}/kubernetes/kubernetes-plain.svg`}
                     alt="Kubernetes"
                     loading="lazy"
                     decoding="async"
@@ -81,8 +127,9 @@ const IntegrationsSection = () => {
               </div>
 
               <p className="mt-6 max-w-3xl text-base text-muted-foreground leading-relaxed">
-                ADHAR is built from the ground up on Kubernetes, providing enterprise-grade container
-                orchestration, automatic scaling, self-healing, and seamless multi-cloud deployments.
+                ADHAR is built from the ground up on Kubernetes — enterprise-grade orchestration,
+                automatic scaling, self-healing, and seamless multi-cloud deployments, with every
+                component reconciled through GitOps.
               </p>
 
               <div className="mt-8 grid grid-cols-2 md:grid-cols-4 gap-px overflow-hidden rounded-2xl border border-border/60 bg-border/50">
@@ -93,70 +140,69 @@ const IntegrationsSection = () => {
                   </div>
                 ))}
               </div>
-
-              {/* Real cloud-native toolchain ADHAR runs on */}
-              <div className="mt-8">
-                <div className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground mb-4">
-                  Built on the cloud-native stack
-                </div>
-                <div className="flex flex-wrap gap-2.5">
-                  {builtOn.map((tool) => (
-                    <div
-                      key={tool.name}
-                      title={tool.name}
-                      className="inline-flex items-center gap-2 rounded-xl border border-border/60 bg-white px-3 py-2 shadow-[var(--shadow-xs)]"
-                    >
-                      <img
-                        src={tool.icon}
-                        alt={tool.name}
-                        loading="lazy"
-                        decoding="async"
-                        className="w-5 h-5 object-contain"
-                        onError={(e) => {
-                          const chip = (e.target as HTMLImageElement).parentElement;
-                          if (chip) chip.style.display = 'none';
-                        }}
-                      />
-                      <span className="text-xs font-medium text-slate-700">{tool.name}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
             </div>
           </div>
         </div>
 
-        {/* Integration grid */}
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-3 gap-px overflow-hidden rounded-2xl border border-border/70 bg-border/60">
-          {integrations.map((integration, index) => (
+        {/* Spotlight grid — the foundational stack */}
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-px overflow-hidden rounded-2xl border border-border/70 bg-border/60">
+          {highlights.map((tool) => (
             <article
-              key={index}
-              className={`group relative flex flex-col items-center text-center bg-card p-6 transition-colors hover:bg-muted/30 ${
-                integration.isFoundation ? 'ring-1 ring-inset ring-primary/30' : ''
+              key={tool.name}
+              className={`group relative flex items-center gap-3.5 bg-card p-5 transition-all duration-300 hover:bg-muted/40 hover:-translate-y-0.5 ${
+                tool.isFoundation ? "ring-1 ring-inset ring-primary/30" : ""
               }`}
             >
-              {integration.isFoundation && (
-                <span className="absolute top-3 right-3 inline-flex items-center px-2 py-0.5 rounded-full bg-primary/10 text-primary text-[10px] font-semibold uppercase tracking-wider ring-1 ring-inset ring-primary/20">
+              {tool.isFoundation && (
+                <span className="absolute top-2.5 right-2.5 inline-flex items-center px-2 py-0.5 rounded-full bg-primary/10 text-primary text-[10px] font-semibold uppercase tracking-wider ring-1 ring-inset ring-primary/20">
                   Core
                 </span>
               )}
-              <div className="inline-flex h-12 w-12 items-center justify-center rounded-2xl border border-border/70 bg-background shadow-[var(--shadow-xs)] mb-4">
+              <div className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-border/70 bg-white shadow-[var(--shadow-xs)] transition-transform duration-300 group-hover:scale-105">
                 <img
-                  src={integration.icon}
+                  src={tool.icon}
                   loading="lazy"
                   decoding="async"
-                  alt={integration.name}
-                  className="w-7 h-7 object-contain"
-                  onError={(e) => {
-                    const target = e.target as HTMLImageElement;
-                    target.style.display = 'none';
-                  }}
+                  alt={tool.name}
+                  className="w-6 h-6 object-contain"
+                  onError={hideOnError}
                 />
               </div>
-              <h3 className="text-sm font-semibold text-foreground tracking-tight">{integration.name}</h3>
-              <p className="mt-1 text-xs text-muted-foreground leading-relaxed">{integration.description}</p>
+              <div className="min-w-0">
+                <h3 className="text-sm font-semibold text-foreground tracking-tight truncate">{tool.name}</h3>
+                <p className="mt-0.5 text-xs text-muted-foreground truncate">{tool.role}</p>
+              </div>
             </article>
           ))}
+        </div>
+
+        {/* Marquee — the wider stack */}
+        <div className="mt-10">
+          <div className="text-center text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground mb-5">
+            …and 60+ more across security, delivery, data &amp; AI
+          </div>
+          <div className="adhar-marquee relative overflow-hidden [mask-image:linear-gradient(to_right,transparent,black_6%,black_94%,transparent)]">
+            <div className="adhar-marquee-track gap-3 pr-3">
+              {[...marquee, ...marquee].map((tool, i) => (
+                <div
+                  key={`${tool.name}-${i}`}
+                  data-logo-chip
+                  title={tool.name}
+                  className="inline-flex items-center gap-2 rounded-xl border border-border/60 bg-white px-3.5 py-2.5 shadow-[var(--shadow-xs)] shrink-0"
+                >
+                  <img
+                    src={tool.icon}
+                    alt={tool.name}
+                    loading="lazy"
+                    decoding="async"
+                    className="w-5 h-5 object-contain"
+                    onError={hideOnError}
+                  />
+                  <span className="text-xs font-medium text-slate-700 whitespace-nowrap">{tool.name}</span>
+                </div>
+              ))}
+            </div>
+          </div>
         </div>
 
         <div className="text-center mt-10">
@@ -165,7 +211,7 @@ const IntegrationsSection = () => {
               type="button"
               className="btn-secondary-modern group inline-flex items-center justify-center gap-2 rounded-full px-6 h-11 text-[15px] font-medium"
             >
-              <span>View all integrations</span>
+              <span>Explore all integrations</span>
               <ArrowRight className="w-4 h-4 transition-transform duration-300 group-hover:translate-x-0.5" />
             </button>
           </Link>

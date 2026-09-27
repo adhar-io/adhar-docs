@@ -1,25 +1,37 @@
+---
+title: "The 6 D's Framework"
+section: "Core Concepts"
+order: 3
+path: "/docs/core-concepts/ds-framework"
+---
 
 # The 6 D's Framework
 
-Understanding ADHAR's core methodology for cloud-native development.
+The 6 D's are ADHAR's methodology for the full cloud-native lifecycle — a simple mental model that maps each stage of building and running software to the platform capabilities that support it. Each phase builds on the previous one, and the last phase (**Decide**) feeds back into the first (**Define**), closing the loop from strategy to delivery and back.
 
-## Overview
+```text
+        ┌──▶ Define ──▶ Design ──▶ Develop ──▶ Deliver ──▶ Discover ──┐
+        │      (what)     (how)     (build)     (ship)     (observe)   │
+        │                                                              ▼
+        └──────────────────────────  Decide  ◀────────────────────────┘
+                                    (learn & steer)
+```
 
-The 6 D's framework is ADHAR's systematic approach to cloud-native application development. Each phase builds upon the previous one, creating a comprehensive workflow from concept to production — and back to strategy.
+## Why a framework
 
-## The Six Phases
+Platform engineering fails when tools are adopted piecemeal and no one can see the whole path from idea to production and back. The 6 D's give teams a shared vocabulary and give the platform a way to organize its 91 packages around outcomes rather than technologies. Every capability Adhar ships maps to at least one D.
 
-### 1. Define 📋
+## The six phases
 
-**Establish clear requirements and architecture**
+### 1. Define 📋 — establish clear requirements and architecture
 
-- **Service Boundaries**: Define microservice boundaries and responsibilities
-- **Data Models**: Design database schemas and data flow
-- **API Contracts**: Specify service interfaces and communication patterns
-- **Non-Functional Requirements**: Performance, security, and scalability needs
+- **Service boundaries** — microservice responsibilities and ownership
+- **Data models** — schemas and data flow
+- **API contracts** — service interfaces and communication patterns
+- **Non-functional requirements** — performance, security, scalability
 
 ```yaml
-# Example: Service definition
+# Example: a service definition
 apiVersion: adhar.dev/v1
 kind: ServiceDefinition
 metadata:
@@ -34,74 +46,63 @@ spec:
     schema: users
 ```
 
-### 2. Design 🎨
+### 2. Design 🎨 — comprehensive system architecture
 
-**Create comprehensive system architecture**
+- **System architecture** — high-level component design
+- **Security model** — authentication, authorization, compliance
+- **Deployment strategy** — environment topology and release processes
+- **Integration patterns** — external service connections
 
-- **System Architecture**: High-level component design
-- **Security Model**: Authentication, authorization, and compliance
-- **Deployment Strategy**: Environment topology and release processes
-- **Integration Patterns**: External service connections
+### 3. Develop 💻 — implement with best practices
 
-### 3. Develop 💻
+- **Code generation** — scaffolding from definitions (golden paths, `adhar-kit`)
+- **Local development** — a full platform on a laptop, plus `adhar dev` inner loop
+- **Testing strategy** — unit, integration, and contract testing
+- **Code quality** — linting, formatting, and security scanning
 
-**Implement with best practices**
+### 4. Deliver 🚀 — automated and reliable releases
 
-- **Code Generation**: Automated scaffolding from definitions
-- **Local Development**: Streamlined dev environment setup
-- **Testing Strategy**: Unit, integration, and contract testing
-- **Code Quality**: Linting, formatting, and security scanning
+- **GitOps workflow** — Git-based deployment automation (ArgoCD)
+- **Progressive delivery** — canary and blue-green deployments (Argo Rollouts)
+- **Supply chain** — build → scan → sign → registry (Tekton, Trivy, Cosign, Harbor)
+- **Environment promotion** — automated dev → staging → production (Kargo)
 
-### 4. Deliver 🚀
+### 5. Discover 🔍 — observe and optimize
 
-**Automated and reliable releases**
+- **Service discovery** — automatic registration and routing
+- **Monitoring & alerting** — the LGTM + OpenTelemetry stack
+- **Performance analytics** — application and infrastructure metrics
+- **Continuous improvement** — data-driven optimization
 
-- **GitOps Workflow**: Git-based deployment automation
-- **Progressive Delivery**: Canary and blue-green deployments
-- **Infrastructure as Code**: Declarative infrastructure management
-- **Environment Promotion**: Automated dev → staging → production flow
+### 6. Decide 📊 — turn insights into strategy
 
-### 5. Discover 🔍
+- **Business intelligence** — aggregate signals from Discover into clear reporting
+- **Strategic planning** — data-driven roadmap and investment decisions
+- **Growth analytics** — measure impact and identify opportunities
+- **Close the loop** — feed decisions back into Define
 
-**Observe and optimize**
+## How each phase maps to the platform
 
-- **Service Discovery**: Automatic service registration and discovery
-- **Monitoring & Alerting**: Comprehensive observability stack
-- **Performance Analytics**: Application and infrastructure metrics
-- **Continuous Improvement**: Data-driven optimization
-
-### 6. Decide 📊
-
-**Turn insights into strategy**
-
-- **Business Intelligence**: Aggregate signals from the Discover stage into clear reporting
-- **Strategic Planning**: Data-driven roadmap and investment decisions
-- **Growth Analytics**: Measure impact and identify opportunities
-- **Data-Driven Decisions**: Close the loop by feeding decisions back into Define
-
-## Implementation
-
-Each phase is supported by integrated tools:
-
-| Phase | Primary Tools | Key Features |
-|-------|---------------|--------------|
-| Define | Backstage, OpenAPI | Service catalogs, API docs |
-| Design | ArgoCD, Kyverno | GitOps, policy enforcement |
-| Develop | VS Code, Telepresence | Local development, remote debugging |
-| Deliver | ArgoCD, Flux | Automated deployments, rollbacks |
-| Discover | Prometheus, Grafana | Monitoring, dashboards, alerts |
-| Decide | Grafana, Metabase | Analytics, roadmap insights |
+| Phase | What it covers | Powered by |
+|---|---|---|
+| **Define** | Requirements, boundaries, API contracts | Backstage catalog, OpenAPI |
+| **Design** | Architecture, security model, governance | Crossplane, Kyverno |
+| **Develop** | Paved-road development | Golden paths, `adhar-kit`, Coder, `adhar dev` |
+| **Deliver** | GitOps deployments, progressive delivery, rollbacks | ArgoCD, Argo Rollouts, Tekton, Harbor, Kargo |
+| **Discover** | Observability, analytics, continuous improvement | Prometheus, Grafana, Loki, Tempo, OpenTelemetry |
+| **Decide** | Insights → strategy and roadmap | Metabase, PostHog, Grafana |
 
 ## Benefits
 
-- **Consistency**: Standardized approach across teams
-- **Velocity**: Faster development and deployment cycles
-- **Quality**: Built-in best practices and governance
-- **Observability**: Complete visibility into system behavior
-- **Scalability**: Designed for enterprise-scale operations
+- **Consistency** — a standardized approach across teams
+- **Velocity** — faster development and deployment cycles
+- **Quality** — best practices and governance built in
+- **Observability** — complete visibility into system behavior
+- **Scalability** — designed for enterprise-scale operations
 
-## Next Steps
+## Next steps
 
-- [Platform Architecture](./platform-architecture)
-- [Integration Patterns](./integration-patterns)
-- [Developer Workflows](./developer-workflows)
+- [Architecture](/docs/core-concepts/architecture) — the layers and lifecycle behind the framework
+- [Your First Service](/docs/getting-started/first-service) — Develop → Deliver in practice
+- [Observability](/docs/operations/observability) — the Discover phase in depth
+- [Platform Services](/docs/core-concepts/platform-services) — the tools behind each phase

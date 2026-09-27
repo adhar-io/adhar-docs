@@ -1,7 +1,7 @@
 
 import { useState, useEffect } from "react";
 import { Link } from "@tanstack/react-router";
-import { LogIn } from "lucide-react";
+import { LogIn, ArrowUpRight } from "lucide-react";
 import { useTheme } from "next-themes";
 import NavigationLogo from "./navigation/NavigationLogo";
 import DesktopNavigationMenu from "./navigation/DesktopNavigationMenu";
@@ -77,9 +77,12 @@ const Navigation = () => {
                 target="_blank"
                 rel="noopener noreferrer"
                 onClick={closeMenu}
-                className="text-foreground hover:text-primary hover:bg-muted/60 rounded-lg px-3 min-h-11 flex items-center text-sm font-medium transition-colors"
+                className="text-foreground hover:text-primary hover:bg-muted/60 rounded-lg px-3 min-h-11 flex items-center gap-1.5 text-sm font-medium transition-colors"
+                title="Opens in a new tab"
               >
                 Adhar UI
+                <ArrowUpRight className="w-3.5 h-3.5 opacity-60" aria-hidden />
+                <span className="sr-only">(opens in a new tab)</span>
               </a>
 
               <div className="mt-3 pt-3 border-t border-border/60">

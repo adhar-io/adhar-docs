@@ -13,6 +13,7 @@ import {
   Plug,
   Shield,
   ArrowRight,
+  ArrowUpRight,
   Sparkles,
   type LucideIcon,
 } from "lucide-react";
@@ -135,7 +136,11 @@ const DesktopNavigationMenu = () => {
 
         <NavigationMenuItem>
           <NavigationMenuLink asChild className={linkClasses}>
-            <a href={ADHAR_UI_URL} target="_blank" rel="noopener noreferrer">Adhar UI</a>
+            <a href={ADHAR_UI_URL} target="_blank" rel="noopener noreferrer" title="Opens in a new tab" className="inline-flex items-center gap-1">
+              Adhar UI
+              <ArrowUpRight className="w-3 h-3 opacity-60" aria-hidden />
+              <span className="sr-only">(opens in a new tab)</span>
+            </a>
           </NavigationMenuLink>
         </NavigationMenuItem>
 

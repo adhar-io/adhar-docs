@@ -1,315 +1,140 @@
+---
+title: "Configuration"
+section: "Getting Started"
+order: 5
+path: "/docs/getting-started/configuration"
+---
 
-# Configuration Guide
+# Configuration
 
-Learn how to configure ADHAR for your specific environment and requirements.
+Locally, Adhar needs no configuration — `adhar up` just works. For clouds and production you describe the target in an `adhar-config.yaml` and pass it with `-f`. This page covers the CLI flags you'll use most and the shape of the config file. For the full per-cloud detail, see [Cloud Providers](/docs/providers/overview).
 
-## Configuration Overview
+## Common `adhar up` flags
 
-ADHAR uses a hierarchical configuration system that allows you to customize every aspect of your platform deployment.
+| Flag | Purpose |
+|---|---|
+| `-f, --file <cfg>` | Provision from a config file (cloud / production) |
+| `--env <name>` | Target one environment in that file (always pass this) |
+| `--recreate` | **Destructive** — delete the existing cluster first |
+| `--port <n>` | HTTPS host port (default 8443); HTTP derives as n − 363 |
+| `--host <name>` | Platform host name (default `adhar.localtest.me`) |
+| `--kube-version <v>` | Kubernetes version for any provider (default v1.37.0) |
+| `--ha` | Render the foundation in HA mode |
+| `-d, --dry-run` | Validate config and preview — create nothing |
+| `--dev-password` | Set ArgoCD and Gitea admin passwords to `developer` |
 
-## Main Configuration File
+> **Always pass `--env <name>`** with a config file. Without it, `adhar up -f config.yaml` provisions *every* environment in the file.
 
-The primary configuration file is `adhar.yaml` located in your project root:
+## The config file, layer by layer
 
-```yaml
-apiVersion: v1
-kind: Platform
-metadata:
-  name: my-platform
-  namespace: adhar-system
-  labels:
-    environment: production
-    team: platform
-spec:
-  # Cloud provider configuration
-  cloudProvider:
-    type: aws  # aws, azure, gcp, local
-    region: us-west-2
-    
-  # Core components
-  components:
-    argocd:
-      enabled: true
-      version: "2.8.0"
-      replicas: 2
-      
-    keycloak:
-      enabled: true
-      version: "22.0.0"
-      database:
-        type: postgresql
-        
-    kyverno:
-      enabled: true
-      version: "1.10.0"
-      
-    harbor:
-      enabled: true
-      version: "2.9.0"
-      
-    backstage:
-      enabled: true
-      version: "1.17.0"
-      
-  # Security configuration
-  security:
-    rbac:
-      enabled: true
-      strictMode: true
-    networkPolicies:
-      enabled: true
-      defaultDeny: true
-    podSecurityStandards:
-      enforce: restricted
-      
-  # Observability
-  observability:
-    metrics:
-      enabled: true
-      retention: 30d
-    logging:
-      enabled: true
-      level: info
-    tracing:
-      enabled: true
-      
-  # Resource limits
-  resources:
-    limits:
-      cpu: "4"
-      memory: "8Gi"
-    requests:
-      cpu: "2"
-      memory: "4Gi"
+Configuration resolves through four layers, each overriding the previous. Never put secrets in `config.yaml` — reference them through External Secrets, environment variables, or workload identity.
+
+```text
+globalSettings          # context, default host, ports, HA mode, ACME email
+  └─ providers          # per-cloud credentials & infrastructure
+      └─ environmentTemplates   # reusable defaults (prod-defaults, nonprod-defaults)
+          └─ environments       # named instances (dev, staging, production)
 ```
 
-## Environment-Specific Configuration
+### globalSettings
 
-Create separate configuration files for different environments:
+| Key | Meaning |
+|---|---|
+| `adharContext` | kube-context prefix and Cilium cluster name (e.g. `adhar-mgmt`) |
+| `defaultHost` | The DNS zone — every hostname is `<app>.<defaultHost>`; the wildcard cert covers `*.<defaultHost>` |
+| `defaultHttpPort` / `defaultHttpsPort` | e.g. `80` / `443` |
+| `enableHAMode` | ArgoCD ×2 + HA Redis + PDBs, CNPG for Gitea, Crossplane HA |
+| `email` | ACME (Let's Encrypt) registration address |
+| `dnsProvider` | Usually derived from the provider; set to override (`digitalocean`, `aws`, `gcp`, `azure`, `cloudflare`, `civo`, `none`) |
 
-### Development Environment
+### A minimal cloud config
+
 ```yaml
-# adhar-dev.yaml
-apiVersion: v1
-kind: Platform
-metadata:
-  name: my-platform-dev
-spec:
-  cloudProvider:
-    type: local
-  components:
-    argocd:
-      replicas: 1
-  resources:
-    limits:
-      cpu: "2"
-      memory: "4Gi"
-```
+globalSettings:
+  adharContext: adhar-mgmt
+  defaultHost: platform.example.com   # a DNS zone you delegate to this cloud
+  defaultHttpPort: 80
+  defaultHttpsPort: 443
+  enableHAMode: true
+  email: admin@example.com
 
-### Production Environment
-```yaml
-# adhar-prod.yaml
-apiVersion: v1
-kind: Platform
-metadata:
-  name: my-platform-prod
-spec:
-  cloudProvider:
-    type: aws
-    region: us-east-1
-  components:
-    argocd:
-      replicas: 3
-      highAvailability: true
-  security:
-    rbac:
-      strictMode: true
-    networkPolicies:
-      defaultDeny: true
-```
-
-## Component-Specific Configuration
-
-### ArgoCD Configuration
-```yaml
-components:
-  argocd:
-    enabled: true
+providers:
+  digitalocean:
+    type: digitalocean
+    region: blr1
+    primary: true
+    useEnvironment: true              # token from DIGITALOCEAN_ACCESS_TOKEN
     config:
-      server:
-        insecure: false
-        grpc:
-          web: true
-      repositories:
-        - url: https://github.com/your-org/app-configs
-          type: git
-          name: app-configs
-      applications:
-        - name: platform-apps
-          source:
-            repoURL: https://github.com/your-org/platform-apps
-            path: overlays/production
-            targetRevision: main
-          destination:
-            server: https://kubernetes.default.svc
-            namespace: default
+      droplet_size: s-8vcpu-16gb
+      image: ubuntu-24-04-x64
+
+environmentTemplates:
+  nonprod-defaults:
+    clusterConfig:
+      - key: autoScale
+        value: "true"
+    coreServices:
+      cilium:
+        chart:
+          repoURL: https://helm.cilium.io/
+          name: cilium
+          version: 1.15.7
+
+environments:
+  dev:
+    type: non-production
+    provider: digitalocean
+    template: nonprod-defaults
+    clusterConfig:
+      - { key: name,      value: adhar-mgmt }
+      - { key: nodeSize,  value: s-8vcpu-16gb }
+      - { key: nodeCount, value: "3" }
+    autoscaling:
+      enabled: true
+      minWorkers: 3
+      maxWorkers: 10
 ```
 
-### Keycloak Configuration
-```yaml
-components:
-  keycloak:
-    enabled: true
-    config:
-      database:
-        vendor: postgresql
-        hostname: keycloak-db
-        database: keycloak
-        username: keycloak
-      admin:
-        username: admin
-        # password should be set via secret
-      themes:
-        - name: custom-theme
-          enabled: true
-      realms:
-        - name: adhar
-          enabled: true
-          clients:
-            - clientId: backstage
-              enabled: true
-              redirectUris:
-                - "http://localhost:3000/*"
-```
-
-### Kyverno Policies
-```yaml
-components:
-  kyverno:
-    enabled: true
-    policies:
-      - name: require-labels
-        enabled: true
-        spec: |
-          apiVersion: kyverno.io/v1
-          kind: ClusterPolicy
-          metadata:
-            name: require-labels
-          spec:
-            validationFailureAction: enforce
-            background: true
-            rules:
-              - name: check-team-label
-                match:
-                  any:
-                  - resources:
-                      kinds:
-                      - Pod
-                validate:
-                  message: "label 'team' is required"
-                  pattern:
-                    metadata:
-                      labels:
-                        team: "?*"
-```
-
-## Secrets Management
-
-ADHAR integrates with various secret management solutions:
-
-### Using Kubernetes Secrets
-```yaml
-secrets:
-  - name: database-credentials
-    type: Opaque
-    data:
-      username: <base64-encoded-username>
-      password: <base64-encoded-password>
-```
-
-### Using External Secret Operators
-```yaml
-externalSecrets:
-  enabled: true
-  provider: aws-secrets-manager
-  secrets:
-    - name: keycloak-admin
-      remoteRef:
-        key: /adhar/keycloak/admin
-        property: password
-```
-
-## Advanced Configuration
-
-### Custom Resource Definitions
-```yaml
-customResources:
-  - apiVersion: platform.adhar.dev/v1
-    kind: Application
-    metadata:
-      name: my-app
-    spec:
-      framework: spring-boot
-      database: postgresql
-      monitoring: prometheus
-```
-
-### Networking Configuration
-```yaml
-networking:
-  ingress:
-    enabled: true
-    className: nginx
-    annotations:
-      cert-manager.io/cluster-issuer: "letsencrypt-prod"
-  service:
-    type: ClusterIP
-    ports:
-      - name: http
-        port: 80
-        targetPort: 8080
-```
-
-## Validation and Testing
-
-Validate your configuration before deployment:
+Provision it:
 
 ```bash
-# Validate configuration
-adhar config validate
-
-# Test configuration in dry-run mode
-adhar deploy --dry-run
-
-# Preview changes
-adhar diff
+adhar up -f config.yaml --env dev --dry-run   # validate, create nothing
+adhar up -f config.yaml --env dev             # provision
 ```
 
-## Configuration Best Practices
+### clusterConfig keys
 
-1. **Version Control**: Always store configurations in Git
-2. **Environment Separation**: Use separate configs for dev/staging/prod
-3. **Secret Management**: Never store secrets in plain text
-4. **Validation**: Always validate before deployment
-5. **Documentation**: Document custom configurations
+Matched ignoring case and separators (`node_count` ≡ `nodeCount`): `name`, `nodeSize` (or the provider's `machineType`/`vmSize`/`droplet_size`/`instance_type`), `nodeCount`, `kubeVersion`/`version`, `podCIDR`, `autoScale`, and Cilium cluster-mesh keys.
 
-## Environment Variables
+### autoscaling
 
-Override configuration values using environment variables:
+| Field | Default | Meaning |
+|---|---|---|
+| `enabled` | `false` | Turn the autoscaler on |
+| `minWorkers` | `1` | Floor (your HA baseline) |
+| `maxWorkers` | `5` | Ceiling — your spend limit |
+| `scaleUpUtilizationThreshold` | `"90%"` | CPU or memory at/above this adds a worker |
+| `scaleDownUtilizationThreshold` | `"50%"` | CPU and memory must both stay under this |
+| `scaleDownDelay` | `"10m"` | Time under threshold before draining |
+| `scaleUpCooldown` | `"3m"` | Minimum gap between additions |
+
+## Kubernetes version precedence
+
+Highest wins: `adhar up --kube-version` → the environment's `kubeVersion`/`version` → the compiled-in default (**v1.37.0**). Nodes added later take the running control plane's version, so a cluster can't skew.
+
+## Enabling more packages
+
+Turning a package on is a platform change — edit the stack and run `adhar upgrade`. See [Customization](/docs/operations/customization) for the full workflow, or use the CLI:
 
 ```bash
-export ADHAR_CLOUD_PROVIDER=aws
-export ADHAR_REGION=us-west-2
-export ADHAR_NAMESPACE=production
+adhar stack list             # the catalogue: enabled or not
+adhar stack enable harbor    # edit the stack
+adhar upgrade --diff-only    # preview
+adhar upgrade                # apply
 ```
 
-## Configuration Precedence
+## Next steps
 
-ADHAR follows this configuration precedence order:
-
-1. Command-line flags
-2. Environment variables
-3. Configuration files (adhar.yaml)
-4. Default values
-
-💡 **Tip**: Use `adhar config show` to see the final resolved configuration.
+- **[Cloud Providers](/docs/providers/overview)** — per-cloud credentials, quotas, and full configs
+- **[Customization](/docs/operations/customization)** — packages, values, environments, and extension points
+- **[Production](/docs/operations/production)** — HA sizing, DNS/TLS, backups
