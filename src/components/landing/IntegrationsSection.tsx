@@ -48,12 +48,12 @@ const marquee = [
   { name: "Coder", icon: `${SI}/coder.svg` },
   { name: "Penpot", icon: `${SI}/penpot.svg` },
   { name: "Headlamp", icon: cncf("headlamp") },
-  { name: "FluxCD", icon: cncf("flux") },
+  { name: "Kubescape", icon: cncf("kubescape") },
   { name: "vLLM", icon: `${SI}/vllm.svg` },
 ];
 
 const kubeMetrics = [
-  { value: "90+", label: "Integrations" },
+  { value: "102", label: "Integrations" },
   { value: "7", label: "Categories" },
   { value: "100%", label: "Open source" },
   { value: "Multi", label: "Cloud" },
@@ -95,7 +95,7 @@ const IntegrationsSection = () => {
             <span className="text-muted-foreground">open source.</span>
           </h2>
           <p className="section-subheading mt-6">
-            Built on the shoulders of giants. ADHAR unifies 90+ of the most trusted cloud-native
+            Built on the shoulders of giants. ADHAR unifies 100+ of the most trusted cloud-native
             projects — wired together, hardened, and upgraded as one platform.
           </p>
         </div>
@@ -179,7 +179,7 @@ const IntegrationsSection = () => {
         {/* Marquee — the wider stack */}
         <div className="mt-10">
           <div className="text-center text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground mb-5">
-            …and 60+ more across security, delivery, data &amp; AI
+            …and 90+ more across security, delivery, data &amp; AI
           </div>
           <div className="adhar-marquee relative overflow-hidden [mask-image:linear-gradient(to_right,transparent,black_6%,black_94%,transparent)]">
             <div className="adhar-marquee-track gap-3 pr-3">

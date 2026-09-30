@@ -61,6 +61,7 @@ const InteractiveArchitecture = () => {
         { name: 'Adhar Console', icon: '/favicon.svg', color: TILE, description: 'Unified platform control plane' },
         { name: 'Crossplane', icon: 'https://cdn.jsdelivr.net/gh/cncf/artwork@main/projects/crossplane/icon/color/crossplane-icon-color.svg', color: TILE, description: 'Self-service infrastructure APIs' },
         { name: 'Cilium', icon: 'https://cdn.jsdelivr.net/gh/simple-icons/simple-icons/icons/cilium.svg', color: TILE, description: 'eBPF networking & Gateway API' },
+        { name: 'Terraform', icon: 'https://cdn.jsdelivr.net/gh/devicons/devicon/icons/terraform/terraform-original.svg', color: TILE, description: 'Infrastructure as code' },
         { name: 'Velero', icon: 'https://cdn.jsdelivr.net/gh/cncf/artwork@main/projects/velero/icon/color/velero-icon-color.svg', color: TILE, description: 'Backup & disaster recovery' }
       ]
     },
@@ -89,7 +90,7 @@ const InteractiveArchitecture = () => {
       color: 'bg-gradient-to-br from-violet-50 to-purple-50',
       tools: [
         { name: 'Knative', icon: 'https://cdn.jsdelivr.net/gh/simple-icons/simple-icons/icons/knative.svg', color: TILE, description: 'Serverless containers' },
-        { name: 'OpenFaaS', icon: 'https://cdn.jsdelivr.net/gh/simple-icons/simple-icons/icons/openfaas.svg', color: TILE, description: 'Functions as a service' },
+        { name: 'OpenFunction', icon: 'https://cdn.jsdelivr.net/gh/cncf/artwork@main/projects/openfunction/icon/color/openfunction-icon-color.svg', color: TILE, description: 'Functions as a service' },
         { name: 'KEDA', icon: 'https://cdn.jsdelivr.net/gh/cncf/artwork@main/projects/keda/icon/color/keda-icon-color.svg', color: TILE, description: 'Event-driven autoscaling' },
         { name: 'Dapr', icon: 'https://cdn.jsdelivr.net/gh/simple-icons/simple-icons/icons/dapr.svg', color: TILE, description: 'Distributed application runtime' }
       ]
@@ -111,7 +112,8 @@ const InteractiveArchitecture = () => {
         { name: 'Kyverno', icon: 'https://cdn.jsdelivr.net/gh/cncf/artwork@main/projects/kyverno/icon/color/kyverno-icon-color.svg', color: TILE, description: 'Policy as code' },
         { name: 'Falco', icon: 'https://cdn.jsdelivr.net/gh/simple-icons/simple-icons/icons/falco.svg', color: TILE, description: 'Runtime threat detection' },
         { name: 'Trivy', icon: 'https://cdn.jsdelivr.net/gh/simple-icons/simple-icons/icons/trivy.svg', color: TILE, description: 'Vulnerability scanning' },
-        { name: 'Tetragon', icon: 'https://cdn.jsdelivr.net/gh/simple-icons/simple-icons/icons/cilium.svg', color: TILE, description: 'eBPF security observability' }
+        { name: 'Tetragon', icon: 'https://cdn.jsdelivr.net/gh/simple-icons/simple-icons/icons/cilium.svg', color: TILE, description: 'eBPF security observability' },
+        { name: 'Kubescape', icon: 'https://cdn.jsdelivr.net/gh/cncf/artwork@main/projects/kubescape/icon/color/kubescape-icon-color.svg', color: TILE, description: 'Security posture management' }
       ]
     },
     {
@@ -119,9 +121,10 @@ const InteractiveArchitecture = () => {
       color: 'bg-gradient-to-br from-emerald-50 to-teal-50',
       tools: [
         { name: 'CloudNativePG', icon: 'https://cdn.jsdelivr.net/gh/cncf/artwork@main/projects/cloudnativepg/icon/color/cloudnativepg-icon-color.svg', color: TILE, description: 'PostgreSQL operator' },
-        { name: 'PostgreSQL', icon: 'https://cdn.jsdelivr.net/gh/devicons/devicon/icons/postgresql/postgresql-original.svg', color: TILE, description: 'Relational database' },
+        { name: 'MongoDB', icon: 'https://cdn.jsdelivr.net/gh/devicons/devicon/icons/mongodb/mongodb-original.svg', color: TILE, description: 'NoSQL document database' },
+        { name: 'Redis', icon: 'https://cdn.jsdelivr.net/gh/devicons/devicon/icons/redis/redis-original.svg', color: TILE, description: 'In-memory data store' },
         { name: 'Valkey', icon: 'https://cdn.jsdelivr.net/gh/simple-icons/simple-icons/icons/valkey.svg', color: TILE, description: 'Redis-compatible cache' },
-        { name: 'ClickHouse', icon: 'https://cdn.jsdelivr.net/gh/simple-icons/simple-icons/icons/clickhouse.svg', color: TILE, description: 'Analytical database' }
+        { name: 'OpenSearch', icon: 'https://cdn.jsdelivr.net/gh/simple-icons/simple-icons/icons/opensearch.svg', color: TILE, description: 'Search & analytics engine' }
       ]
     },
     {
@@ -129,6 +132,7 @@ const InteractiveArchitecture = () => {
       color: 'bg-gradient-to-br from-cyan-50 to-sky-50',
       tools: [
         { name: 'Kafka', icon: 'https://cdn.jsdelivr.net/gh/simple-icons/simple-icons/icons/apachekafka.svg', color: TILE, description: 'Event streaming platform' },
+        { name: 'RabbitMQ', icon: 'https://cdn.jsdelivr.net/gh/devicons/devicon/icons/rabbitmq/rabbitmq-original.svg', color: TILE, description: 'Message broker' },
         { name: 'MinIO', icon: 'https://cdn.jsdelivr.net/gh/simple-icons/simple-icons/icons/minio.svg', color: TILE, description: 'S3-compatible object storage' },
         { name: 'Trino', icon: 'https://cdn.jsdelivr.net/gh/simple-icons/simple-icons/icons/trino.svg', color: TILE, description: 'Distributed SQL query engine' },
         { name: 'Spark', icon: 'https://cdn.jsdelivr.net/gh/simple-icons/simple-icons/icons/apachespark.svg', color: TILE, description: 'Large-scale data processing' }
@@ -139,6 +143,7 @@ const InteractiveArchitecture = () => {
       color: 'bg-gradient-to-br from-purple-50 to-fuchsia-50',
       tools: [
         { name: 'Airbyte', icon: 'https://cdn.jsdelivr.net/gh/simple-icons/simple-icons/icons/airbyte.svg', color: TILE, description: 'Data integration / ELT' },
+        { name: 'dbt', icon: 'https://cdn.jsdelivr.net/gh/simple-icons/simple-icons/icons/dbt.svg', color: TILE, description: 'Data transformation' },
         { name: 'Kubeflow', icon: 'https://cdn.jsdelivr.net/gh/cncf/artwork@main/projects/kubeflow/icon/color/kubeflow-icon.svg', color: TILE, description: 'Machine-learning workflows' },
         { name: 'Metabase', icon: 'https://cdn.jsdelivr.net/gh/simple-icons/simple-icons/icons/metabase.svg', color: TILE, description: 'Business intelligence' },
         { name: 'PostHog', icon: 'https://cdn.jsdelivr.net/gh/simple-icons/simple-icons/icons/posthog.svg', color: TILE, description: 'Product analytics' }
@@ -149,9 +154,9 @@ const InteractiveArchitecture = () => {
       color: 'bg-gradient-to-br from-rose-50 to-pink-50',
       tools: [
         { name: 'Headlamp', icon: 'https://cdn.jsdelivr.net/gh/cncf/artwork@main/projects/headlamp/icon/color/headlamp-icon-color.svg', color: TILE, description: 'Kubernetes web UI' },
+        { name: 'Strapi', icon: 'https://cdn.jsdelivr.net/gh/simple-icons/simple-icons/icons/strapi.svg', color: TILE, description: 'Headless CMS' },
         { name: 'Plane', icon: 'https://cdn.jsdelivr.net/gh/simple-icons/simple-icons/icons/plane.svg', color: TILE, description: 'Project management' },
-        { name: 'Penpot', icon: 'https://cdn.jsdelivr.net/gh/simple-icons/simple-icons/icons/penpot.svg', color: TILE, description: 'Design & prototyping' },
-        { name: 'DevSpace', icon: 'https://cdn.jsdelivr.net/gh/simple-icons/simple-icons/icons/devspace.svg', color: TILE, description: 'Inner-loop dev tooling' }
+        { name: 'Penpot', icon: 'https://cdn.jsdelivr.net/gh/simple-icons/simple-icons/icons/penpot.svg', color: TILE, description: 'Design & prototyping' }
       ]
     }
   ];

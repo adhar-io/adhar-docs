@@ -57,8 +57,7 @@ const TOOLS: Tool[] = [
   { name: "Trivy", category: "Security", logo: `${SI}/trivy.svg`, url: "https://trivy.dev", what: "Vulnerability scanning", usage: "Scans every image in the supply chain before it can run." },
   { name: "cert-manager", category: "Security", logo: cncf("cert-manager"), url: "https://cert-manager.io", what: "TLS certificate automation", usage: "Issues and renews the platform's certificates via Let's Encrypt." },
   { name: "Cosign", category: "Security", logo: null, url: "https://www.sigstore.dev", what: "Container image signing", usage: "Signs and verifies images; Kyverno gates what runs." },
-  { name: "SealedSecrets", category: "Security", logo: null, url: "https://sealed-secrets.netlify.app", what: "Encrypted secrets for GitOps", usage: "Lets you store encrypted secrets safely in Git when needed." },
-  { name: "SPIFFE / SPIRE", category: "Security", logo: cncf("spiffe"), url: "https://spiffe.io", what: "Workload identity", usage: "Cryptographic workload identity across the fleet." },
+  { name: "Kubescape", category: "Security", logo: cncf("kubescape"), url: "https://kubescape.io", what: "Security posture management", usage: "Scans the cluster against security frameworks and reports posture." },
 
   // ---- Observability ----
   { name: "Prometheus", category: "Observability", logo: `${DEV}/prometheus/prometheus-original.svg`, url: "https://prometheus.io", what: "Metrics collection", usage: "Cluster-local metrics for every platform component and your apps." },
@@ -68,7 +67,7 @@ const TOOLS: Tool[] = [
   { name: "Mimir", category: "Observability", logo: `${DEV}/grafana/grafana-original.svg`, url: "https://grafana.com/oss/mimir/", what: "Long-term metrics", usage: "Scalable, multi-cluster metric storage — the observability hub." },
   { name: "Grafana Alloy", category: "Observability", logo: `${DEV}/grafana/grafana-original.svg`, url: "https://grafana.com/oss/alloy/", what: "OpenTelemetry collector", usage: "The single agent shipping metrics, logs, and traces to the hub." },
   { name: "OpenTelemetry", category: "Observability", logo: `${SI}/opentelemetry.svg`, url: "https://opentelemetry.io", what: "Instrumentation standard", usage: "The vendor-neutral collection contract across the platform." },
-  { name: "Jaeger", category: "Observability", logo: `${SI}/jaeger.svg`, url: "https://www.jaegertracing.io", what: "Distributed tracing", usage: "Trace analysis and visualization." },
+  { name: "Beyla", category: "Observability", logo: `${DEV}/grafana/grafana-original.svg`, url: "https://grafana.com/oss/beyla/", what: "eBPF auto-instrumentation", usage: "Generates traces and metrics from running services with no code changes." },
   { name: "Hubble", category: "Observability", logo: `${SI}/cilium.svg`, url: "https://github.com/cilium/hubble", what: "Network observability", usage: "Live flow-level visibility into every network connection (Cilium)." },
   { name: "Pyroscope", category: "Observability", logo: `${DEV}/grafana/grafana-original.svg`, url: "https://grafana.com/oss/pyroscope/", what: "Continuous profiling", usage: "Always-on performance profiling." },
   { name: "Pixie", category: "Observability", logo: cncf("pixie"), url: "https://px.dev", what: "eBPF auto-instrumentation", usage: "Instant, code-free Kubernetes observability." },
@@ -83,11 +82,10 @@ const TOOLS: Tool[] = [
   { name: "Argo Workflows", category: "Delivery", logo: `${SI}/argo.svg`, url: "https://argoproj.github.io/workflows/", what: "Workflow engine", usage: "Container-native workflow and job orchestration." },
   { name: "Argo Rollouts", category: "Delivery", logo: `${SI}/argo.svg`, url: "https://argoproj.github.io/rollouts/", what: "Progressive delivery", usage: "Canary and blue-green releases for your apps." },
   { name: "Argo Events", category: "Delivery", logo: `${SI}/argo.svg`, url: "https://argoproj.github.io/events/", what: "Event-driven automation", usage: "Triggers workflows and pipelines from events." },
-  { name: "FluxCD", category: "Delivery", logo: cncf("flux"), url: "https://fluxcd.io", what: "GitOps toolkit", usage: "Complementary GitOps reconciliation primitives." },
   { name: "Kargo", category: "Delivery", logo: null, url: "https://kargo.io", what: "GitOps promotion", usage: "Promotes changes across environments (dev → staging → prod)." },
   { name: "Buildpacks", category: "Delivery", logo: cncf("buildpacks"), url: "https://buildpacks.io", what: "Source-to-image builds", usage: "Builds container images from source with no Dockerfile (kpack)." },
   { name: "Knative", category: "Delivery", logo: `${SI}/knative.svg`, url: "https://knative.dev", what: "Serverless runtime", usage: "Kubernetes-based serverless for scale-to-zero workloads." },
-  { name: "OpenFaaS", category: "Delivery", logo: `${SI}/openfaas.svg`, url: "https://www.openfaas.com", what: "Functions as a Service", usage: "Deploy event-driven functions on the platform." },
+  { name: "OpenFunction", category: "Delivery", logo: null, url: "https://openfunction.dev", what: "Functions as a Service", usage: "Deploy event-driven functions on the platform." },
   { name: "DAPR", category: "Delivery", logo: `${SI}/dapr.svg`, url: "https://dapr.io", what: "Distributed app runtime", usage: "Sidecar building blocks: state, pub/sub, service invocation." },
   { name: "KEDA", category: "Delivery", logo: cncf("keda"), url: "https://keda.sh", what: "Event-driven autoscaling", usage: "Scales workloads on external event sources." },
   { name: "K6", category: "Delivery", logo: `${SI}/k6.svg`, url: "https://k6.io", what: "Load testing", usage: "Modern load and performance testing." },
@@ -116,7 +114,6 @@ const TOOLS: Tool[] = [
   { name: "Backstage", category: "Developer Experience", logo: `${SI}/backstage.svg`, url: "https://backstage.io", what: "Developer portal", usage: "Powers the Adhar Console — catalog, golden paths, and scorecards." },
   { name: "Headlamp", category: "Developer Experience", logo: cncf("headlamp"), url: "https://headlamp.dev", what: "Kubernetes web UI", usage: "A friendly UI over cluster resources." },
   { name: "Coder", category: "Developer Experience", logo: `${SI}/coder.svg`, url: "https://coder.com", what: "Cloud development environments", usage: "Browser-based, reproducible dev workspaces." },
-  { name: "DevSpace", category: "Developer Experience", logo: null, url: "https://www.devspace.sh", what: "Inner-loop dev tooling", usage: "Fast develop-in-cluster workflows." },
   { name: "Plane", category: "Developer Experience", logo: `${SI}/plane.svg`, url: "https://plane.so", what: "Project management", usage: "Issue tracking and planning on the platform." },
   { name: "Penpot", category: "Developer Experience", logo: `${SI}/penpot.svg`, url: "https://penpot.app", what: "Design & prototyping", usage: "Open-source design and prototyping." },
 ];
@@ -208,7 +205,7 @@ const Integrations = () => {
 
           <Reveal className="mt-10 flex flex-wrap justify-center gap-3" delay={80}>
             {[
-              { value: "91", label: "packages" },
+              { value: "102", label: "packages" },
               { value: `${TOOLS.length}+`, label: "tools" },
               { value: "7", label: "categories" },
               { value: "100%", label: "open source" },
