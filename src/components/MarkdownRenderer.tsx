@@ -5,6 +5,8 @@ import rehypeHighlight from "rehype-highlight";
 import rehypeSlug from "rehype-slug";
 import { Check, Copy, Link as LinkIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { DIAGRAMS } from "@/components/docs/diagrams";
+import Terminal from "@/components/docs/Terminal";
 
 interface MarkdownRendererProps {
   content: string;
@@ -165,12 +167,42 @@ const MarkdownRenderer = ({ content, className }: MarkdownRendererProps) => {
             const codeEl: any = Array.isArray(children) ? children[0] : children;
             const codeClassName: string | undefined = codeEl?.props?.className;
             const codeChildren: ReactNode = codeEl?.props?.children;
+            // A ```diagram fence names an SVG architecture diagram rather than
+            // holding code; render the component instead of a code block.
+            if (/\blanguage-diagram\b/.test(codeClassName || "")) {
+              const key = nodeToText(codeChildren).trim();
+              const Diagram = DIAGRAMS[key];
+              if (Diagram) return <Diagram />;
+            }
+            // A ```terminal fence holds real CLI output; render it in terminal
+            // chrome rather than as a plain code block.
+            if (/\blanguage-terminal\b/.test(codeClassName || "")) {
+              return <Terminal content={nodeToText(codeChildren)} />;
+            }
             return <CodeBlock className={codeClassName}>{codeChildren}</CodeBlock>;
           },
           code: ({ className, children }) => {
             // Inline only — block code is intercepted by `pre`
             return <code className={className}>{children}</code>;
           },
+          // Screenshots and figures. `title` (the quoted part of a markdown
+          // image) becomes the caption: ![alt](/img/x.png "Caption text")
+          img: ({ src, alt, title }) => (
+            <figure className="my-7">
+              <img
+                src={typeof src === "string" ? src : undefined}
+                alt={alt || ""}
+                loading="lazy"
+                decoding="async"
+                className="w-full rounded-xl border border-border/60 bg-card"
+              />
+              {(title || alt) && (
+                <figcaption className="mt-2 text-center text-[13px] text-muted-foreground">
+                  {title || alt}
+                </figcaption>
+              )}
+            </figure>
+          ),
         }}
       >
         {content}

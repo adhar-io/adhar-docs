@@ -14,6 +14,14 @@
   line-height: 1.65;
 }
 .docs-prose pre code.hljs { background: transparent; padding: 0; }
+/* ASCII diagrams live in ```text fences and are drawn with box-drawing glyphs
+   (─ │ ┌ ┤ …). Those only join into continuous lines when rows sit flush, so
+   the 1.65 leading above breaks them into dashes. Tighten it for text blocks
+   only — real code keeps the readable spacing. */
+.docs-prose pre:has(> code.language-text),
+.docs-prose pre > code.language-text {
+  line-height: 1.12;
+}
 .docs-prose code:not(pre code) {
   background: hsl(var(--muted) / 0.6);
   color: hsl(var(--foreground));

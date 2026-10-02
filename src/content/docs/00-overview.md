@@ -7,7 +7,7 @@ path: "/docs"
 
 # Overview
 
-**Adhar** is an open **Internal Developer Platform (IDP)**. One command — `adhar up` — provisions a complete, production-grade platform of **91 open-source packages** on your laptop or on any of six clouds. The name comes from the Sanskrit **अधार (Adhāra) — "foundation."**
+**Adhar** is an open **Internal Developer Platform (IDP)**. One command — `adhar up` — provisions a complete, production-grade platform of **102 open-source packages** on your laptop or on any of six clouds. The name comes from the Sanskrit **अधार (Adhāra) — "foundation."**
 
 This page is the map. It explains the problem Adhar exists to solve, the mental model you need before the rest of the documentation makes sense, and exactly which page to open next depending on why you are here.
 
@@ -33,31 +33,29 @@ Concretely, that means a developer asks for a PostgreSQL database by applying a 
 | **What it is** | An open-source Internal Developer Platform you run yourself |
 | **How you install it** | `adhar up` — one command, roughly ten minutes locally |
 | **Built on** | Kubernetes, Cilium, ArgoCD, Gitea, Crossplane, Keycloak |
-| **What it ships** | 100+ curated open-source packages, delivered by GitOps |
+| **What it ships** | 102 curated open-source packages, delivered by GitOps |
 | **Where it runs** | Kind (local), AWS, Azure, GCP, DigitalOcean, Civo, your own hosts |
 | **How you change it** | A Git commit, then `adhar upgrade` |
 | **Licence** | Apache 2.0 throughout — no proprietary tier, no managed-only features |
 
 ## How it works, in one paragraph
 
-`adhar up` bootstraps a strictly ordered foundation — **Cilium** (CNI + Gateway API) → **ArgoCD** → **Gitea** — then seeds in-cluster Git repositories and hands control to GitOps. A single ArgoCD **ApplicationSet** deploys every enabled package from Git, and a **Crossplane v2** control plane exposes namespaced, self-service infrastructure APIs. From that moment, every change to the platform is a reviewable Git commit. The same architecture runs on a laptop (Kind), on one production cluster, or on a control plane governing a fleet of workload clusters.
+`adhar up` builds the platform in two moves. First it bootstraps a minimal foundation in an order that cannot be rearranged — **Cilium** for networking and the Gateway API, then **ArgoCD** to reconcile, then **Gitea** to hold the truth — and seeds that in-cluster Git with the platform's own definition. Then it steps out of the way: a single ArgoCD **ApplicationSet** reads the repository and deploys every enabled package, while a **Crossplane v2** control plane turns databases, caches, and buckets into ordinary namespaced Kubernetes resources that a developer can request without a ticket. After that handoff the platform maintains itself — ArgoCD reconciles the live cluster against Git roughly every minute, so a commit is the only thing that can change it, and the same model runs unchanged on a laptop under Kind, on one production cluster, or on a control plane governing a fleet.
 
 ## The mental model
 
-Two pictures are enough to read the rest of these docs. The top half is the **write path** — how any change reaches the cluster. The bottom half is the **layer stack** — how the pieces are arranged.
+Two pictures are enough to read the rest of these docs. The first is the **write path** — how any change reaches the cluster, and how you watch it land. The second is the **layer stack** — how the pieces sit on top of each other.
 
-```text
-    you ──commit──▶  Gitea  ──▶  ArgoCD ApplicationSet ──▶  cluster
-     ▲            (in-cluster Git:                              │
-     │             the only write path)                         │
-     └──── Console · CLI · Grafana · Hubble ◀──── observe ───────┘
+**The write path** — one way in, one way to observe:
 
-   ┌──────────────────────────────────────────────────────────────┐
-   │ L3  Developer Experience   Console · CLI · Headlamp · Grafana│
-   │ L2  Platform Services      91 GitOps packages                │
-   │ L1  Cluster Foundation     Cilium · ArgoCD · Gitea·Crossplane│
-   │ L0  Infrastructure         Kind · AWS · Azure · GCP · DO·Civo│
-   └──────────────────────────────────────────────────────────────┘
+```diagram
+write-path
+```
+
+**The layer stack** — each layer depends only on the one below it:
+
+```diagram
+layer-stack
 ```
 
 Three invariants follow from that picture, and they explain most of Adhar's behaviour:
