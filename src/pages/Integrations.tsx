@@ -205,7 +205,7 @@ const Integrations = () => {
 
           <Reveal className="mt-10 flex flex-wrap justify-center gap-3" delay={80}>
             {[
-              { value: "102", label: "packages" },
+              { value: "100+", label: "packages" },
               { value: `${TOOLS.length}+`, label: "tools" },
               { value: "7", label: "categories" },
               { value: "100%", label: "open source" },

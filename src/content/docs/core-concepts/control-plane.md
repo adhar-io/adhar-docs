@@ -67,18 +67,8 @@ spec:
 
 > The composition selector lives at **`spec.crossplane.compositionSelector`** (the v2 reserved stanza), not `spec.compositionSelector`.
 
-```text
-  developer                Kubernetes API         Crossplane                provider
-  ─────────                ──────────────         ──────────                ────────
-  kubectl apply  ───▶  admit (RBAC + schema) ──▶ select Composition ──▶ create/converge
-  CompositeDatabase         │                     by labels                 RDS / CloudSQL / CNPG
-  (team namespace)          │                        │                          │
-                            │                     run function pipeline         │ continuous
-                            │                     → managed resources +         │ reconcile
-                            │                       connection Secret ◀─────────┘
-                            ▼                        │
-                     developer mounts  ◀─────────────┘  (Secret in the team namespace)
-                     the connection Secret
+```diagram
+cc-request-life
 ```
 
 Change `provider: gcp` and the same manifest lands on Cloud SQL; locally it renders a CNPG cluster — the application never changes. Deleting the XR cascades to the managed resources (retention governed by `managementPolicies`).

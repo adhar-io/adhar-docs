@@ -53,7 +53,7 @@ const marquee = [
 ];
 
 const kubeMetrics = [
-  { value: "102", label: "Integrations" },
+  { value: "100+", label: "Integrations" },
   { value: "7", label: "Categories" },
   { value: "100%", label: "Open source" },
   { value: "Multi", label: "Cloud" },

@@ -25,22 +25,15 @@ Everything below follows from seven principles:
 
 Each layer depends only on the one below it, and each has a defined customization surface.
 
-```text
-Layer 3 — Developer Experience
-    Adhar Console (Backstage) · Adhar CLI · Headlamp · Hubble UI · Grafana
-Layer 2 — Platform Services (91 GitOps packages)
-    Security · Observability · Delivery · Data · AI (opt-in)
-Layer 1 — Cluster Foundation (bootstrap, embedded manifests)
-    Cilium CNI + Gateway API · ArgoCD · Gitea · Crossplane control plane
-Layer 0 — Infrastructure Providers
-    Kind (local) · AWS · Azure · GCP · DigitalOcean · Civo · Custom
+```diagram
+cc-layer-stack
 ```
 
 | Layer | What it is | Managed by | You customize with |
 |---|---|---|---|
 | **L0 — Infrastructure** | Clusters, networks, load balancers, storage | Provider interface + Crossplane | Provider config, Compositions |
 | **L1 — Foundation** | CNI, Gateway, GitOps engine, Git server, control plane | AdharPlatform controller (embedded manifests) | `AdharPlatform` spec, HA flags |
-| **L2 — Platform Services** | 91 packages across seven categories | ArgoCD ApplicationSet from Gitea | Package toggles, values, custom packages |
+| **L2 — Platform Services** | 100+ packages across eight categories | ArgoCD ApplicationSet from Gitea | Package toggles, values, custom packages |
 | **L3 — Developer Experience** | Console, CLI, dashboards, golden-path templates | GitOps packages + CLI releases | Templates, Backstage plugins |
 
 ## Foundation components
@@ -61,20 +54,8 @@ Pinned at bootstrap and applied with Server-Side Apply:
 
 `adhar up` is split into two phases, each gated on `AdharPlatform.status`, which makes the whole process **idempotent, all-or-retry, and resumable**.
 
-```text
-        PHASE 1 — Imperative (deterministic, embedded manifests)
-        ─────────────────────────────────────────────────────────
-        create cluster ─▶ CRDs + controller ─▶ Gateway API CRDs
-              ─▶ Cilium ─▶ Cilium Gateway ─▶ ArgoCD ─▶ Gitea ─▶ Crossplane
-              ─▶ seed Git repos (packages · environments · templates)
-              ─▶ apply the ApplicationSet + repo credentials
-                                   │
-        ══════════════ handoff gate: RepositoriesCreated ═════════════
-                                   │
-        PHASE 2 — Declarative (GitOps, continuous)
-        ─────────────────────────────────────────────────────────
-        ArgoCD syncs every enabled package from Git ── forever ──▶
-        (self-heal on; drift is reverted within ~1 minute)
+```diagram
+cc-bootstrap-phases
 ```
 
 Why two phases (per ADR-0001): a pure-GitOps system can't install its own prerequisites. Phase 1 lays exactly enough foundation — network, GitOps engine, Git server, control plane — for Phase 2 to take over. Because each phase is gated on status flags, an interrupted run resumes from the pending gate: locally the controller is ephemeral (it exits on convergence), so you just re-run `adhar up`; in production the in-cluster controller self-heals continuously.
@@ -89,19 +70,15 @@ After bootstrap, **Git is the only write path.** Three repos live in the in-clus
 | `adhar/environments` | Per-environment package sets (`local`, `development`, `staging`, `production`) | ApplicationSet generators |
 | `adhar/templates` | Service scaffolding templates | CLI + Console golden paths |
 
-```text
-   git commit ─▶ Gitea ─▶ ArgoCD ApplicationSet ─▶ Application per enabled package
-                                                          │
-                                              sync ──▶ cluster state
-                                                          │
-                        drift? ◀── self-heal reverts it ──┘   (kubectl edit is undone)
+```diagram
+write-path
 ```
 
 A single ArgoCD **ApplicationSet** deploys every package whose `enabled` flag is `"true"`. Enabling a package is a one-line Git change followed by `adhar upgrade`.
 
 ## The package model
 
-The catalogue is **91 packages** wired as **94 ApplicationSet entries** (a few ship variants). The ApplicationSet is **selected by provider**:
+The catalogue is **100+ packages** wired as a matching number of **ApplicationSet entries** (a few ship variants). The ApplicationSet is **selected by provider**:
 
 - **Kind / unset** → the *local* ApplicationSet — a curated **32** enabled (a single node can't run the full catalogue).
 - **Any cloud / on-prem** → the *production* ApplicationSet — **76** enabled.
@@ -120,19 +97,8 @@ A hard invariant: **application workloads run only on data planes; the control p
 - **Control plane** (the management cluster) — the fleet brain. Runs GitOps (ArgoCD, Gitea), IaC (Crossplane), identity (Keycloak), the secrets root (OpenBao + ESO), the observability hub (Grafana + Mimir/Loki/Tempo), the shared registry (Harbor), and fleet controllers. Hosts no application workloads.
 - **Data plane** (a workload cluster) — where applications run. Runs a thin agent profile: Cilium, metrics-server, Kyverno, Alloy collectors (shipping to the hub), an ESO agent, a SPIRE agent, and a local Gateway. Its applications are delivered by the control plane's ArgoCD.
 
-```text
-        ┌──────────────────────── CONTROL PLANE (management cluster) ────────────────────────┐
-        │  GitOps: ArgoCD · Gitea      IaC: Crossplane      Identity: Keycloak (global OIDC)   │
-        │  Secrets root: OpenBao + ESO    Observability hub: Grafana · Mimir · Loki · Tempo    │
-        │  Registry/catalog: Harbor      Fleet controllers: AdharPlatform · DataPlane · Kargo  │
-        │                              (runs NO application workloads)                         │
-        └───────────────┬───────────────────────────┬───────────────────────────┬────────────┘
-             deploys via │ ArgoCD          ships telemetry ▲            provisions │ Crossplane
-                         ▼                               │ (Alloy)                 ▼
-        ┌──────────── DATA PLANE (dev) ────────────┐            ┌──────────── DATA PLANE (prod) ───────────┐
-        │  Your apps + thin agent profile:         │    …       │  Your apps + thin agent profile:          │
-        │  Cilium · Kyverno · Alloy · ESO · SPIRE  │            │  Cilium · Kyverno · Alloy · ESO · SPIRE   │
-        └──────────────────────────────────────────┘            └───────────────────────────────────────────┘
+```diagram
+cc-fleet-topology
 ```
 
 A first-class **`DataPlane` API** (`platform.adhar.io/v1alpha1`) manages the whole lifecycle of a workload cluster — provision, register with ArgoCD, apply the thin-agent profile, join the mesh, wire telemetry — reported through status conditions (`InfraReady`, `Registered`, `AgentsReady`, `MeshJoined`, `Ready`).

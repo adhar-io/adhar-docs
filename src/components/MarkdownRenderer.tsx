@@ -5,7 +5,7 @@ import rehypeHighlight from "rehype-highlight";
 import rehypeSlug from "rehype-slug";
 import { Check, Copy, Link as LinkIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { DIAGRAMS } from "@/components/docs/diagrams";
+import { DIAGRAMS } from "@/components/docs/diagrams/index";
 import Terminal from "@/components/docs/Terminal";
 
 interface MarkdownRendererProps {

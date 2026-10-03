@@ -26,21 +26,8 @@ Run Adhar on AWS with EC2 instances + kubeadm (default) or managed **EKS** (opt-
 
 ## The three identities
 
-```text
-   your machine                        AWS account
-  ┌──────────────┐   EC2 / ELB / quota / STS
-  │ adhar up     │ ─────────────────────────────▶  VPC, subnets, IGW,
-  │ (identity 1) │                                 SG, key pair, EC2
-  └──────────────┘
-          │ kubeadm over SSH, then Helm on the control plane
-          ▼
-  ┌───────────────────────── cluster ─────────────────────────┐
-  │  cloud-controller-manager + EBS CSI   (identity 2)        │
-  │    ← kube-system/aws-secret, or the node instance profile │
-  │                                                           │
-  │  external-dns + cert-manager DNS-01   (identity 3)        │
-  │    ← STATIC Route 53 keys, read from a Secret             │
-  └───────────────────────────────────────────────────────────┘
+```diagram
+pv-aws-ownership
 ```
 
 Identity 1 never calls Route 53 — DNS is entirely an in-cluster concern. Identity 2 is what turns nodes usable: until the cloud-controller-manager runs, every node keeps the `node.cloudprovider.kubernetes.io/uninitialized:NoSchedule` taint and nothing schedules.

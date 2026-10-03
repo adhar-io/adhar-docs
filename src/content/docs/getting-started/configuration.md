@@ -27,39 +27,21 @@ Keeping that line clear is the whole point of the config file. Infrastructure sh
 
 Each layer answers a different question, and they resolve from the outside in when you name an environment with `--env`:
 
-```text
-  globalSettings        "What is true for the whole platform?"
-        │                host name, ports, HA mode, ACME email, DNS backend
-        │                — flat; nothing below overrides it
-        ▼
-  providers             "Which cloud, and how do we authenticate to it?"
-        │                type, region, credentials, provider-specific config
-        │                — one is primary; that one hosts the management cluster
-        ▼
-  environmentTemplates  "What do several environments have in common?"
-        │                reusable clusterConfig / coreServices / addons / autoscaling
-        ▼
-  environments          "What is specific to THIS one?"
-                         dev, staging, production — the thing --env names
+```diagram
+config-layers
 ```
 
 Only the bottom two layers overlap, so "precedence" is really one question: when a template and an environment both set something, which wins?
 
-```text
-  resolution of `--env dev`
-  ─────────────────────────────────────────────────────────────────
-  provider     env.provider  >  the provider with primary: true
-                             >  the first provider in the map
-  region       env.region    >  providers.<name>.region
-  type         env.type      >  "non-production"
-
-  clusterConfig   [ …template entries… , …environment entries… ]
-                    ▲ appended in that order, BOTH kept in the list
-  coreServices    environment's block per service; template fills gaps
-  addons          [ …template addons… , …environment addons… ]
-  autoscaling     environment's WHOLE block, else the template's
-                  (no field-by-field merge — see the pitfall below)
-```
+| Field | How `--env dev` resolves it |
+|---|---|
+| `provider` | `env.provider` → else the provider with `primary: true` → else the first provider in the map |
+| `region` | `env.region` → else `providers.<name>.region` |
+| `type` | `env.type` → else `"non-production"` |
+| `clusterConfig` | `[ …template entries… , …environment entries… ]` — appended in that order, **both kept in the list** |
+| `coreServices` | The environment's block per service; the template fills gaps |
+| `addons` | `[ …template addons… , …environment addons… ]` |
+| `autoscaling` | The environment's **whole block**, else the template's — no field-by-field merge (see the pitfall below) |
 
 Inspect the result rather than guessing: `adhar config view` prints the fully resolved configuration, and `adhar up -f config.yaml --env dev --dry-run` prints the resolved provider, region, type and the whole `clusterConfig` list **in resolution order**, then exits without creating anything.
 

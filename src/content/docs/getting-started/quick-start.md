@@ -47,21 +47,8 @@ A nine-stage checklist streams to your terminal. The first three stages run in t
 
 Adhar bootstraps **imperatively** only far enough to have a place to put Git, then hands everything else to **GitOps**:
 
-```text
-adhar up
-   │
-   ├─ 1. Create the Kind node `adhar`
-   │        default CNI off · kube-proxy off · host 8443/8080 → 30443/30080
-   ├─ 2. Install the Adhar CRDs and start the controller
-   ├─ 3. Foundation, from manifests embedded in the binary (no network fetch):
-   │        Gateway API CRDs ─▶ Cilium ─▶ Gateway ─▶ [CNPG, if --ha] ─▶ ArgoCD ─▶ Gitea
-   ├─ 4. Seed Git: create and fill two repos in the `adhar` Gitea org
-   │        `packages`  (every package's manifests, ~62 MB)
-   │        `environments`  (which packages each environment enables)
-   ├─ 5. Apply the ArgoCD ApplicationSet  (101 entries; 17 enabled locally)
-   ├─ 6. Reconcile Crossplane — deliberately AFTER the ApplicationSet, so its
-   │        slow convergence can never block app delivery
-   └─ 7. ArgoCD syncs every enabled package from Git  ◀── GitOps owns it now
+```diagram
+gd-adhar-up-stages
 ```
 
 Two things about that diagram are quick to skip past, and both are worth internalising.

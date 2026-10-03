@@ -7,7 +7,7 @@ path: "/docs"
 
 # Overview
 
-**Adhar** is an open **Internal Developer Platform (IDP)**. One command — `adhar up` — provisions a complete, production-grade platform of **102 open-source packages** on your laptop or on any of six clouds. The name comes from the Sanskrit **अधार (Adhāra) — "foundation."**
+**Adhar** is an open **Internal Developer Platform (IDP)**. One command — `adhar up` — provisions a complete, production-grade platform of **100+ open-source packages** on your laptop or on any of six clouds. The name comes from the Sanskrit **अधार (Adhāra) — "foundation."**
 
 This page is the map. It explains the problem Adhar exists to solve, the mental model you need before the rest of the documentation makes sense, and exactly which page to open next depending on why you are here.
 
@@ -33,7 +33,7 @@ Concretely, that means a developer asks for a PostgreSQL database by applying a 
 | **What it is** | An open-source Internal Developer Platform you run yourself |
 | **How you install it** | `adhar up` — one command, roughly ten minutes locally |
 | **Built on** | Kubernetes, Cilium, ArgoCD, Gitea, Crossplane, Keycloak |
-| **What it ships** | 102 curated open-source packages, delivered by GitOps |
+| **What it ships** | 100+ curated open-source packages, delivered by GitOps |
 | **Where it runs** | Kind (local), AWS, Azure, GCP, DigitalOcean, Civo, your own hosts |
 | **How you change it** | A Git commit, then `adhar upgrade` |
 | **Licence** | Apache 2.0 throughout — no proprietary tier, no managed-only features |

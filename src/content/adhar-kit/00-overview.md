@@ -43,31 +43,8 @@ There are 23 accessors: 22 for gated modules (`getMetrics()`, `getSecurity()`, `
 
 Above those accessors sit the shortcuts. `adhar.safe(name, work, fallback)` is tracing plus a circuit breaker plus a fallback in one call. `adhar.cached(cache, key, type, loader)` is the whole cache-aside pattern. `adhar.transactional(...)`, `adhar.publish(...)`, `adhar.hasPermission(...)`, `adhar.chat(...)` collapse a collaborator plus its ceremony into a method call.
 
-```text
-        ┌──────────────────────────────────────────────────┐
-        │               YOUR APPLICATION CODE              │
-        │        OrderService · PaymentService · …         │
-        └───────────────────────┬──────────────────────────┘
-                                │ adhar.safe(…)   adhar.cached(…)
-                                │ adhar.publish(…) adhar.save(…)
-        ┌───────────────────────▼──────────────────────────┐
-        │                    AdharFacade                   │
-        │   framework-neutral · 23 accessors · shortcuts   │
-        ├──────────────────────────────────────────────────┤
-        │  LoggingFacade  MetricsFacade  TracingFacade     │
-        │  CacheFacade  SecurityFacade  MessagingFacade …  │
-        │        (lazy, gated by AdharModuleAccess)        │
-        ├──────────────────────────────────────────────────┤
-        │              FRAMEWORK ADAPTER LAYER             │
-        │  Spring · Quarkus · Micronaut · Helidon · Vert.x │
-        └───────────────────────┬──────────────────────────┘
-                                │
-        ┌───────────────────────▼──────────────────────────┐
-        │                  INFRASTRUCTURE                  │
-        │  Kafka · RabbitMQ · JPA/Postgres · Caffeine      │
-        │  OpenTelemetry · Micrometer/Prometheus           │
-        │  Kubernetes · Dapr · OAuth2/JWT providers        │
-        └──────────────────────────────────────────────────┘
+```diagram
+kit-facade-layers
 ```
 
 The important line in that diagram is the adapter layer. Your code sits above it and never names a framework type; only the adapter below it does. That is what makes the portability claim real rather than aspirational.

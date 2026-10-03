@@ -25,29 +25,8 @@ Most libraries that call themselves framework-agnostic still put framework types
 
 `AdharFacade` carries **no DI annotations and no compile-time dependency on any framework**. It is a plain class. Each supported runtime ships a thin adapter in its own package (`starter.spring`, `starter.quarkus`, `starter.micronaut`, `starter.helidon`, `starter.vertx`) whose only job is to hand that plain class to the container. The adapters live in `adhar-kit-starter` and every framework dependency they need is declared `<optional>true</optional>`, so adding the starter to a Quarkus app does not drag Spring onto your classpath.
 
-```text
-   ┌─────────────────────────────────────────────────────────────┐
-   │  YOUR CODE — identical on all five runtimes                 │
-   │  adhar.safe("charge", () -> gateway.charge(x), () -> queue) │
-   └───────────────────────────┬─────────────────────────────────┘
-                               │
-   ┌───────────────────────────▼─────────────────────────────────┐
-   │  AdharFacade  (plain class, no DI annotations, singleton)   │
-   │  → the SAME instance whichever adapter produced it          │
-   └───────────────────────────┬─────────────────────────────────┘
-        ┌──────────┬───────────┼───────────┬──────────┐
-        │          │           │           │          │
-   ┌────▼────┐┌────▼────┐┌─────▼────┐┌─────▼────┐┌────▼─────┐
-   │ Spring  ││ Quarkus ││Micronaut ││ Helidon  ││  Vert.x  │
-   │ @Auto-  ││  CDI    ││ @Factory ││CDI / SE  ││ static + │
-   │ config  ││@Produces││@Singleton││ bootstrap││  shared  │
-   └────┬────┘└────┬────┘└─────┬────┘└─────┬────┘└────┬─────┘
-        └──────────┴───────────┼───────────┴──────────┘
-                               │
-   ┌───────────────────────────▼─────────────────────────────────┐
-   │  FrameworkDetector — probes the classpath once, caches it   │
-   │  SPRING_BOOT → QUARKUS → MICRONAUT → HELIDON → VERTX → OTHER│
-   └─────────────────────────────────────────────────────────────┘
+```diagram
+kit-framework-adapters
 ```
 
 ## Shared versus adapter-specific

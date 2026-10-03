@@ -11,32 +11,20 @@ The 6 D's are Adhar's model for the full cloud-native lifecycle: **six named sta
 
 The six are **Define, Design, Develop, Deliver, Discover, Decide**. The last feeds the first, which is what makes it a loop rather than a pipeline.
 
-```text
-       ┌──▶ Define ──▶ Design ──▶ Develop ──▶ Deliver ──▶ Discover ──┐
-       │     (what)     (how)      (build)     (ship)     (observe)  │
-       │                                                             ▼
-       └───────────────────────  Decide  ◀───────────────────────────┘
-                              (learn & steer)
+```diagram
+cc-lifecycle-loop
 ```
 
 ## Why the framework earns its place
 
 A framework that only renames familiar activities is overhead. This one does two jobs.
 
-**It gives the catalogue an organising principle.** Adhar ships 91 packages. "Which of these do I need?" is unanswerable as a list of technologies and tractable as a list of outcomes — every package serves at least one D, and a D with no packages behind it is a gap in the platform, not a gap in your process.
+**It gives the catalogue an organising principle.** Adhar ships over a hundred packages. "Which of these do I need?" is unanswerable as a list of technologies and tractable as a list of outcomes — every package serves at least one D, and a D with no packages behind it is a gap in the platform, not a gap in your process.
 
 **It names the handoffs.** Most delivery pain is not inside a stage; it is at the boundary between two — a design nobody encoded, a deployment nobody can trace to a commit, a dashboard nobody reads. Adhar's position is that **every handoff should be a reviewable artifact in Git**, not a document or a conversation.
 
-```text
-  Define      Design      Develop     Deliver     Discover    Decide
-    │           │            │           │           │           │
-    ▼           ▼            ▼           ▼           ▼           ▼
- catalog     XRD +        source +    signed      metrics     budgets,
- entry +     policy       tests in    image +     logs,       scorecards,
- Composite   guardrail    Git         Argo CD     traces,     roadmap
- Project                              Application cost        change
-    └───────────┴────────────┴───────────┴───────────┴───────────┘
-          every arrow is an artifact you can review and revert
+```diagram
+cc-handoff-artifacts
 ```
 
 ## At a glance
@@ -118,14 +106,8 @@ adhar push api                 # the full build → sign → deploy path, on dem
 
 Deliver is the outer loop, and it is the stage Adhar automates most completely. The chain is: build, scan, sign, store, admit, deploy, promote.
 
-```text
-  git push ─▶ Tekton + buildpacks ─▶ Cosign sign ─▶ Harbor
-                                                      │
-                            Kyverno admits ◀──────────┘
-                            only signed images
-                                   │
-                    ArgoCD ─▶ Argo Rollouts ─▶ Kargo promotion
-                    (sync)    (canary / blue-green)  (dev → test → prod)
+```diagram
+cc-deliver-chain
 ```
 
 Deployment itself is declarative. `adhar application deploy --repo …` creates a `CompositeApplication`, and so does the Console's create wizard — the same object either way, with dev auto-syncing and later environments promoted through Kargo.

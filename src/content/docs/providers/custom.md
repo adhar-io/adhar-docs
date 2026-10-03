@@ -31,16 +31,8 @@ On a cloud provider, conformance is a property of the cluster the cloud hands yo
 
 Re-running against hosts that already form the cluster *is* supported. Every step is idempotent: node prep is guarded by a completion marker, `kubeadm init` is skipped on an initialised master, and a worker already in the node list is skipped rather than re-joined. Retries are safe, and adding hosts to `workerIPs` grows the cluster rather than rebuilding it.
 
-```text
-  you own                          adhar owns
- ┌───────────────────────┐        ┌──────────────────────────────┐
- │ the machines          │        │ containerd + kubeadm on each │
- │ the network & firewall│  SSH   │ kubeadm init / join / reset  │
- │ DNS, certificates     │ ─────▶ │ Cilium (CNI + Gateway)       │
- │ load balancing        │        │ local-path StorageClass      │
- │ real (replicated)     │        │ the whole platform stack     │
- │   storage             │        │                              │
- └───────────────────────┘        └──────────────────────────────┘
+```diagram
+pv-custom-ownership
 ```
 
 ### Host requirements

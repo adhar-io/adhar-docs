@@ -2,7 +2,7 @@ import { useMemo, useState, useEffect } from "react";
 import { Link, useLocation } from "@tanstack/react-router";
 import {
   Search, ChevronRight, BookOpen, Rocket, Package, Coffee, Layers,
-  GraduationCap, Code2, Shield, Settings, Sparkles, ArrowRight, Hash,
+  GraduationCap, Code2, Shield, Settings, Sparkles, ArrowRight, Hash, Compass,
 } from "lucide-react";
 import Navigation from "@/components/landing/Navigation";
 import Footer from "@/components/landing/Footer";
@@ -30,6 +30,7 @@ const SECTION_ICON: Record<string, typeof BookOpen> = {
   "Guides": GraduationCap,
   "API Reference": Code2,
   "Core Concepts": Sparkles,
+  "Platform Engineering": Compass,
   "Security": Shield,
   "Operations": Settings,
 };

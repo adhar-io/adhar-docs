@@ -157,29 +157,8 @@ export DIGITALOCEAN_ACCESS_TOKEN="dop_v1_…"
 
 What happens, measured on the 3-worker verified run:
 
-```text
-  preflight ● credentials and API access
-       │
-       ▼
-  VPC + firewall + SSH key
-       │
-       ▼
-  4 droplets created and PREPARED IN PARALLEL
-  (containerd, pinned kubeadm stream, swap off,
-   Cilium data-path images pre-pulled in the background)
-       │
-       ▼
-  kubeadm init  (kube-proxy SKIPPED — Cilium replaces it)
-  kubeadm join  (nodes stay NotReady: no CNI yet, by design)
-       │
-       ▼
-  DO cloud-controller-manager + CSI installed over SSH
-       │
-       ▼  ~5 min: cluster serving, kubeconfig fetched over SSH
-  Gateway API CRDs → Cilium → Gateway → ArgoCD → Gitea →
-  Crossplane → seed platform/stack into Gitea
-       │
-       ▼  ~13 min: Completed Environment Provisioning
+```diagram
+pv-digitalocean-sequence
 ```
 
 During bootstrap the CLI also writes the kubeconfig to `~/.adhar/clusters/dev/kubeconfig` and merges it into `~/.kube/config` as context `adhar-dev`, creates the `adhar-dns-provider` Secret for external-dns and cert-manager, renders the stack for your domain (ClusterIssuers with the DigitalOcean DNS-01 solver; external-dns with `--provider=digitalocean --domain-filter=<host> --txt-owner-id=adhar-dev`), and applies the cloud Gateway as a `Service` of type LoadBalancer.

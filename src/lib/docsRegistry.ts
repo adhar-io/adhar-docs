@@ -129,6 +129,7 @@ export function buildRegistry(cfg: RegistryConfig): Registry {
     // Platform docs (/docs)
     "Getting Started",
     "Core Concepts",
+    "Platform Engineering",
     "Cloud Providers",
     "Operations",
     "Security",

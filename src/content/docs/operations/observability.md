@@ -33,37 +33,8 @@ Three decisions do most of the work.
 
 ### Signal flow
 
-```text
-  YOUR SERVICE                            PLATFORM COMPONENT
-    | OTLP :4317 grpc / :4318 http          | /metrics
-    | (traces + metrics + logs)             | (ServiceMonitor / PodMonitor)
-    v                                       v
- +-----------------------------------------------------------------+
- | Grafana Alloy    (agent on every node, every cluster)            |
- |   otelcol.receiver.otlp .... 0.0.0.0:4317 / 0.0.0.0:4318         |
- |   prometheus.scrape ........ pods with prometheus.io/scrape=true |
- |   loki.source.kubernetes ... container stdout/stderr             |
- |                                                                  |
- |   relabels every stream with namespace/pod/container/node/app    |
- |   and stamps  external_labels { cluster = HUB_CLUSTER_NAME }     |
- +-----------------------------------------------------------------+
-     | HUB_MIMIR_URL        | HUB_LOKI_URL        | HUB_TEMPO_URL
-     | (mimir-gateway)      | (loki:3100)         | (tempo:4318)
-     v                      v                     v
- +-----------+          +-----------+         +-----------+
- |   Mimir   |          |   Loki    |         |   Tempo   |
- +-----+-----+          +-----+-----+         +-----+-----+
-       |                      |                     |
-       |   +-------------+    |                     |
-       |   | Prometheus  |    |   (span-metrics and service-graphs
-       |   |  10d local  |    |    are remote-written Tempo -> Mimir)
-       |   +------+------+    |                     |
-       +----------+-----------+---------------------+
-                             v
-                      +-------------+
-                      |   Grafana   |   fixed datasource UIDs:
-                      +-------------+   prometheus | mimir | loki
-                                        tempo | pyroscope
+```diagram
+gd-observability-signals
 ```
 
 Those endpoints are not compiled in. They come from the `observability-hub` ConfigMap in `adhar-system`, which Alloy reads via `envFrom`. On the management cluster the defaults are in-cluster service URLs; on a spoke you override the same four keys with the hub's external Gateway URLs and the spoke's own name:

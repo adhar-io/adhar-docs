@@ -28,17 +28,8 @@ ArgoCD is a reconciliation loop, not a deployment tool. Every platform package i
 
 That makes the source of truth unambiguous:
 
-```text
-  your Adhar checkout                    (you edit here)
-    platform/stack/packages/<cat>/<pkg>/
-           │
-           │  adhar upgrade
-           ▼
-  Gitea  adhar/packages  (in-cluster git)  <- ArgoCD's desired state
-           │
-           │  ArgoCD sync
-           ▼
-  cluster objects in adhar-system          (never edit here)
+```diagram
+gd-source-of-truth
 ```
 
 One more asymmetry catches people: the **ApplicationSet itself is not read from Gitea.** The controller applies it from the platform stack, so editing it inside Gitea has no effect at all. Edit it in your checkout.

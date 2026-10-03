@@ -7,7 +7,7 @@ path: "/docs/core-concepts/platform-services"
 
 # Platform Services
 
-Adhar ships a curated catalogue of **91 open-source packages** (94 ApplicationSet entries). **A package is the platform's unit of capability** — a directory of pre-rendered manifests plus a machine-checkable contract, delivered by ArgoCD and switched on by one line in Git. This page explains how that catalogue is organised, what "enabled" really means, how packages relate to each other, and how to discover, enable, and inspect one.
+Adhar ships a curated catalogue of **100+ open-source packages** (a matching number of ApplicationSet entries). **A package is the platform's unit of capability** — a directory of pre-rendered manifests plus a machine-checkable contract, delivered by ArgoCD and switched on by one line in Git. This page explains how that catalogue is organised, what "enabled" really means, how packages relate to each other, and how to discover, enable, and inspect one.
 
 > **Explore the ecosystem visually.** The [interactive Integrations explorer](/integrations) lets you search and filter every tool Adhar builds on, with logos and a description of how each one is used.
 
@@ -21,7 +21,7 @@ Adhar ships a curated catalogue of **91 open-source packages** (94 ApplicationSe
 | **How you enable one** | `adhar stack enable <pkg>` → review the diff → `adhar upgrade` |
 | **How you inspect one** | `adhar stack describe <pkg>` |
 | **Categories** | Nine in the contract enum; seven carry ApplicationSet entries today |
-| **Profiles** | `local` (Kind, curated core — 32) and `production` (cloud/on-prem — 76) |
+| **Profiles** | `local` (Kind, curated core) and `production` (cloud/on-prem) — `adhar stack list` prints what each enables |
 
 ## What a package is
 
@@ -60,14 +60,8 @@ A single ArgoCD **ApplicationSet** turns every enabled entry into an Application
   manifestPath: "application/harbor/manifests"
 ```
 
-```text
-  adhar/packages (Git) ──▶ ApplicationSet ──▶ Application per package
-                                │                       │
-                    selector: enabled="true"            ▼
-                                                  workloads in adhar-system
-                                                        │
-                           self-heal reverts drift ◀────┘  (~1 min)
-                           prune removes what you disabled
+```diagram
+gd-applicationset-flow
 ```
 
 Two consequences are worth internalising before you change anything:

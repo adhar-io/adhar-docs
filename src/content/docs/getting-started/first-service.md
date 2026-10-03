@@ -25,13 +25,8 @@ Everything below assumes a local platform from [Quick Start](/docs/getting-start
 
 Whichever route you take, your application becomes a **`CompositeApplication`** — the platform's own application API, a namespaced Crossplane composite resource. Crossplane expands it into an ArgoCD Application, and ArgoCD keeps the workload matching Git:
 
-```text
-  you ──▶ CompositeApplication ──▶ ArgoCD Application ──▶ your workload
-          platform.adhar.io/         GitOps sync            Deployment
-          v1alpha1                                          Service
-          (what you declare)                                HTTPRoute
-                                          ▲
-                                          └─ reconciled from Git, self-healing
+```diagram
+gd-composite-application
 ```
 
 The value of the indirection is that you declare *intent* — a repo, a path, a destination — and the platform owns the machinery. The same `CompositeApplication` behaves identically on Kind and on a cloud, because a provider-specific composition is selected for you.
@@ -113,16 +108,8 @@ adhar application status hello --detailed
 
 You get the sync status, health, the Git revision currently deployed, the last sync time, per-environment status and the resource's conditions. Add `-o json` for machine-readable output.
 
-```text
-  git push / scaffold commit
-          │
-          ▼
-  Gitea  ──(ArgoCD polls)──▶  ArgoCD compares desired vs live
-          │                            │
-          │                   OutOfSync ──▶ apply ──▶ Progressing ──▶ Healthy
-          │                            │
-          └────── self-heal ◀──────────┘
-                  (a manual kubectl edit is reverted)
+```diagram
+gd-sync-states
 ```
 
 Three states to recognise:
@@ -167,19 +154,8 @@ adhar push api --git-url https://github.com/paketo-buildpacks/samples --subpath 
 
 The full CI pipeline that a repo runs on every push looks like this:
 
-```text
-  clone ─▶ buildpacks build ─┬─▶ tests
-                             ├─▶ gitleaks (secret scan)
-                             ├─▶ source scan
-                             ├─▶ Trivy (image vulnerabilities)
-                             └─▶ Syft (SBOM)
-                                   │
-                        all must pass ─▶ Cosign sign ─▶ attest SBOM ─▶ verify
-                                                              │
-                                     push to Harbor  :latest and :<commit sha>
-                                                              │
-                                     GitOps write-back: pin the image to :<sha>,
-                                     commit, push ─▶ ArgoCD deploys it
+```diagram
+gd-ci-pipeline
 ```
 
 Two properties make this more than a build script. **Scanning happens before signing**, so only a clean image ever gets a signature. And the Kyverno cluster policy `verify-supply-chain-images` runs in enforce mode: a Pod referencing a Harbor `library/*` image without a valid Cosign signature is rejected at admission. Unsigned code cannot run, regardless of how it was applied.

@@ -26,23 +26,8 @@ Run Adhar on Azure with VMs + kubeadm (default) or managed **AKS** (opt-in). Azu
 
 ## Two halves, two credentials
 
-```text
-  your machine                      Azure subscription
- ┌──────────────┐  ARM: resource group, VNet, NSG,
- │ adhar up     │ ──── public IPs, NICs, VMs, LB ────▶  cluster infrastructure
- │ az login OK  │
- └──────────────┘
-         │ kubeadm over SSH, then Helm on the control plane
-         ▼
- ┌────────────────────────── cluster ──────────────────────────┐
- │ cloud-provider-azure CCM + Azure Disk CSI                   │
- │   ← kube-system/azure-cloud-provider  (azure.json)          │
- │   ← AND /etc/kubernetes/azure.json on the control plane     │
- │      a service principal, or useManagedIdentityExtension    │
- │ external-dns + cert-manager DNS-01                          │
- │   ← a service principal with DNS Zone Contributor ON THE    │
- │      ZONE, plus subscriptionId and dnsResourceGroup         │
- └─────────────────────────────────────────────────────────────┘
+```diagram
+pv-azure-ownership
 ```
 
 **`az login` is enough to create the cluster and not enough to run it.** The in-cluster controllers cannot use your CLI session, so Adhar builds `azure.json` from the service-principal fields. Given a `clientId` with an empty `clientSecret` and no managed identity, `cloud-provider-azure` falls back to a default credential chain, finds no identity on a plain VM, and dies inside the Azure SDK without mentioning credentials — the visible symptom is a Gateway Service stuck at `EXTERNAL-IP <pending>`, which reads as a networking fault. Adhar refuses to write that config and names the remedy instead.

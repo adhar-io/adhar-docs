@@ -175,32 +175,8 @@ export CIVO_TOKEN="…"
 ./adhar up -f config.yaml --env dev
 ```
 
-```text
-  preflight ● credentials and API access
-  preflight ● quota: 4 × g3.xlarge fits within the account limits
-       │      (✖ any fail → STOP, nothing was created)
-       ▼
-  network + firewall + SSH key
-       │
-       ▼
-  instances created and prepared in parallel
-  (containerd, pinned kubeadm stream, Cilium images pre-pulled)
-       │
-       ▼
-  kubeadm init  (kube-proxy SKIPPED — Cilium replaces it)
-  kubeadm join  (nodes NotReady until Cilium arrives)
-       │
-       ▼
-  cloud integration over SSH: Civo CCM + Civo CSI,
-  kube-system/civo-api-access holds the API key,
-  CSI DaemonSet tolerates node.adhar.io/csi-not-ready
-       │
-       ▼
-  Gateway API CRDs → Cilium → Gateway → ArgoCD → Gitea →
-  Crossplane → seed platform/stack into Gitea
-       │
-       ▼
-  GitOps sync: ArgoCD drives every package Synced + Healthy
+```diagram
+pv-civo-sequence
 ```
 
 Then:

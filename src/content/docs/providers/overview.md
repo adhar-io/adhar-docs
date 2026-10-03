@@ -58,36 +58,8 @@ The imperative path gets you a management cluster. The declarative path lets tha
 
 ## How `adhar up` flows through a provider
 
-```text
-adhar up -f config.yaml --env dev
-       │
-       ▼
- 1. Resolve config       globalSettings → providers →
-       │                 environmentTemplates → environments[dev]
-       │                 (the environment block wins)
-       ▼
- 2. CreateProvider()     factory.go instantiates ONE Provider from
-       │                 the resolved `type:` — unknown type = error
-       ▼
- 3. Authenticate()       token from env var / workload identity
-       │
-       ▼
- 4. Preflight            credentials, quota, size availability
-       │                 ✖ any fail → STOP. Nothing was created.
-       ▼
- 5. Reuse-or-create      a cluster of this name already there?
-       │                 reuse it (--recreate asks for a fresh one)
-       ▼
- 6. CreateCluster()   ─── PROVIDER-SPECIFIC ───────────────────
-       │                 network · firewall · SSH key · instances
-       │                 kubeadm init/join · CCM + CSI
-       │                 kubeconfig fetched over SSH
-       ▼
- 7. Platform bootstrap ── IDENTICAL EVERYWHERE ────────────────
-       │                 Gateway API CRDs → Cilium → Gateway →
-       │                 ArgoCD → Gitea → Crossplane → seed stack
-       ▼
- 8. GitOps sync          ArgoCD drives every package Synced+Healthy
+```diagram
+pv-provider-up-sequence
 ```
 
 Step 4 is the one worth internalising. `--dry-run` validates the *config* and nothing else, so it passes cleanly on an account that cannot create a single resource. Preflight probes the calls that actually gate a create — reads and writes, plus quota and whether the region really offers the instance type you asked for — and refuses **before** anything bills. Kind is exempt: no account, no quota, no permission model.

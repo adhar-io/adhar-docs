@@ -108,26 +108,8 @@ Most modules offer a declarative alternative to facade calls: an annotation plus
 | Persistence | `@MultiTenant`, `@SoftDelete`, `@Audited` | — (JPA lifecycle) |
 | Profiler | `@Profiled` | `ProfilingAspect` |
 
-```text
-  Two ways into one module — identical implementation behind both
-
-   @CircuitBreaker("payments")             adhar.resilient("payments", …)
-   public Receipt charge(Order o) {…}                  │
-                │                                      │
-     ┌──────────▼──────────┐                           │
-     │  ResilienceAspect   │  AOP proxy, opt-in        │
-     │  around the method  │  per annotated method     │
-     └──────────┬──────────┘                           │
-                └───────────────┬──────────────────────┘
-                                ▼
-                 ┌──────────────────────────────┐
-                 │    CircuitBreakerFacade      │  module public API
-                 └──────────────┬───────────────┘
-                                ▼
-                 ┌──────────────────────────────┐
-                 │  Resilience4j registry via   │
-                 │  SpringCircuitBreakerAdapter │
-                 └──────────────────────────────┘
+```diagram
+kit-annotation-vs-facade
 ```
 
 Choose annotations when the concern covers a whole method and you want it visible in the signature; choose facade calls when it covers part of a method, needs a computed name, or has to be conditional. Aspects need a proxy, so self-invocation inside the same object bypasses them — facade calls do not.

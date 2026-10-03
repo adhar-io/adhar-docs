@@ -26,23 +26,8 @@ Run Adhar on Google Cloud (GCP) with GCE instances + kubeadm (default) or manage
 
 ## Which credential does what
 
-```text
-  your machine                          Google Cloud project
- ┌──────────────┐  compute / serviceusage / resourcemanager
- │ adhar up     │ ──────────────────────────────────────▶  VPC, subnet,
- │ ADC, key, or │                                          firewall, GCE
- │ metadata     │
- └──────────────┘
-         │ kubeadm over SSH, then Helm/kustomize on the control plane
-         ▼
- ┌────────────────────────── cluster ──────────────────────────┐
- │ cloud-provider-gcp CCM   ← the NODES' own service account   │
- │                             (cloud-platform scope)          │
- │ PD CSI driver            ← gce-pd-csi-driver/cloud-sa, from │
- │                             the key file, else ADC          │
- │ external-dns + cert-manager DNS-01                          │
- │                          ← a MOUNTED service-account key    │
- └─────────────────────────────────────────────────────────────┘
+```diagram
+pv-gcp-ownership
 ```
 
 **Workload identity where it works, a key file where it does not.** For provisioning, prefer the ambient identity: `useApplicationDefault: true`, `useComputeMetadata: true` when Adhar runs on a GCE instance, or `useWorkloadIdentity: true` when it runs inside a cluster — nothing long-lived is stored and nothing needs rotating. The nodes Adhar creates follow the same principle: they carry a service account with `cloud-platform` scope, which is how the cloud-controller-manager authenticates without a Secret.

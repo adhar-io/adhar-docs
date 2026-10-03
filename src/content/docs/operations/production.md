@@ -53,7 +53,7 @@ globalSettings:
   enableHAMode: true
 ```
 
-Or pass `--ha` to `adhar up`. **What constrains size:** the production profile enables **76 of 94** entries; the full profile creates ~55–60 PersistentVolumes and ~300 pods. The binding constraint is usually per-node **volume attachment limits**, not CPU — on DigitalOcean that's 7 block volumes per droplet, so the full catalogue needs ≥ 10 workers.
+Or pass `--ha` to `adhar up`. **What constrains size:** the production profile enables most of the catalogue (`adhar stack list` prints the live count); the full profile creates ~55–60 PersistentVolumes and ~300 pods. The binding constraint is usually per-node **volume attachment limits**, not CPU — on DigitalOcean that's 7 block volumes per droplet, so the full catalogue needs ≥ 10 workers.
 
 ## The edge: DNS, TLS, load balancing
 
