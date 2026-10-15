@@ -20,6 +20,22 @@ Adhar wires identity, secrets, supply-chain integrity and policy into the platfo
 | **Runtime** | Falco + Tetragon (production profile) | Triage — findings are visibility, not blocking |
 | **Workload identity** | Not deployed — SPIFFE/SPIRE is deliberately absent | Nothing; see the note below |
 
+## Defence in depth
+
+Read the platform from the outside in. An attacker who wants a Secret has to get through every layer below, and each layer is designed on the assumption that the one outside it can fail. The diagram marks which layers are switched on in the production profile and which ship but are yours to enable.
+
+```diagram
+do-defence-layers
+```
+
+Three trust boundaries matter more than the rest:
+
+- **The edge.** The Cilium Gateway is the only public entry point. Every platform UI sits behind Keycloak SSO (an oauth2-proxy where the application has no native OIDC), and the Kubernetes API is not exposed through the Gateway at all — restricting where it *is* reachable is your job (step 9 of the checklist).
+- **The platform plane.** `adhar-system` is where the control plane lives. Every supply-chain policy excludes it twice — by namespace name and by the `adhar.io/plane: control` label — so an Enforce flip cannot brick the platform. The flip side is that admission policy does not protect that namespace; RBAC and network policy have to.
+- **The tenant namespace.** A team's authority comes from `Project`, scoped to its own namespace, with ingress limited to its own pods and `adhar-system`. That boundary is the one to test by impersonation, below.
+
+What is deliberately **not** a boundary: workload-to-workload identity. There is no SPIFFE/SPIRE and no platform-provided mutual TLS between pods, so two pods that can reach each other cannot prove who they are to each other. Use network policy for reachability and application-level mTLS where you need peer identity.
+
 ## Threat model
 
 Each control exists against a specific attacker move. Knowing which one tells you what a gap costs.
@@ -29,6 +45,7 @@ Each control exists against a specific attacker move. Knowing which one tells yo
 | Keycloak OIDC + group RBAC | A stolen day-0 password becoming durable cluster access |
 | Credential rotation | Well-known defaults surviving into production |
 | Per-team RBAC scoping | One tenant reading another tenant's Secrets |
+| Platform-only ClusterSecretStores + per-namespace `tenant` role | A tenant reading another namespace's or the platform's secrets through an `ExternalSecret` |
 | OpenBao + External Secrets | Credentials in Git, replicated to every clone |
 | KMS auto-unseal | Unseal key and root token in a Secret the attacker already reached |
 | etcd encryption at rest | Disk or snapshot theft yielding Secrets in plaintext |
@@ -68,7 +85,7 @@ Managed control planes cannot take apiserver flags this way and must use the clo
 
 > **Read this twice.** On current Kubernetes the built-in `edit` role **grants get/list/watch on Secrets**. Only `view` excludes them, so `platform-developer` can read Secrets in any namespace. If that is not what you intend, bind a custom role instead of `edit`.
 
-Application-team authority comes from `CompositeProject`, per namespace, never cluster-wide. Verify a tenant boundary by impersonation, not by reading manifests:
+Application-team authority comes from `Project`, per namespace, never cluster-wide. Verify a tenant boundary by impersonation, not by reading manifests:
 
 ```bash
 kubectl auth can-i get secrets -n team-payments \
@@ -90,69 +107,64 @@ apiVersion: external-secrets.io/v1
 kind: ExternalSecret
 metadata: { name: myapp-config, namespace: my-team }
 spec:
-  secretStoreRef: { name: vault, kind: ClusterSecretStore }
+  secretStoreRef: { name: openbao, kind: SecretStore }   # the namespace's own store
   target: { name: myapp-config }
   data:
     - secretKey: password
-      remoteRef: { key: myapp/config, property: password }
+      remoteRef: { key: tenants/my-team/myapp/config, property: password }
 ```
+
+The `SecretStore` lives in the tenant's namespace and logs in to OpenBao as the ServiceAccount `adhar-secrets` with the kubernetes-auth role `tenant`. That role's templated policy, `tenant-secrets`, grants read on `secret/data/tenants/<namespace>/*` and read/list on `secret/metadata/tenants/<namespace>/*`, where the namespace comes from the verified ServiceAccount token — so a namespace can only ever read its own path. [Manage Secrets End to End](/docs/guides/manage-secrets) has the full YAML.
 
 Two hardening steps the shipped config does **not** do for you:
 
 1. **Auto-unseal.** The bootstrap Job runs `operator init` with one key share and stores the unseal key *and* root token in the `openbao-keys` Secret — fine on a laptop, unacceptable in production. Add a `seal "awskms"` / `"azurekeyvault"` / `"gcpckms"` stanza to the package `values.yaml` so no unseal material stays in-cluster.
 2. **etcd encryption at rest.** Without it, a disk or snapshot yields every Secret in plaintext. On managed offerings, verify the provider default rather than assuming it.
 
-> **Ordering trap.** An `ExternalSecret` whose backend path does not exist reports `Degraded`, and ArgoCD will not advance past its sync wave — so one missing path can leave a whole package uninstalled. Seed the path (even empty) or move the resource to a later wave.
+**The platform's stores serve the platform only — treat the boundary as namespace names and labels.** External Secrets' RBAC aggregates `create` on `ExternalSecret` and `SecretStore` into the built-in `edit` and `admin` roles, so every `ws-team-<team>` admin can write one in their own namespace. A `ClusterSecretStore` with no `conditions` would serve that ExternalSecret whatever it pointed at. The shipped stores are therefore restricted:
 
-## Network
-
-Be precise about the default, because the gap is real: **Cilium runs with `enable-policy: default`, so a pod that no policy selects is unrestricted.** No cluster-wide default-deny `CiliumNetworkPolicy` ships with the bootstrap. Microsegmentation is opt-in, and authoring it is genuine work.
-
-What you get by default:
-
-- **Per-tenant ingress isolation.** `CompositeProject` emits a `<project>-tenant-isolation` NetworkPolicy in every team namespace: ingress only from the team's own pods and from `adhar-system`. **Egress is left open on purpose** — a default-deny egress that forgets kube-DNS reads as a total DNS outage, not as a policy.
-- **The Cilium Gateway as the only public entry point**, with `external-dns` scoped to the platform DNS zone.
-- **Hubble** for observing flows and policy verdicts — which is how you author allow-rules that actually work.
-
-What you must add: cluster-wide default-deny for workload namespaces, scoped allow-rules for platform namespaces, WireGuard node-to-node encryption, and API-server access restricted to a VPN or allowlist.
-
-> **SPIFFE/SPIRE is deliberately not deployed.** It starved the Cilium operator's Gateway controller, and upstream deprecated that path in Cilium 1.20 — the version the platform runs — for removal in 1.21. Workload-to-workload mutual authentication is therefore **not available and is not claimed**. "Mesh-ready identity" here means a unique cluster name and id plus one shared CA, nothing more.
-
-## Workloads and supply chain
-
-Three policies do the real gating, and they ship **twice** — identical rules in `manifests/audit/` and `manifests/enforce/`, differing only in `failureAction` and digest pinning. That is the point: **audit findings predict exactly what enforce would block.**
-
-| Policy (enforce name) | What it denies | Message |
+| ClusterSecretStore | Can reach | Serves |
 |---|---|---|
-| `disallow-latest-tag-enforce` | `:latest` or untagged images | `An explicit image tag is required` |
-| `restrict-image-registries-enforce` | Registries outside the allowlist | `Image registry is not in the platform allowlist` |
-| `verify-image-signatures-enforce` | Images with no valid Cosign signature | Kyverno's own verification text |
+| `vault` | Every OpenBao path, including `secret/adhar/bootstrap-credentials` | `adhar-system` |
+| `platform`, `keycloak`, `argocd` | Secrets in `adhar-system` | `adhar-system` |
+| `gitea` | Secrets in `adhar-system` | `adhar-system`, `adhar-environments` |
+| `platform-object-storage` | `root-creds` only (RBAC `resourceNames`) | Namespaces labelled `adhar.io/plane` `workload` or `preview` |
+| `platform-delivery` | `gitea-ci-creds` and `harbor-push` only | Namespaces labelled `adhar.io/plane` `workload` or `preview` |
 
-The allowlist is **not Harbor-only**: it admits the platform Harbor plus `cgr.dev`, `registry.k8s.io`, `gcr.io`, `ghcr.io`, `quay.io`, `docker.io`, `index.docker.io` and `public.ecr.aws`. A docker.io image being admitted is correct, not a gap — tighten the list if your threat model needs it.
+`vault`, `platform`, `keycloak`, `argocd` and `gitea` match by namespace **name**, which a tenant cannot create or rename; an ExternalSecret elsewhere that names them is refused. The two narrow stores exist for what the platform itself puts in tenant namespaces — database and pipeline backups to RustFS (the neo4j, MongoDB and OpenSearch compositions and the data-pipeline template), and Kargo's Git and registry credentials in a Project namespace. The `adhar.io/plane` label is set by the platform's compositions; tenant roles are namespace-scoped and cannot change it.
 
-Signature verification accepts either attestor: the platform's own key (`keys.secret: cosign-key`, with `rekor.ignoreTlog: true`, matching what the Tekton `cosign-sign` Task produces) or the GitHub Actions keyless identity for `ghcr.io/adhar-io/*`. Every rule excludes platform namespaces twice over — by name and by the `adhar.io/plane: control` label — so an Enforce flip cannot brick the platform.
+**OpenBao's people-policies deny the platform's paths.** `platform-developer` (create, read, update, delete, list) and `platform-viewer` (read, list) keep their grants on `secret/*`, but both carry an explicit `deny` on the platform-owned paths `secret/data/…` and `secret/metadata/…` under `adhar/*`, `adhar-ai/*` and `vllm/*`, which overrides the broad grant. This was checked against a real OpenBao 2.6.2 server: both groups read team secrets and can no longer read or overwrite the break-glass credentials. `platform-admin` is unchanged.
 
-**Pod Security policies are `Audit`, not `Enforce`.** `security/adhar-kyverno-policies` ships the restricted-profile set — `disallow-privileged-containers`, `disallow-host-namespaces`, `disallow-host-path`, `disallow-capabilities`, `restrict-seccomp`, `restrict-sysctls` and more — in audit mode, with `PolicyException` objects where a component needs one. Promote them one at a time.
+These controls take effect once the updated packages are synced with `adhar upgrade`; a platform built from an earlier version serves `vault` to every namespace until then.
 
-**Prove enforcement before flipping it.** `hack/verify-supply-chain.sh` generates a throwaway keypair, copies two tiny public images into a disposable `adhar-drill` Harbor project, signs one exactly as the pipeline does (`--key`, `--tlog-upload=false`), applies an Enforce policy in a scratch namespace with `failurePolicy: Fail`, and asserts unsigned → DENIED / signed → ADMITTED before cleaning up. Success prints `SUPPLY-CHAIN ENFORCEMENT DRILL PASSED`.
+**How the boundary was verified.** On a disposable cluster running External Secrets v2.10.0 and OpenBao 2.6.2, configured by the platform's own bootstrap commands and store manifests, every attempt below was made from a team namespace:
+
+| Attempt | Result | Why |
+|---|---|---|
+| Read the team's own `secret/tenants/<ns>/` path | Synced | `tenant-secrets` policy |
+| Read another team's tenant path | Blocked | OpenBao: permission denied |
+| Read the break-glass credentials (own store or `vault`) | Blocked | Store refuses the namespace / policy denies |
+| Read an `adhar-system` Secret through `platform` | Blocked | Store refuses the namespace |
+| Read a non-allowed key through a narrow store | Blocked | Kubernetes RBAC `resourceNames` |
+| Use a narrow store from an unlabelled namespace | Blocked | Store's namespace selector |
+| `root-creds` / `gitea-ci-creds` through the right narrow store | Synced | Intended platform use |
+
+As a control, removing the `vault` store's `conditions` (the old configuration) let the same team namespace read the break-glass password; restoring them blocked it again. The platform's own reads in `adhar-system` kept working throughout.
+
+> **Residual risk — what the boundary does not cover.**
+> - **The narrow stores are readable by every `workload` and `preview` namespace**, including PR previews. `root-creds` is the RustFS **root** credential. Per-database, scoped object-storage users are the recommended follow-up.
+> - **`platform-developer` and `platform-viewer` still read every team's secrets** under `secret/`, `tenants/…` included.
+> - **Cluster-wide `edit` is outside it.** `platform-developer` holds `edit` cluster-wide, which already reads Secrets in `adhar-system` directly.
+> - **The namespace is the trust unit.** Whoever administers a namespace can read everything under `secret/tenants/<that namespace>/`.
+
+Check what a tenant can do in its namespace, and that the platform store refuses it:
 
 ```bash
-KUBE_CONTEXT=kind-adhar hack/verify-supply-chain.sh
+kubectl auth can-i create externalsecrets.external-secrets.io -n team-payments \
+  --as=alice@example.com --as-group=oidc:ws-team-payments     # yes
+kubectl get clustersecretstore vault -o jsonpath='{.spec.conditions}{"\n"}'
+# [{"namespaces":["adhar-system"]}]
 ```
-
-## Runtime and compliance
-
-`security/falco` and `security/tetragon` give eBPF runtime threat detection in the production profile. `security/trivy` (the operator) is disabled in the curated profiles — pipeline scanning is a Tekton `trivy-scan` Task instead, so the gate does not depend on the operator. `security/kubescape` ships disabled everywhere.
-
-Aggregate what the policy engines found:
-
-```bash
-adhar compliance                       # posture from PolicyReports
-adhar compliance --failures-only
-adhar compliance export -o posture.md  # or .json — the auditor artifact
-```
-
-## TLS
 
 Local platforms use a self-signed certificate. Production uses cert-manager with Let's Encrypt; the platform **wildcard** (`*.<defaultHost>`) requires a DNS-01-capable provider. See [Accessing the Platform](/docs/operations/accessing-the-platform).
 
@@ -177,6 +189,9 @@ Work through this in order — later steps assume earlier ones.
 | Symptom | Cause | Fix |
 |---|---|---|
 | A developer reads another team's Secrets | `edit` grants Secrets read, bound cluster-wide | Bind a custom role without `secrets` |
+| A tenant reads a platform credential from OpenBao | The platform runs packages from before the store restrictions: `ClusterSecretStore/vault` has no `conditions` | `adhar upgrade`; confirm `kubectl get clustersecretstore vault -o jsonpath='{.spec.conditions}'` lists `adhar-system` |
+| A tenant ExternalSecret against `vault` is refused | The `vault` store serves `adhar-system` only, by design | Use a namespaced `SecretStore` with role `tenant` and paths under `secret/tenants/<namespace>/` |
+| A preview namespace can read `root-creds` | `platform-object-storage` serves every `workload` and `preview` namespace | Known residual risk; move backups to scoped object-storage users |
 | OIDC login works, `kubectl` says `Unauthorized` | The apiserver carries no `--oidc-*` flags | Apply them as a day-2 change |
 | An OIDC check passes that should not | `kubectl --token` did not displace the context's client certificate | Re-test with a token-only kubeconfig |
 | Provisioning dies at `kubeadm token create` | OIDC flags wired at creation, pointing at a Keycloak that does not exist | Never set `oidcAuth` in `clusterConfig` |
@@ -201,4 +216,4 @@ adhar compliance                          # aggregated posture
 
 - [Production](/docs/operations/production) — HA, backups, the day-2 routine
 - [Observability](/docs/operations/observability) — Hubble, Falco dashboards, alert routing
-- [Control Plane](/docs/core-concepts/control-plane) — how `CompositeProject` grants tenant authority
+- [Control Plane](/docs/core-concepts/control-plane) — how `Project` grants tenant authority

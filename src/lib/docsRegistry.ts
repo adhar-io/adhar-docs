@@ -129,6 +129,7 @@ export function buildRegistry(cfg: RegistryConfig): Registry {
     // Platform docs (/docs)
     "Getting Started",
     "Core Concepts",
+    "Guides",
     "Platform Engineering",
     "Cloud Providers",
     "Operations",
@@ -138,7 +139,6 @@ export function buildRegistry(cfg: RegistryConfig): Registry {
     "Get Started",
     "Frameworks",
     "Modules",
-    "Guides",
     "API Reference",
   ];
   const sectionRank = (s: string) => {

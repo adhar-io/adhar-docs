@@ -229,55 +229,6 @@ export const enterpriseBenefits = [
     description: "Self-service capabilities that empower developers and reduce operational overhead"
   }
 ];
-
-export const testimonials = [
-  {
-    quote: "ADHAR eliminated weeks of infrastructure setup. Our team deployed a production-grade platform in 9 minutes with 50+ services pre-configured. We've reclaimed 80% of our engineering time to focus on product features.",
-    author: "Sarah Chen",
-    role: "VP Engineering",
-    company: "TechCorp Global",
-    avatar: "SC",
-    logo: "https://images.unsplash.com/photo-1599305445671-ac291c95aaa9?w=120&h=120&fit=crop",
-    metrics: { timeSaved: "80%", deployTime: "9 min", productivity: "3x" }
-  },
-  {
-    quote: "Before ADHAR, it took us 2-3 weeks to provision infrastructure and configure security. Now it's a single command. Our deployment frequency increased from monthly to daily, and our developers are 4x more productive.",
-    author: "Michael Rodriguez",
-    role: "Chief Architect",
-    company: "SecureFinance",
-    avatar: "MR",
-    logo: "https://images.unsplash.com/photo-1560179707-f14e90ef3623?w=120&h=120&fit=crop",
-    metrics: { timeSaved: "95%", deployTime: "8 min", productivity: "4x" }
-  },
-  {
-    quote: "ADHAR transformed our platform engineering. Zero infrastructure tickets, zero security reviews, zero integration projects. Our 15-person team can now manage infrastructure that previously required 50+ engineers.",
-    author: "Emily Johnson",
-    role: "Head of Platform Engineering",
-    company: "GlobalScale",
-    avatar: "EJ",
-    logo: "https://images.unsplash.com/photo-1549923746-c502d488b3ea?w=120&h=120&fit=crop",
-    metrics: { timeSaved: "90%", deployTime: "7 min", productivity: "5x" }
-  },
-  {
-    quote: "We went from 3-week deployment cycles to same-day deployments. ADHAR's battle-tested patterns and automated security gave us confidence to move fast without breaking compliance requirements.",
-    author: "David Park",
-    role: "CTO",
-    company: "CloudNative Systems",
-    avatar: "DP",
-    logo: "https://images.unsplash.com/photo-1557804506-669a67965ba0?w=120&h=120&fit=crop",
-    metrics: { timeSaved: "85%", deployTime: "10 min", productivity: "3.5x" }
-  },
-  {
-    quote: "ADHAR's open-source approach with enterprise-grade defaults saved us months of research and integration work. Our developers get self-service access to everything they need, instantly.",
-    author: "Rachel Martinez",
-    role: "Director of Engineering",
-    company: "InnovateLabs",
-    avatar: "RM",
-    logo: "https://images.unsplash.com/photo-1551434678-e076c223a692?w=120&h=120&fit=crop",
-    metrics: { timeSaved: "92%", deployTime: "8 min", productivity: "4.5x" }
-  }
-];
-
 export const pricingPlans = [
   {
     name: "Open Source",

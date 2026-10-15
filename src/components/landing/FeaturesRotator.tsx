@@ -11,7 +11,7 @@ import {
 } from 'lucide-react';
 
 const features = [
-  { icon: Zap, title: "Lightning fast", description: "Deploy in under 2 minutes with zero-config setup." },
+  { icon: Zap, title: "Lightning fast", description: "One adhar up — a running platform in about ten minutes, locally or on any cloud." },
   { icon: Shield, title: "Enterprise security", description: "SOC2 Type II compliant with end-to-end encryption." },
   { icon: Globe, title: "Multi-cloud ready", description: "Works seamlessly across AWS, GCP, Azure, and more." },
   { icon: Cpu, title: "AI-powered", description: "Intelligent resource optimization and auto-scaling." },

@@ -31,7 +31,7 @@ Concretely, that means a developer asks for a PostgreSQL database by applying a 
 | | |
 |---|---|
 | **What it is** | An open-source Internal Developer Platform you run yourself |
-| **How you install it** | `adhar up` — one command, roughly ten minutes locally |
+| **How you install it** | One `adhar up` — about ten minutes locally; the same single command on any supported cloud, where machine provisioning sets the pace |
 | **Built on** | Kubernetes, Cilium, ArgoCD, Gitea, Crossplane, Keycloak |
 | **What it ships** | 100+ curated open-source packages, delivered by GitOps |
 | **Where it runs** | Kind (local), AWS, Azure, GCP, DigitalOcean, Civo, your own hosts |
@@ -88,7 +88,7 @@ None of it is bolted on afterwards: a package arrives already wired into identit
 | **An application developer** | You scaffold from a golden path, run `adhar dev` against the real platform, open a pull request, and the supply chain and GitOps take it to production |
 | **A platform engineer** | The catalogue, its policies, and its self-service APIs are declarative files you review in Git rather than a bespoke internal tool you maintain |
 | **An SRE or operator** | One observability stack, one identity provider, one promotion path, and day-2 operations (backup, rotation, drift detection) shipped as scheduled operations |
-| **A technical leader evaluating** | A complete IDP you can stand up on a laptop in ten minutes, entirely Apache 2.0, with no vendor to negotiate with before you find out whether it fits |
+| **A technical leader evaluating** | A complete IDP you can stand up with one `adhar up` — on a laptop in about ten minutes, or on your cloud — entirely Apache 2.0, with no vendor to negotiate with before you find out whether it fits |
 
 Adhar is a good fit if you run Kubernetes and want a coherent platform rather than a shelf of tools. It is not a PaaS: you keep your clusters, your cloud account, and your data.
 
@@ -123,6 +123,19 @@ Pick the path that matches why you are here. Each is ordered — read them in se
 2. [Observability](/docs/operations/observability) — the metrics, logs, traces, and cost stack
 3. [Security Best Practices](/docs/security/security-best-practices) — the hardening checklist
 4. [Troubleshooting](/docs/reference/troubleshooting) — failure signatures and fixes
+
+### Getting real work done — task guides
+
+Each guide is an end-to-end walkthrough with verify steps after every stage.
+
+1. [Deploy a Database-Backed Service](/docs/guides/deploy-a-database-backed-service) — template, `Database` request, binding, GitOps
+2. [Promote Across Environments](/docs/guides/promote-across-environments) — build once, promote the digest
+3. [Onboard a Team](/docs/guides/onboard-a-team) — Keycloak groups, RBAC, quotas, access
+4. [Manage Secrets End to End](/docs/guides/manage-secrets) — OpenBao, External Secrets, rotation
+5. [Backup and Restore](/docs/guides/backup-and-restore) — Velero, CloudNativePG, a real restore drill
+6. [Run a Multi-Cluster Fleet](/docs/guides/run-a-fleet) — control plane, workload clusters, Cluster Mesh
+7. [Upgrade the Platform](/docs/guides/upgrade-the-platform) — diff, converge, roll back
+8. [Preview Environments per Pull Request](/docs/guides/preview-environments) — one namespace per PR
 
 ### Background reading
 

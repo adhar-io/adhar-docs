@@ -139,7 +139,7 @@ const CivoSequence = () => (
     width={880}
     boxW={250}
     heading={["stage", "what happens"]}
-    label="The Civo provisioning sequence: preflight, then network, firewall and SSH key, instances prepared in parallel, kubeadm init and join, Civo CCM and CSI over SSH, the platform bootstrap, and finally the GitOps sync."
+    label="The Civo provisioning sequence: preflight, then network, firewall and SSH key, instances prepared in parallel, kubeadm init and join — with no Civo CCM or CSI in compute mode — the platform bootstrap, and finally the GitOps sync."
     rungs={[
       {
         name: "preflight",
@@ -165,10 +165,10 @@ const CivoSequence = () => (
       },
       {
         name: "cloud integration",
-        detail: "over SSH",
+        detail: "compute mode",
         adds: [
-          "Civo CCM + Civo CSI; kube-system/civo-api-access holds the API key;",
-          "the CSI DaemonSet tolerates node.adhar.io/csi-not-ready",
+          "deliberately none: no Civo CCM or CSI in compute mode, and a",
+          "host-network Gateway — the shipped default is managed (k3s) mode",
         ],
       },
       {

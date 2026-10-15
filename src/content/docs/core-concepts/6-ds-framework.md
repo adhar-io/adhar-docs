@@ -31,7 +31,7 @@ cc-handoff-artifacts
 
 | Phase | The question it answers | Typically owned by | Artifact it produces |
 |---|---|---|---|
-| **Define** | What are we building, and who owns it? | Product owner and tech lead | Catalog entry, `CompositeProject`, API contract |
+| **Define** | What are we building, and who owns it? | Product owner and tech lead | Catalog entry, `Project`, API contract |
 | **Design** | How will it be built, and within which limits? | Architects with platform engineering | XRDs, Compositions, Kyverno policies, quotas |
 | **Develop** | Does the code work against the real platform? | The application team | Source, tests, and a preview environment |
 | **Deliver** | How does a commit become production, safely? | Shared — team owns the commit, platform owns the path | Signed image, ArgoCD Application, promotion |
@@ -48,7 +48,7 @@ In Adhar, Define is not a document. The unit of ownership is a **project**, and 
 
 ```yaml
 apiVersion: platform.adhar.io/v1alpha1
-kind: CompositeProject
+kind: Project                     # platform.adhar.io — formerly CompositeProject
 metadata:
   name: payments-api
   namespace: team-payments
@@ -56,18 +56,29 @@ spec:
   crossplane:
     compositionSelector:
       matchLabels:
-        provider: local
+        provider: local             # selects the project-local Composition
   parameters:
     organisation: acme
     team: payments
     name: payments-api
     description: Payment capture and settlement service
     tier: dev
-    cpuQuota: "4"
+    cpuQuota: "4"                   # becomes the namespace's ResourceQuota
     memoryQuota: 8Gi
     podQuota: 30
-    createRepository: true
+    createRepository: true          # a Gitea repo for the project
 ```
+
+Apply it and check what Define produced — the request, then the namespace and guardrails it composed:
+
+```bash
+kubectl create namespace team-payments    # the Project XR is namespaced; nothing creates this for you
+kubectl apply -f project.yaml
+kubectl get projects.platform.adhar.io -n team-payments       # READY True
+kubectl get resourcequota,limitrange,networkpolicy -A | grep payments-api
+```
+
+The CLI makes the same object with `adhar project create`. `Project` shares its short name with Kargo's `Project`, so qualify it as `projects.platform.adhar.io` on the command line.
 
 Applying it creates a guard-railed namespace (ResourceQuota, LimitRange, default-deny NetworkPolicy), RBAC bound to the team's Keycloak group, and a Gitea repository. Ownership, limits, and the source of truth are decided once and expressed in one place.
 
@@ -81,9 +92,16 @@ Design turns requirements into an implementable shape: component architecture, t
 
 Adhar's contribution here is that **guardrails are executable**. Rather than a design review that a service either satisfies or does not, the platform encodes the decision:
 
-- A self-service infrastructure contract is a Crossplane **XRD**; each implementation is a **Composition**. The control plane ships 25 XRDs and 47 Compositions — see [Control Plane](/docs/core-concepts/control-plane).
+- A self-service infrastructure contract is a Crossplane **XRD**; each implementation is a **Composition**. The control plane ships about forty XRDs and sixty-odd Compositions (`kubectl get xrd` lists them) — see [Control Plane](/docs/core-concepts/control-plane).
 - An architectural rule is a **Kyverno** policy. `adhar-kyverno-policies` and `adhar-policy-packs` carry the baseline; a denial names the policy that rejected the workload.
 - A tenancy boundary is a quota. `adhar-tenant-quotas` caps a team's total across its projects.
+
+A guardrail written this way is an ordinary manifest. The `CompliancePolicy` API puts Kyverno guardrails, in audit or enforce mode, behind the same self-service contract as a database; its default Composition is `compliancepolicy-local`, and `examples/compliance-policy.yaml` in the platform repo is a working request. Explore it before writing one:
+
+```bash
+kubectl explain compliancepolicies.platform.adhar.io.spec.parameters   # the fields you can set
+kubectl get compositions -l feature=compliance --show-labels          # the engines behind it
+```
 
 **Done when** every constraint a reviewer would check by hand is either a Composition, a policy, or a quota.
 
@@ -110,7 +128,32 @@ Deliver is the outer loop, and it is the stage Adhar automates most completely. 
 cc-deliver-chain
 ```
 
-Deployment itself is declarative. `adhar application deploy --repo …` creates a `CompositeApplication`, and so does the Console's create wizard — the same object either way, with dev auto-syncing and later environments promoted through Kargo.
+Deployment itself is declarative. `adhar application deploy --repo …` creates an `Application` (`platform.adhar.io/v1alpha1`), and so does the Console's create wizard — the same object either way, with dev auto-syncing and later environments promoted through Kargo:
+
+```yaml
+apiVersion: platform.adhar.io/v1alpha1
+kind: Application                   # formerly CompositeApplication
+metadata:
+  name: payments-api
+  namespace: team-payments
+spec:
+  crossplane:
+    compositionSelector:
+      matchLabels:
+        provider: local
+  parameters:
+    project: default
+    source:
+      repoURL: https://gitea.cloud.adhar.io/adhar/payments-api.git
+      path: deploy
+      targetRevision: main
+    destination:
+      namespace: team-payments
+    # omit `environments` for the platform default: dev auto-syncs,
+    # test and prod are promoted through Kargo
+```
+
+A promotion is itself an object — a `Release` moves one piece of freight into one environment — so the answer to "what is in production, and how did it get there?" is a list of commits and `Release` objects, not a chat log.
 
 > **Nothing is deployed by a person.** ArgoCD self-heals, so a change applied directly to the cluster is reverted. If a deployment did not come from a commit, it does not survive.
 
@@ -136,7 +179,7 @@ Decide is the stage most lifecycle models omit, and it is the one that closes th
 
 | Phase | Adhar capabilities | Packages and commands |
 |---|---|---|
-| **Define** | Catalog, ownership, tenancy, golden paths | `adhar-console`, `CompositeProject`, `open-metadata`, `adhar project create`, `adhar application templates` |
+| **Define** | Catalog, ownership, tenancy, golden paths | `adhar-console`, `Project`, `open-metadata`, `adhar project create`, `adhar application templates` |
 | **Design** | Self-service contracts, policy, quotas | `crossplane` (XRDs + Compositions), `kyverno`, `adhar-kyverno-policies`, `adhar-policy-packs`, `adhar-tenant-quotas`, `keycloak` |
 | **Develop** | Inner loop, hosted IDEs, previews, shared libraries | `adhar dev`, `adhar push`, `coder`, `adhar-libraries`, `nexus`, `adhar-preview-environments`, `k6` |
 | **Deliver** | Build, sign, admit, deploy, promote | `tekton`, `buildpack`, `adhar-supply-chain`, `cosign`, `harbor`, `adhar-supply-chain-policies`, ArgoCD, `argo-rollout`, `kargo`, `argo-events`, `keda` |
@@ -152,7 +195,8 @@ Not every package is enabled in every profile — see [Platform Services](/docs/
 | Design decisions keep getting re-litigated in review | The constraint lives in a document, not in the platform | Encode it as a Composition, a Kyverno policy, or a quota |
 | Deployments that nobody can trace to a change | Someone applied to the cluster directly | Revert it (ArgoCD already has), then make the change in Git |
 | Dashboards exist but no decision has ever come from them | Discover produced signals with no Decide stage consuming them | Attach a budget, a scorecard threshold, or a review to the signal |
-| A service reaches production with no owner | Define was skipped — the namespace predates the project | Create the `CompositeProject`; the catalog entry and quotas follow |
+| `no matches for kind "CompositeProject"` | The `Composite*` kinds were renamed on 2026-10-07 and are not aliased | Use `kind: Project` (likewise `Application`, `Database`) |
+| A service reaches production with no owner | Define was skipped — the namespace predates the project | Create the `Project`; the namespace, quotas and repository follow |
 
 ## Next steps
 

@@ -9,27 +9,27 @@ path: "/docs/getting-started/first-service"
 
 You have a platform. This page puts an application on it and follows the change the whole way — from a golden-path template, through a Git repository, through ArgoCD reconciliation, to a URL you can open. **Nothing you are about to do writes to the cluster directly**, and understanding why is the point of the exercise: on Adhar, the cluster is a projection of Git, so the way to change what is running is to change what is committed.
 
-Everything below assumes a local platform from [Quick Start](/docs/getting-started/quick-start). The commands are identical on a cloud platform; only the host name changes.
+Everything below assumes a local platform from [Quick Start](/docs/getting-started/quick-start). The commands are identical on a cloud platform; only the host name changes. By the end you will have scaffolded and deployed a service, watched the GitOps loop converge it, verified it at every layer, given it a database, and bound that database's credentials into it.
 
 ## At a glance
 
 | | |
 |---|---|
 | **Fastest path** | `adhar application deploy <name> --template <id> -n <ns>` |
-| **What it creates** | A Gitea repo `adhar/<name>` plus a `CompositeApplication` resource |
+| **What it creates** | A Gitea repo `adhar/<name>` plus an `Application` resource (`platform.adhar.io`) |
 | **What reconciles it** | ArgoCD, continuously, with self-heal on |
 | **Where it lands** | `https://<name>.adhar.localtest.me:8443` |
 | **Watch it with** | `adhar application status <name> --detailed` |
 
 ## The model: who creates what
 
-Whichever route you take, your application becomes a **`CompositeApplication`** — the platform's own application API, a namespaced Crossplane composite resource. Crossplane expands it into an ArgoCD Application, and ArgoCD keeps the workload matching Git:
+Whichever route you take, your application becomes an **`Application`** in `platform.adhar.io/v1alpha1` — the platform's own application API, a namespaced Crossplane composite resource. (It was called `CompositeApplication` until 2026-10-07; the old kind is rejected, not aliased.) Crossplane expands it into an ArgoCD Application, and ArgoCD keeps the workload matching Git:
 
 ```diagram
 gd-composite-application
 ```
 
-The value of the indirection is that you declare *intent* — a repo, a path, a destination — and the platform owns the machinery. The same `CompositeApplication` behaves identically on Kind and on a cloud, because a provider-specific composition is selected for you.
+The value of the indirection is that you declare *intent* — a repo, a path, a destination — and the platform owns the machinery. The same `Application` behaves identically on Kind and on a cloud, because a provider-specific composition is selected for you. Note that Argo CD also has a kind called `Application`; on the command line, qualify the platform's as `applications.platform.adhar.io`.
 
 ## Step 1 — Pick a template
 
@@ -57,14 +57,17 @@ adhar application templates microservice
 
 ## Step 2 — Deploy it
 
+The `Application` is namespaced, and neither the CLI nor the control plane creates its namespace for you. Create it first, then deploy into it. On `adhar application`, `-n` means `--namespace`. On `adhar database` it means `--name`, so spell `--namespace` out there:
+
 ```bash
+kubectl create namespace hello
 adhar application deploy hello --template microservice -n hello
 ```
 
 Three things happen, in order, and the CLI narrates each:
 
 1. **Scaffold.** The template's skeleton is rendered with your values and committed to a **new Gitea repository, `adhar/hello`**, as a single commit named `scaffold hello from microservice` on `main`. The template's hostname parameter is filled in for you from the platform host, giving `hello.adhar.localtest.me`.
-2. **Declare.** A `CompositeApplication` named `hello` is created in namespace `hello`, pointing at that repository.
+2. **Declare.** An `Application` named `hello` is created in namespace `hello`, pointing at that repository and at the manifest path the template declares.
 3. **Reconcile.** Crossplane selects a composition, produces an ArgoCD Application, and ArgoCD syncs the manifests.
 
 > **The repository must be new or empty.** Scaffolding refuses to overwrite an existing non-empty repo — your code is never clobbered by a re-run. Delete the repo, or choose another name.
@@ -73,15 +76,23 @@ The resource that results looks like this, which is also exactly what you would 
 
 ```yaml
 apiVersion: platform.adhar.io/v1alpha1
-kind: CompositeApplication
+kind: Application
 metadata:
   name: hello
   namespace: hello
+  labels:
+    adhar.io/managed-by: adhar-cli          # set by the CLI; harmless to omit by hand
 spec:
+  crossplane:
+    compositionSelector:
+      matchLabels:
+        provider: local                     # from ADHAR_PROVIDER; local on Kind
+        feature: application
   parameters:
-    project: default
+    project: default                        # the Argo CD project (--project)
     source:
-      repoURL: http://gitea-http.adhar-system.svc.cluster.local:3000/adhar/hello
+      repoURL: <platform Gitea URL>/adhar/hello.git   # the repo just scaffolded
+      path: <the template's manifest path>             # or --path
       targetRevision: main
     destination:
       namespace: hello
@@ -94,7 +105,7 @@ spec:
 |---|---|
 | Manifests or a chart already in Git | `adhar application deploy my-app --repo https://github.com/org/repo --path manifests/ --dest-namespace my-team --wait` |
 | Source code, no image, no Dockerfile | `adhar push my-app --git-url https://github.com/org/repo --wait` |
-| A `CompositeApplication` you wrote yourself | `adhar application deploy my-app --file my-app.yaml` |
+| An `Application` manifest you wrote yourself | `adhar application deploy my-app --file my-app.yaml` |
 
 `--wait` blocks until the application reports healthy, with a `--timeout` that defaults to 10 minutes. Without it the command returns as soon as the resource is accepted, which is the right default for scripts that do their own polling.
 
@@ -121,8 +132,8 @@ Three states to recognise:
 Verify at each layer when you want certainty rather than a summary:
 
 ```bash
-kubectl get compositeapplication -n hello               # the intent you declared
-kubectl get applications -n adhar-system                # ArgoCD's view of it
+kubectl get applications.platform.adhar.io -n hello    # the intent you declared
+kubectl get applications.argoproj.io hello -n adhar-system   # ArgoCD's view of it
 kubectl get deploy,pods,svc -n hello                    # the workload itself
 kubectl get httproute -A | grep hello                   # the route that makes it reachable
 curl -sk -o /dev/null -w 'HTTP %{http_code}\n' https://hello.adhar.localtest.me:8443
@@ -136,6 +147,7 @@ Work down the chain: intent → ArgoCD → workload → route. The first layer t
 
 | Symptom | Likely cause | What to do |
 |---|---|---|
+| `namespaces "hello" not found` on deploy | The namespace was never created | `kubectl create namespace hello`, then deploy again |
 | `application not found: hello/hello` | Wrong namespace — `-n` defaults to `default` | `adhar application list -A` |
 | Stuck `OutOfSync`, never applies | Manifest path wrong, or the repo has no manifests at that path | Re-deploy with an explicit `--path`; check the repo in Gitea |
 | `Progressing` forever, pods `Pending` | Node out of memory or CPU | `kubectl describe pod -n hello`; `kubectl top nodes`; give the engine more RAM |
@@ -171,31 +183,52 @@ A repository in the platform's Gitea that contains a **`.adhar/app.yaml`** is pi
 Infrastructure is requested as ordinary Kubernetes resources, governed by normal RBAC and quotas:
 
 ```bash
-adhar database create --name orders-db --engine postgresql --version 16 --size 20Gi
+adhar database create --name orders-db --engine postgresql --version 16 --size 20Gi --namespace hello
 adhar cache create sessions --engine valkey --replicas 2
 adhar bucket create uploads --size 100Gi
 
-adhar application bind hello orders-db      # mounts the connection Secret
+adhar application bind hello orders-db --namespace hello   # mounts the connection Secret
 ```
 
-`bind` finds the generated connection Secret — `<service>-app` by convention, overridable with `--secret` — and adds it as `envFrom` on the application's first container, then lets the Deployment roll. It is idempotent: binding twice tells you it is already bound and changes nothing.
+Two flags trip people up here. On `adhar database`, `-n` is short for `--name`, not namespace — use `--namespace hello` to put the database beside the app. And `--version` is required.
+
+```diagram
+ds-bind-flow
+```
+
+`bind` finds the generated connection Secret — `<service>-app` by convention, overridable with `--secret` — and adds it as `envFrom` on the application's first container, then lets the Deployment roll. It is idempotent: binding twice prints that the app is already bound and changes nothing. Verify the wiring, and that the new pods carry it:
+
+```bash
+kubectl get databases.platform.adhar.io orders-db -n hello            # READY True
+kubectl get secret orders-db-app -n hello                              # the connection details
+kubectl get deploy hello -n hello \
+  -o jsonpath='{.spec.template.spec.containers[0].envFrom}{"\n"}'      # contains orders-db-app
+kubectl rollout status deploy/hello -n hello                           # the roll completed
+```
+
+On a cloud platform the database Compositions write `<name>-db` rather than `<name>-app`, so bind with `--secret orders-db-db` there.
 
 The declarative equivalent, which is what you would commit:
 
 ```yaml
 apiVersion: platform.adhar.io/v1alpha1
-kind: CompositeDatabase
+kind: Database                         # formerly CompositeDatabase
 metadata:
   name: orders-db
-  namespace: team-orders
+  namespace: hello
 spec:
+  crossplane:
+    compositionSelector:
+      matchLabels:
+        provider: local                # aws or gcp on a cloud
+        engine: postgresql
   parameters:
     engine: postgresql
     engineVersion: "16"
-    storageSize: 50Gi
+    storageSize: 20Gi
 ```
 
-The same manifest resolves to a managed cloud database or an in-cluster CloudNativePG instance depending on where you run it. Your application never changes. See [Control Plane](/docs/core-concepts/control-plane).
+The same manifest resolves to a managed cloud database or an in-cluster CloudNativePG instance depending on the `provider` label. Your application never changes. See [Control Plane](/docs/core-concepts/control-plane) for every API you can request this way, and where each one puts its credentials.
 
 ## Secrets, observability and previews
 
@@ -209,18 +242,18 @@ metadata:
   namespace: my-team
 spec:
   secretStoreRef:
-    name: vault
-    kind: ClusterSecretStore
+    name: openbao
+    kind: SecretStore              # your namespace's own store
   target:
     name: myapp-config
   data:
     - secretKey: password
       remoteRef:
-        key: myapp/config
+        key: tenants/my-team/myapp/config
         property: password
 ```
 
-The `vault` `ClusterSecretStore` is created by the OpenBao package, which ships with the production profile — enable it before using this pattern on a laptop.
+The `SecretStore` named `openbao` is one you create once in your namespace, with a ServiceAccount named `adhar-secrets`; it can read only `secret/tenants/<your namespace>/`. The platform's `vault` `ClusterSecretStore` serves `adhar-system` only. OpenBao ships with the production profile — enable it before using this pattern on a laptop. [Manage Secrets End to End](/docs/guides/manage-secrets) has the full setup.
 
 **Observability** needs no wiring: metrics from your pods reach Prometheus and Grafana as soon as they run. The log, trace and network-flow stacks (Loki, Tempo, Hubble) belong to the production profile and are off by default locally — enable them with `adhar stack enable` if you want them on a laptop. See [Observability](/docs/operations/observability).
 
@@ -239,6 +272,8 @@ adhar application delete hello
 ## Next steps
 
 - **[Platform Services](/docs/core-concepts/platform-services)** — everything else your application can reach for
+- **[Deploy a Database-Backed Service](/docs/guides/deploy-a-database-backed-service)** — this page's last two steps, in depth
+- **[Preview Environments per Pull Request](/docs/guides/preview-environments)** — previews, set up end to end
 - **[Customization](/docs/operations/customization)** — enable more packages, add your own golden paths
 - **[CLI Reference](/docs/reference/cli)** — every command and flag
 - **[Troubleshooting](/docs/reference/troubleshooting)** — deeper failure signatures

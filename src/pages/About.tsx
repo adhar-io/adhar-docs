@@ -94,7 +94,7 @@ const About = () => {
   const openSource = [
     { label: "GitHub stars", value: "12k+" },
     { label: "Contributors", value: "300+" },
-    { label: "Integrated services", value: "50+" },
+    { label: "Integrated services", value: "100+" },
     { label: "License", value: "Apache 2.0" },
   ];
 

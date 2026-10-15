@@ -4,11 +4,11 @@ import { Play, CheckCircle2, Sparkles, Zap } from 'lucide-react';
 const DemoVideoSection = () => {
   const features = [{
     icon: Zap,
-    text: 'Deploy in under 10 minutes',
+    text: 'One adhar up, about ten minutes',
     color: 'text-primary'
   }, {
     icon: CheckCircle2,
-    text: '50+ pre-configured services',
+    text: '100+ pre-configured services',
     color: 'text-accent'
   }, {
     icon: Sparkles,
@@ -73,7 +73,7 @@ const DemoVideoSection = () => {
             <div className="text-sm text-muted-foreground">Average Deployment Time</div>
           </div>
           <div className="text-center p-6 rounded-xl bg-background/50 backdrop-blur-sm border border-border hover:border-accent/50 hover:bg-background/70 transition-all duration-300 group">
-            <div className="text-4xl font-bold text-accent mb-2 group-hover:scale-110 transition-transform duration-300">50+</div>
+            <div className="text-4xl font-bold text-accent mb-2 group-hover:scale-110 transition-transform duration-300">100+</div>
             <div className="text-sm text-muted-foreground">Pre-configured Services</div>
           </div>
           <div className="text-center p-6 rounded-xl bg-background/50 backdrop-blur-sm border border-border hover:border-primary/50 hover:bg-background/70 transition-all duration-300 group">

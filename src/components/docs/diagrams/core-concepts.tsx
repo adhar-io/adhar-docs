@@ -67,10 +67,10 @@ function LifecycleLoop() {
 
 const HandoffArtifacts = () => (
   <Pipeline
-    label="Each of the six phases hands the next one an artifact: a catalog entry and CompositeProject, an XRD and policy guardrail, source and tests in Git, a signed image and Argo CD Application, metrics logs traces and cost, then budgets scorecards and roadmap change."
+    label="Each of the six phases hands the next one an artifact: a catalog entry and Project, an XRD and policy guardrail, source and tests in Git, a signed image and Argo CD Application, metrics logs traces and cost, then budgets scorecards and roadmap change."
     caption="Every arrow is an artifact you can review and revert."
     stages={[
-      { name: "Define", guarantee: "catalog entry +\nCompositeProject", tone: "primary" },
+      { name: "Define", guarantee: "catalog entry +\nProject", tone: "primary" },
       { name: "Design", guarantee: "XRD +\npolicy guardrail" },
       { name: "Develop", guarantee: "source + tests\nin Git" },
       { name: "Deliver", guarantee: "signed image +\nArgo CD Application" },
@@ -233,7 +233,7 @@ function BootstrapPhases() {
 
 const DP_LINES = [
   "Your apps + thin agent profile:",
-  "Cilium · Kyverno · Alloy · ESO · SPIRE",
+  "Cilium · Kyverno · Alloy · ESO",
 ];
 
 function FleetTopology() {
@@ -285,7 +285,7 @@ const LANES: [string, number][] = [
 function RequestLife() {
   return (
     <Frame width={840} height={290}
-      label="A request's life: the developer applies a CompositeDatabase in the team namespace, the Kubernetes API admits it against RBAC and schema, Crossplane selects a Composition by labels and runs the function pipeline to produce managed resources and a connection Secret, the provider creates and continuously reconciles RDS, Cloud SQL or CNPG, and the developer mounts the connection Secret.">
+      label="A request's life: the developer applies a Database in the team namespace, the Kubernetes API admits it against RBAC and schema, Crossplane selects a Composition by labels and runs the function pipeline to produce managed resources and a connection Secret, the provider creates and continuously reconciles RDS, Cloud SQL or CNPG, and the developer mounts the connection Secret.">
       {LANES.map(([name, x]) => (
         <text key={name} x={x} y={16} fontFamily={SANS} fontSize={10} fontWeight={700}
           fill={C.dim} letterSpacing="0.08em">
@@ -295,7 +295,7 @@ function RequestLife() {
       <line x1={16} y1={24} x2={824} y2={24} stroke={C.line} strokeWidth={1} />
 
       <Box x={16} y={36} w={160} h={58} title="kubectl apply" tone="primary"
-        lines={["CompositeDatabase", "(team namespace)"]} />
+        lines={["Database", "(team namespace)"]} />
       <line x1={182} y1={65} x2={200} y2={65} stroke={C.strong} strokeWidth={1.5}
         markerEnd="url(#dk-arrow)" />
 

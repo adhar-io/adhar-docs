@@ -7,7 +7,7 @@ path: "/docs/core-concepts/platform-services"
 
 # Platform Services
 
-Adhar ships a curated catalogue of **100+ open-source packages** (a matching number of ApplicationSet entries). **A package is the platform's unit of capability** — a directory of pre-rendered manifests plus a machine-checkable contract, delivered by ArgoCD and switched on by one line in Git. This page explains how that catalogue is organised, what "enabled" really means, how packages relate to each other, and how to discover, enable, and inspect one.
+Adhar ships a curated catalogue of **100+ open-source packages** (a matching number of ApplicationSet entries). **A package is the platform's unit of capability** — a directory of pre-rendered manifests plus a machine-checkable contract, delivered by ArgoCD and switched on by one line in Git. This page explains how that catalogue is organised, what "enabled" really means, how packages relate to each other, and how to discover, enable, and inspect one. It is for anyone deciding what a platform should run — by the end you will be able to find a package, judge whether it is safe to turn on, enable it the GitOps way, and verify that it converged.
 
 > **Explore the ecosystem visually.** The [interactive Integrations explorer](/integrations) lets you search and filter every tool Adhar builds on, with logos and a description of how each one is used.
 
@@ -54,10 +54,10 @@ A single ArgoCD **ApplicationSet** turns every enabled entry into an Application
 
 ```yaml
 - name: "harbor"
-  enabled: "false"        # ← the on/off gate
-  namespace: "adhar-system"
-  category: "application"
-  manifestPath: "application/harbor/manifests"
+  enabled: "true"         # ← the on/off gate: a STRING, matched by the generator's selector
+  namespace: "adhar-system"   # every platform package installs here
+  category: "application"     # also stamped on the Application as adhar.io/category
+  manifestPath: "application/harbor/manifests"   # path inside the adhar/packages repo
 ```
 
 ```diagram
@@ -73,10 +73,16 @@ Two consequences are worth internalising before you change anything:
 
 The ApplicationSet is **selected by provider**. Kind gets the *local* profile; any cloud or on-prem target gets the *production* profile.
 
-| Profile | Applied to | Enables | Why |
-|---|---|---|---|
-| **local** | Kind | A curated core (32) | A single Kind node cannot run the full catalogue — the complete set OOM-kills it |
-| **production** | AWS, Azure, GCP, DigitalOcean, Civo, custom | 76 | Everything except the documented mutual exclusions and alternatives, each disabled entry carrying its reason inline |
+```diagram
+ds-profiles
+```
+
+| Profile | File | Applied to | Enables | Why |
+|---|---|---|---|---|
+| **local** | `adhar-appset-local.yaml` | Kind, or no provider set | A small curated core | A single Kind node cannot run the full catalogue — the complete set OOM-kills it |
+| **production** | `adhar-appset-production.yaml` | AWS, Azure, GCP, DigitalOcean, Civo, custom | Most of the catalogue | Everything except the documented mutual exclusions and alternatives, each disabled entry carrying its reason inline |
+
+The counts move as packages are added and verified, so this page does not quote them: `adhar stack list --enabled` prints the live set for your profile.
 
 Every package is *wired* in both profiles; the `enabled` flag is the only difference. "Opt-in" therefore means "flip one line", not "go find and integrate a tool".
 
@@ -94,7 +100,7 @@ Every platform package installs into the one shared **`adhar-system`** namespace
 |---|---|
 | `vault` ↔ `openbao` | Both define `ClusterSecretStore/vault` and `Service/vault`. Exactly one may be enabled — production runs OpenBao (MPL-2.0) rather than Vault (BUSL-1.1), and keeps every downstream name identical so consumers never have to know which is running |
 | `cosign` ↔ `buildpack` | Both knative-framework webhooks hardcode `Secret/webhook-certs`, so `buildpack` keeps its own `kpack-system` namespace — the one documented exception to the shared-namespace rule |
-| `vllm` ↔ `vllm-cpu` / `vllm-gpu` | Variants of the same serving stack |
+| `vllm` ↔ `vllm-cpu` / `vllm-gpu`, `llm-d` ↔ `llm-d-cpu` / `llm-d-gpu` | Variants of the same serving stack — enable one |
 
 > **A name a package hardcodes in its binary cannot be fixed by renaming the manifest** — a renamed object is never read. That is why some pairs are resolved by renaming, and others are exclusive by design.
 
@@ -104,13 +110,13 @@ The contract enum recognises nine categories, matching the directory layout on d
 
 | Category | What it covers | Packages |
 |---|---|---|
-| **core** | Portal and fleet components | `adhar-console`, `vcluster`, `karmada`, `kamaji`, `sveltos`, `velero` |
-| **infrastructure** | Provisioning engines | `crossplane`, `terraform` |
+| **core** | Portal, fleet and backup | `adhar-console`, `vcluster`, `karmada`, `kamaji`, `velero` |
+| **infrastructure** | Provisioning engines and node runtimes | `crossplane`, `terraform`, `kata-containers`, `gpu-operator` |
 | **security** | Identity, secrets, policy, runtime and supply-chain security | `keycloak`, `openbao`, `vault`, `external-secrets`, `cert-manager`, `kyverno`, `adhar-kyverno-policies`, `adhar-policy-packs`, `adhar-policy-reporter`, `adhar-supply-chain-policies`, `adhar-supply-chain-policies-enforce`, `adhar-tenant-quotas`, `adhar-credential-rotation`, `falco`, `tetragon`, `trivy`, `kubescape`, `cosign` |
 | **observability** | Metrics, logs, traces, profiles, flows, cost, alerting | `kube-prometheus`, `mimir`, `loki`, `tempo`, `alloy`, `faro`, `beyla`, `pyroscope`, `pixie`, `hubble`, `metrics-server`, `victoria-metrics`, `fluent-bit`, `opencost`, `adhar-cost-governance`, `oncall`, `headlamp` |
 | **application** | Delivery, supply chain, runtimes and developer tooling | `tekton`, `buildpack`, `harbor`, `nexus`, `adhar-supply-chain`, `adhar-supply-chain-kyverno`, `adhar-libraries`, `adhar-scorecards`, `adhar-preview-environments`, `adhar-preview-environments-kyverno`, `argo-events`, `argo-rollout`, `argo-workflows`, `kargo`, `keda`, `knative`, `open-function`, `dapr`, `external-dns`, `coder`, `k6`, `litmus`, `chaos-mesh`, `n8n`, `posthog`, `plane`, `penpot`, `baserow`, `strapi`, `tooljet` |
-| **data** | Databases, streaming, object storage, lakehouse, ML and BI | `cnpg`, `mongodb`, `mysql-operator`, `valkey`, `redis`, `rabbitmq`, `kafka-operator`, `kafka-ui`, `opensearch`, `rustfs`, `minio`, `trino`, `airbyte`, `dagster`, `prefect`, `spark-operator`, `kubeflow`, `jupyterhub`, `mlflow`, `metabase`, `open-metadata`, `libredb-studio` |
-| **ai** | Model serving and the agentic layer | `adhar-ai`, `agentgateway`, `llm-d`, `vllm`, `vllm-cpu`, `vllm-gpu` |
+| **data** | Databases, streaming, object storage, lakehouse, ML and BI | `cnpg`, `mongodb`, `mysql-operator`, `mariadb-operator`, `neo4j`, `valkey`, `valkey-admin`, `redis`, `rabbitmq`, `kafka-operator`, `kafka-ui`, `opensearch`, `rustfs`, `minio`, `trino`, `airbyte`, `dagster`, `prefect`, `spark-operator`, `kubeflow`, `jupyterhub`, `mlflow`, `metabase`, `open-metadata`, `libredb-studio` |
+| **ai** | Model serving and the agentic layer | `adhar-ai`, `agentgateway`, `k8sgpt`, `llm-d`, `llm-d-cpu`, `llm-d-gpu`, `vllm`, `vllm-cpu`, `vllm-gpu` |
 
 The full searchable list with logos and per-tool usage is on the [Integrations explorer](/integrations).
 
@@ -151,7 +157,20 @@ adhar upgrade                        # converge
 adhar stack sync harbor              # hard refresh if it parks at Unknown
 ```
 
-`enable` and `disable` edit files and stop: nothing is committed, pushed, or applied until `adhar upgrade`. Changing a package's *configuration* instead means editing `values.yaml`, re-running `generate-manifests.sh`, and committing the regenerated manifests — that workflow, and adding your own package, is in [Customization](/docs/operations/customization).
+`enable` and `disable` edit files and stop: nothing is committed, pushed, or applied until `adhar upgrade`.
+
+### 4. Verify it converged
+
+```bash
+adhar stack list --enabled --category application   # harbor now declared enabled
+adhar stack status harbor                           # declared vs live, one package
+kubectl -n adhar-system get applications.argoproj.io harbor   # SYNC Synced, HEALTH Healthy
+kubectl get httproute -A | grep harbor              # the route that makes its UI reachable
+```
+
+Success is the Application at `Synced` and `Healthy` and, for a package with a UI, an `HTTPRoute` for its host. A package that sits at `Progressing` for a few minutes is usually pulling images or waiting on a database; one that sits at `Unknown` needs `adhar stack sync <pkg>`.
+
+Changing a package's *configuration*, rather than whether it is on, means editing `values.yaml`, re-running `generate-manifests.sh`, and committing the regenerated manifests — that workflow, and adding your own package, is in [Customization](/docs/operations/customization).
 
 ## Accessing services
 
@@ -209,4 +228,5 @@ kubectl -n adhar-system get configmap adhar-scorecards -o jsonpath='{.data.summa
 - [Architecture](/docs/core-concepts/architecture) — how packages fit the four-layer design
 - [Customization](/docs/operations/customization) — enable, configure, and add packages
 - [Control Plane](/docs/core-concepts/control-plane) — the self-service infrastructure APIs
+- [Upgrade the Platform](/docs/guides/upgrade-the-platform) — converging a live platform onto a newer stack
 - [Integrations explorer](/integrations) — the full searchable catalogue

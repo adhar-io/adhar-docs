@@ -9,16 +9,27 @@ path: "/docs/getting-started/quick-start"
 
 One command turns your laptop into a complete Internal Developer Platform: GitOps delivery, identity, CI, a container registry, observability and a developer portal, all behind one gateway and one sign-on. **The interesting part is not that it is one command — it is that after the first two minutes, Git is in charge.** This page narrates what each phase is doing so the wait is informative rather than opaque.
 
-You need a container engine and the `adhar` CLI from [Installation](/docs/getting-started/installation). Nothing else.
+You need a container engine and the `adhar` CLI from [Installation](/docs/getting-started/installation). Nothing else. By the end of this page you will have a running platform, know how to tell that it is healthy, be signed in to its consoles, have changed it the GitOps way, and have asked its control plane for a database.
+
+## Ten minutes, on a laptop or a cloud
+
+**One `adhar up` brings up the whole platform — on your laptop or on any supported cloud.** Locally that takes about ten minutes. On a cloud, the provider's machine provisioning sets the pace: DigitalOcean is serving in about 5 minutes and usable at about 13; AWS first runs take 25–40 minutes. The command is the same shape either way:
+
+```bash
+adhar up                                              # local: Kind, no config file
+adhar up -f config.digitalocean.yaml --env dev        # cloud: a config file and an environment
+```
+
+This page uses the local path, because it needs no account and no DNS. Everything you learn here — the stages, the status checks, the GitOps workflow — is identical on a cloud. [Installation](/docs/getting-started/installation#set-up-a-cloud-platform) covers the cloud preparation.
 
 ## At a glance
 
 | | |
 |---|---|
 | **Command** | `adhar up` |
-| **Time** | Roughly 10 minutes on a warm machine; longer on the first run, which pulls ~10 GB |
+| **Time** | About 10 minutes locally on a warm machine; the first run also pulls ~10 GB. On a cloud, provisioning sets the pace |
 | **What you get** | A Kind node named `adhar` running the curated local platform profile |
-| **Packages** | 17 of the 101 wired catalogue entries are enabled locally |
+| **Packages** | A curated core of the 100+ wired catalogue entries — `adhar stack list --enabled` prints them |
 | **Host ports** | `8443` → HTTPS, `8080` → HTTP, mapped to the Gateway's node ports `30443`/`30080` |
 | **URLs** | `https://<service>.adhar.localtest.me:8443` |
 | **Teardown** | `adhar down` |
@@ -55,13 +66,19 @@ Two things about that diagram are quick to skip past, and both are worth interna
 
 **The foundation never touches the network.** Those six components ship as manifests compiled into the binary, so the bootstrap cannot be broken by an upstream chart repository being down or having moved.
 
-**After step 4, Git is the source of truth.** ArgoCD reconciles continuously with self-heal on, so a manual `kubectl edit` on a managed object is reverted within about a minute. Changing the platform means changing Git — covered in step 6 below and in [Architecture](/docs/core-concepts/architecture).
+**After step 4, Git is the source of truth.** ArgoCD reconciles continuously with self-heal on, so a manual `kubectl edit` on a managed object is reverted within about a minute. Changing the platform means changing Git — covered in step 5 below and in [Architecture](/docs/core-concepts/architecture).
 
 ### How long each phase takes
+
+```diagram
+ds-up-timeline
+```
 
 Measured on one machine (Docker Desktop, 11 CPUs) with a warm image cache: the foundation completes in about **2m40s** and the GitOps sync of the curated core in about another **6m40s**, so roughly **ten minutes** to every application `Synced` and `Healthy`. The first run on a cold machine is slower — it pulls roughly 90 images from eight registries through per-registry pull-through caches that Adhar starts alongside the node. Every later run reads them from local disk.
 
 The CLI stops waiting after `--apps-timeout` (default **15 minutes**) and says so; ArgoCD keeps converging in the background either way.
+
+On a cloud the foundation and GitOps phases take about as long as they do locally; what changes is the time in front of them. The checklist gains **Preflight** (credentials, quota and API access), **Cloud cluster** and **Kubeconfig & TLS** stages, and the provider's machine provisioning dominates. The catalogue on AWS, GCP and Azure keeps converging for another 30–45 minutes after the CLI returns, while the autoscaler adds workers — the provider pages carry the measured numbers.
 
 ### Useful variants
 
@@ -145,7 +162,26 @@ adhar upgrade                    # converge
 
 > A single Kind node cannot run the full catalogue — the local profile exists precisely because the full set OOM-kills the node. Check `kubectl top nodes` before enabling anything heavy, and check `adhar stack conflicts` first: a few packages claim the same cluster-scoped objects and must not both be enabled. Full workflow in [Customization](/docs/operations/customization).
 
-## 6. If something goes wrong
+## 6. Ask the control plane for something
+
+The platform is not only consoles. Teams request infrastructure as Kubernetes objects, and the control plane composes it. Ask for a PostgreSQL database in a namespace of your own:
+
+```bash
+kubectl create namespace demo
+adhar database create --name demo-db --engine postgresql --version 16 --namespace demo
+```
+
+`-n` on `adhar database` means `--name`, not namespace, so spell `--namespace` out. Then follow the request down to what it produced:
+
+```bash
+kubectl get databases.platform.adhar.io -n demo     # the request: READY turns True
+kubectl get clusters.postgresql.cnpg.io -n demo     # what it composed: a CNPG cluster
+kubectl get secret demo-db-app -n demo              # the connection details, for your app
+```
+
+Locally the request resolves to an in-cluster CloudNativePG cluster; on a cloud the same request can resolve to a managed database. [Control Plane](/docs/core-concepts/control-plane) explains the mechanism and lists every API you can ask for. Clean up with `kubectl delete namespace demo`.
+
+## 7. If something goes wrong
 
 | Symptom | First move |
 |---|---|
@@ -155,13 +191,14 @@ adhar upgrade                    # converge
 | A URL returns nothing | `adhar get apps` — the package must be enabled, `Healthy`, and ship an `HTTPRoute` |
 | Browser TLS warning | Expected locally; production uses cert-manager certificates |
 | Pods `Pending`, node under pressure | Give the engine more RAM, or disable packages you enabled |
+| `demo-db` never turns `READY` | `kubectl describe databases.platform.adhar.io demo-db -n demo` — the events name the unready piece |
 | Everything wedged | `adhar up --recreate` — destructive rebuild |
 
 ### Why re-running `adhar up` is safe
 
 Every foundation manifest is applied with Server-Side Apply and force-ownership, so re-applying re-adopts the existing objects instead of duplicating them. Each phase is gated on a status flag — satisfied gates short-circuit and the pending one runs — and without `--recreate` the existing healthy node is reused, so repos, data and running apps survive. The exit gate is honest: a run cannot report success while the repos are unseeded or the Gateway is unprogrammed. Deeper failure signatures are in [Troubleshooting](/docs/reference/troubleshooting).
 
-## 7. Tear it down
+## 8. Tear it down
 
 ```bash
 adhar down                        # remove the Kind node and Adhar state
@@ -176,6 +213,7 @@ adhar up --recreate               # or destroy and rebuild in one step
 You have a platform. The next page puts an application on it and follows the change all the way from a template to a URL.
 
 - **[Your First Service](/docs/getting-started/first-service)** — the full GitOps loop, end to end
+- **[Deploy a Database-Backed Service](/docs/guides/deploy-a-database-backed-service)** — the control-plane request above, carried through to a running app
 - **[Configuration](/docs/getting-started/configuration)** — the config file, for when you move off the laptop
 - **[Architecture](/docs/core-concepts/architecture)** — how the bootstrap and control plane actually fit together
 - **[CLI Reference](/docs/reference/cli)** — every command and flag

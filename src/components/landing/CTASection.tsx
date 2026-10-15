@@ -23,7 +23,7 @@ const CTASection = () => {
             </h2>
 
             <p className="section-subheading mt-5">
-              Join teams who replaced months of platform work with a single command.
+              Replace months of platform work with a single adhar up — on your laptop or any cloud.
               Free to start, open source, no lock-in.
             </p>
 

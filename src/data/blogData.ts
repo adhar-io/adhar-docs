@@ -65,7 +65,7 @@ A single \`adhar up\` command provisions a complete platform in under 10 minutes
 | **DigitalOcean** | \`DIGITALOCEAN_DOKS\` | Lean managed production |
 | **Civo** | \`CIVO_K3S\` | Fast, low-cost K3s |
 
-## 50+ services, pre-integrated
+## 100+ services, pre-integrated
 
 ADHAR bundles battle-tested open-source projects into one curated, security-hardened stack — wired together and managed declaratively through GitOps. A sample of the 50+ components:
 

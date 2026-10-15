@@ -8,7 +8,6 @@ import ModernArchitectureDiagram from '@/components/ModernArchitectureDiagram';
 import CapabilitiesSection from '@/components/landing/CapabilitiesSection';
 import FluentAISection from '@/components/landing/FluentAISection';
 import IntegrationsSection from '@/components/landing/IntegrationsSection';
-import TestimonialsSection from '@/components/landing/TestimonialsSection';
 import PricingSection from '@/components/landing/PricingSection';
 import FAQSection from '@/components/landing/FAQSection';
 import CTASection from '@/components/landing/CTASection';
@@ -65,7 +64,6 @@ const Index = () => {
         <Reveal><CapabilitiesSection /></Reveal>
         <Reveal><FluentAISection /></Reveal>
         <Reveal><IntegrationsSection /></Reveal>
-        <Reveal><TestimonialsSection /></Reveal>
         <Reveal><PricingSection /></Reveal>
         <Reveal><FAQSection /></Reveal>
         <Reveal><CTASection /></Reveal>

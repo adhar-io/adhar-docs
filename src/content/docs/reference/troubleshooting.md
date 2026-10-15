@@ -7,11 +7,19 @@ path: "/docs/reference/troubleshooting"
 
 # Troubleshooting
 
-A diagnostic guide, not a list of tips: **run the triage block, work out which phase or layer is failing, then read the matching symptom**. Every entry has one shape — symptom, cause, confirm, fix. Examples assume `adhar-system` and local Kind.
+A diagnostic guide, not a list of tips: **run the triage checks, work out which phase or layer is failing, then read the matching symptom**. It is for whoever is on the hook when the platform misbehaves, on a laptop or in production. Every entry has one shape — symptom, cause, confirm, fix. Examples assume namespace `adhar-system` and local Kind (`*.adhar.localtest.me`); on cloud, substitute your `globalSettings.defaultHost`.
+
+## Triage: where to start
+
+The platform is built in layers, and a failure in a lower layer explains every symptom above it. So the order you check things in matters more than any single command. Work down this flow and stop at the first "no".
+
+```diagram
+do-triage
+```
 
 ## The first five commands
 
-Run these before forming a theory; the first that disagrees with its comment names the layer.
+The same checks as commands. Run them before forming a theory; the first that disagrees with its comment names the layer.
 
 ```bash
 kubectl config current-context                      # 1. the cluster you think you are on
@@ -23,19 +31,43 @@ kubectl get gateway -n adhar-system adhar-gateway \
                                                     # 5. is the data path live
 ```
 
-`adhar get status` renders `ArgoCDReady`, `GatewayReady`, `GiteaReady`, `CrossplaneReady`, `GitOpsReady` and package health. **It does not verify that Crossplane can provision** — check that below.
+`adhar get status` renders `ArgoCDReady`, `GatewayReady`, `GiteaReady`, `CrossplaneReady`, `GitOpsReady` and package health. **It does not verify that Crossplane can provision** — check that below. The raw resource carries the phase gates themselves:
+
+```bash
+kubectl get adharplatform -n adhar-system -o yaml
+# key gates: .status.gateway.available, .status.gitea.repositoriesCreated,
+#            .status.crossplane.controlPlaneApplied, .status.autoscaling
+```
+
+## Find your symptom
+
+| What you see | Read |
+|---|---|
+| `curl` returns `HTTP 000`; every URL hangs | [`HTTP 000` on every URL](#http-000-on-every-url) |
+| ArgoCD is up but shows no applications | [No applications at all](#no-applications-at-all) |
+| `failed installing <component>: …` | [A core installer errored](#a-core-installer-errored) |
+| `Gitea not ready` / `Gitea API not responding after 5 minutes` | [Gitea slow to serve](#gitea-slow-to-serve) |
+| `CrossplaneReady` stays false; `adhar up` keeps requeuing | [`CrossplaneReady` never clears](#crossplaneready-never-clears) |
+| Platform healthy, but nothing can be provisioned | [Zero ProviderConfigs](#zero-providerconfigs) |
+| App stuck at `waiting for healthy state of <resource>` | [A sync is wedged](#a-sync-is-wedged) |
+| Every application flips `OutOfSync` after a push | [Every app goes OutOfSync after a push](#every-app-goes-outofsync-after-a-push-expected) |
+| SSO login works, ArgoCD application list is empty | [SSO works but the app list is empty](#sso-works-but-the-app-list-is-empty) |
+| DNS resolves, HTTPS fails | [The URL resolves but TLS fails](#the-url-resolves-but-tls-fails) |
+| `exceed max volume count` | [`exceed max volume count` on cloud](#exceed-max-volume-count-on-cloud) |
+| Pods `Pending`, autoscaler does nothing | [The autoscaler is not scaling](#the-autoscaler-is-not-scaling) |
+| Every SSO login returns 503 | [Storage saturation takes SSO down](#storage-saturation-takes-sso-down) |
+| `ExternalSecret` in `SecretSyncedError` | [Secrets and OpenBao](#secrets-and-openbao) |
+| A deploy is rejected by an admission webhook | [Policy denials](#policy-denials) |
+| `adhar cluster list` prints `No clusters found` | [`adhar cluster list` says "No clusters found"](#adhar-cluster-list-says-no-clusters-found) |
 
 ## How the platform comes up
 
-Phase order makes a partial failure readable: an early failure blocks everything after it.
+Phase order makes a partial failure readable: an early failure blocks everything after it. Bootstrap is two phases. **Phase 1** is imperative: the controller server-side-applies the foundation in a fixed order — Gateway API CRDs, Cilium, the Gateway, the CNPG operator (HA mode only), ArgoCD, Gitea — and starts installing Crossplane core early so it pulls while seeding runs. **Phase 2** is declarative: it seeds the `packages` and `environments` repositories in the Gitea `adhar` org, applies ArgoCD's repository credentials and the platform ApplicationSet, and only *then* applies Crossplane's control-plane configuration, so that slow, retry-prone step can never block GitOps. After that, ArgoCD owns everything.
 
-```text
-  phase 1  bootstrap (imperative, server-side apply, ordered)
-     Gateway API CRDs → Cilium → Gateway → [CNPG if HA]
-       → ArgoCD → Gitea → Crossplane
-  phase 2  GitOps (declarative)
-     seed Gitea packages/environments repos → apply ArgoCD repo auth
-       → apply the platform ApplicationSet → ArgoCD owns everything after
+The ladder below is the same order, with what each step's failure looks like from the outside.
+
+```diagram
+do-bootstrap-failures
 ```
 
 Locally the controller runs in-process and exits after phase 2, so **nothing retries on its own**. Re-running `adhar up` without `--recreate` is safe: manifests are server-side applied with `ForceOwnership`, and each phase keys on a status flag, so satisfied gates short-circuit.
@@ -63,6 +95,19 @@ On cloud, roll changes out with `adhar upgrade --yes` (preview with `--diff-only
 **Diagnose** — `kubectl -n adhar-system describe pod <pod>`.
 **Fix** — usually self-heals on requeue. If not, `adhar up`; if the node is starved, `--recreate`.
 
+### Gitea slow to serve
+
+**Symptom** — bootstrap sits at "Setting up GitOps repositories…" and logs `Gitea not ready` / `Gitea API not responding after 5 minutes`.
+**Cause** — Gitea took longer than the seeding step's budget: a slow disk, an image pull, or in HA mode a CNPG database still initialising. Seeding never races an unready API — it waits for the deployment, the pods and an in-pod `GET /api/v1/version`.
+**Diagnose**
+
+```bash
+kubectl get deploy,pods -n adhar-system -l app=gitea
+kubectl get clusters.postgresql.cnpg.io -n adhar-system     # HA: is gitea-db healthy?
+```
+
+**Fix** — `kubectl rollout status deploy/gitea -n adhar-system --timeout=10m`, then `adhar up` to resume seeding.
+
 ### `CrossplaneReady` never clears
 
 **Symptom** — the foundation is up and apps exist, but `adhar up` keeps requeuing.
@@ -89,7 +134,18 @@ kubectl get clusterproviderconfigs.aws.m.upbound.io   # per cloud in use
 
 **Symptom** — an empty list for a cluster you know is running.
 **Cause** — without `--file` it loads the default config, which declares no cloud provider, and queries nothing.
-**Fix** — `adhar cluster list --file config.yaml`. Same for `status`, `scale`, `upgrade`; on `cluster delete`, `-f` is `--force`, so spell out `--file`.
+**Fix** — `adhar cluster list --file config.yaml`. Same for `status`, `scale`, `upgrade` and `delete`.
+
+### Applications hang `Terminating` after a cluster is deleted
+
+**Symptom** — you deleted a `Cluster`, and the ArgoCD Applications that targeted it hang in `Terminating`.
+**Cause** — deleting the XR removes ArgoCD's cluster-registration Secret at the same moment as the cluster, so the Applications' prune finalizer can never reach an API server.
+**Fix** — clear the finalizers, and next time prune the Applications **before** deleting the XR:
+
+```bash
+kubectl -n adhar-system patch application <app> --type merge \
+  -p '{"metadata":{"finalizers":[]}}'
+```
 
 ## ArgoCD and GitOps
 
@@ -188,7 +244,30 @@ kubectl port-forward -n adhar-system svc/adhar-console        3000:3000
 adhar cluster scale <cluster> --workers 10 -p digitalocean -f config.yaml
 ```
 
-`spec.storageClassName` is immutable, so a wrongly-classed PVC must be deleted to move it.
+`spec.storageClassName` is immutable, so a wrongly-classed PVC must be deleted to move it. A different message, `volume node affinity conflict`, is **not** a capacity problem: the volume is pinned to a zone or node the pod cannot use, so more identical workers will not help. Check the PV's `nodeAffinity` and the StorageClass `volumeBindingMode` instead.
+
+### The autoscaler is not scaling
+
+**Symptom** — pods are `Pending`, or the cluster is idle, and the worker count does not move.
+**Cause** — usually a deliberate guard. The reason is recorded on the platform resource.
+**Diagnose**
+
+```bash
+kubectl get adharplatform -n adhar-system \
+  -o jsonpath='{.items[0].status.autoscaling}{"\n"}'
+# workers, lastScaleUp, lastScaleDown, underutilizedSince, lastReason
+```
+
+| `lastReason` says | Meaning |
+|---|---|
+| `… but maxWorkers=N reached` | The spend ceiling — raise `autoscaling.maxWorkers` |
+| `… waiting out the 3m scale-up cooldown` | `scaleUpCooldown` since the last addition |
+| `cluster idle for Xs of the required 10m` | `scaleDownDelay` has not elapsed |
+| `cluster idle … but minWorkers=N reached` | The floor |
+| `cluster idle but a worker was added/removed recently; holding` | One move per delay window, so the cluster settles |
+| `… no worker is safe to drain: pod <ns>/<name> holds ReadWriteOnce volume <claim>` | A node hosting a ReadWriteOnce volume is never retired |
+
+**Fix** — act on the reason. Pods pending on taints, node affinity or a volume affinity conflict are deliberately not scale-up triggers: a new worker is a clone of the existing ones and would not satisfy them either.
 
 ### A node flaps NotReady
 
@@ -199,20 +278,28 @@ adhar cluster scale <cluster> --workers 10 -p digitalocean -f config.yaml
 ### Storage saturation takes SSO down
 
 **Symptom** — every SSO login returns 503, and `barman-cloud-wal-archive: … no space left on device` appears on every database at once.
-**Cause** — the shared MinIO (the default backup target) filled, so no database can retire WAL and Postgres volumes fill. Keycloak usually hits zero first.
-**Fix** — expand MinIO, set a CNPG `retentionPolicy` on every database, then expand the claim:
+**Cause** — the in-cluster object store (RustFS, which replaced MinIO as the platform's primary S3 store) is the default backup target for every platform database. When its volume fills, WAL archiving fails everywhere, no database can retire WAL, and the Postgres volumes fill. Keycloak usually hits zero first.
+**Diagnose**
+
+```bash
+kubectl -n adhar-system get pvc rustfs-data
+kubectl -n adhar-system get clusters.postgresql.cnpg.io \
+  -o custom-columns=NAME:.metadata.name,STATUS:.status.phase,LASTFAILED:.status.lastFailedBackup
+```
+
+**Fix** — grow the object store's claim, set a CNPG `retentionPolicy` on every database, then expand any Postgres claim that already filled:
 
 ```bash
 kubectl -n adhar-system patch pvc keycloak-db-1 --type merge \
   -p '{"spec":{"resources":{"requests":{"storage":"20Gi"}}}}'
 ```
 
-In production, point the backup location at real object storage and alert on MinIO PVC usage above 80%.
+In production, point the backup location at off-cluster object storage and alert on the object store's PVC usage above 80% — see [Backup and Restore](/docs/guides/backup-and-restore).
 
 ## Secrets and OpenBao
 
 **Symptom** — `ExternalSecret`s sit in `SecretSyncedError` and their Secrets never appear.
-**Causes, in order** — OpenBao is sealed or uninitialised; `ClusterSecretStore/vault` is missing; both backends are enabled and fighting.
+**Causes, in order** — OpenBao is sealed or uninitialised; `ClusterSecretStore/vault` is missing; both backends are enabled and fighting; the ExternalSecret is in an application namespace and names `ClusterSecretStore/vault`, which serves `adhar-system` only.
 **Diagnose**
 
 ```bash
@@ -222,7 +309,7 @@ kubectl get clustersecretstore vault -o yaml
 adhar stack conflicts
 ```
 
-**Fix** — the `openbao-bootstrap` Job is idempotent and runs as an ArgoCD sync hook, so `adhar stack sync openbao` re-runs init, unseal and configuration. If both backends are on, disable one and `adhar upgrade`: both claim `ClusterSecretStore/vault` and `Service/vault`, and two owners flap forever. The unseal key and root token live in `Secret/openbao-keys`; in production prefer KMS auto-unseal.
+**Fix** — the `openbao-bootstrap` Job is idempotent and runs as an ArgoCD sync hook, so `adhar stack sync openbao` re-runs init, unseal and configuration. An application namespace uses its own `SecretStore` with OpenBao role `tenant` and ServiceAccount `adhar-secrets` instead — see [Manage Secrets End to End](/docs/guides/manage-secrets). If both backends are on, disable one and `adhar upgrade`: both claim `ClusterSecretStore/vault` and `Service/vault`, and two owners flap forever. The unseal key and root token live in `Secret/openbao-keys`; in production prefer KMS auto-unseal.
 
 ## Policy denials
 
@@ -246,6 +333,18 @@ kubectl -n adhar-system logs deploy/argo-cd-argocd-server
 kubectl get events -n adhar-system --sort-by=.lastTimestamp | tail -30
 cilium status && hubble observe --since 5m --namespace <ns>
 ```
+
+## Common pitfalls
+
+| Symptom | Cause | Fix |
+|---|---|---|
+| A fix pushed to Gitea changes nothing | The in-flight sync is pinned to its starting revision | Terminate the operation, then hard-refresh the Application |
+| `kubectl edit` reverts within a minute | ArgoCD self-heal | Change the stack and `adhar upgrade` ([Customization](/docs/operations/customization)) |
+| `adhar up --recreate` "fixed" it but data is gone | `--recreate` deletes the cluster | Re-run `adhar up` without it first; it resumes |
+| `adhar up -f config.yaml` touched every environment | No `--env` | Always pass `--env <name>` |
+| Diagnosing the wrong cluster | Another kube-context is current | `kubectl config current-context` before anything else |
+| Health looks green, nothing provisions | `adhar get status` does not check ProviderConfigs | `kubectl get clusterproviderconfigs.<group>` |
+| Two packages flap `Degraded` forever | A mutual exclusion (for example `vault` and `openbao`) is violated | `adhar stack conflicts`, disable one, `adhar upgrade` |
 
 Still stuck? Ask on [Slack](https://join.slack.com/t/adharworkspace/shared_invite/zt-26586j9sx-QGrIejNigvzGJrnyH~IXww) or open a [GitHub issue](https://github.com/adhar-io/adhar/issues).
 

@@ -68,17 +68,17 @@ const HeroTitle = ({ isVisible }: HeroTitleProps) => {
 
         {/* Secondary description */}
         <p className="text-pretty text-base sm:text-lg text-muted-foreground leading-relaxed max-w-2xl mx-auto">
-          <span className="font-medium text-foreground">50+ production-grade services</span>, security-hardened and pre-configured.
-          Deploy complete platforms across any cloud in{' '}
-          <span className="font-medium text-foreground">under 10 minutes</span> with a single command.
+          <span className="font-medium text-foreground">100+ production-grade services</span>, security-hardened and pre-configured.
+          One <code className="font-mono text-foreground">adhar up</code> brings up the whole platform — on your laptop in{' '}
+          <span className="font-medium text-foreground">about ten minutes</span>, or on any supported cloud with the same single command.
         </p>
       </div>
 
       {/* Modern stats row — clean, restrained */}
       <div className={`grid grid-cols-2 md:grid-cols-4 gap-px sm:gap-2 mt-12 max-w-3xl mx-auto rounded-2xl border border-border/70 bg-card/40 backdrop-blur-sm p-2 transition-all duration-700 delay-500 ${isVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'}`}>
         {[
-          { value: '50+', label: 'Services' },
-          { value: '<10min', label: 'Time to deploy' },
+          { value: '100+', label: 'Services' },
+          { value: '~10 min', label: 'To a running platform' },
           { value: '100%', label: 'Open source' },
           { value: '0%', label: 'Vendor lock-in' },
         ].map((stat) => (

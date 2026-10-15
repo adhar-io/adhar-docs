@@ -9,6 +9,8 @@ path: "/docs/operations/observability"
 
 Most platforms bolt monitoring on per service, and every team solves label naming, trace propagation and retention again. Adhar is **observable by construction**: one collection contract (OpenTelemetry), one storage tier (the Grafana LGTM stack), one pane (Grafana). Enable a package and Grafana already sees it.
 
+This page is for platform engineers running the stack and developers who want their service visible in it. It explains how signals flow, what you get for free, the two things a service has to do itself, how to investigate an incident across metrics, traces and logs, and which alerts actually predict outages.
+
 ## At a glance
 
 | | |
@@ -146,6 +148,10 @@ https://oncall.<host>       schedules and escalation
 
 In **Explore**, the datasources are cross-linked, so an investigation is one path rather than five tabs:
 
+```diagram
+do-investigation
+```
+
 1. Start on a metric spike (`Prometheus` or `Mimir`). Exemplars carry a `trace_id` and render a **View trace** button into Tempo.
 2. In the Tempo trace, `tracesToLogsV2` jumps to the Loki lines for that `service.name` / `k8s.pod.name` within ±5 minutes, filtered by trace ID. From a Loki line, the `TraceID` derived field goes back the other way.
 3. Tempo's service map and node graph are on by default, because the metrics generator is enabled and remote-writes span metrics and service graphs into Mimir.
@@ -165,6 +171,39 @@ hubble observe --since 5m --namespace checkout
 ```
 
 > `adhar metrics` and `adhar traces` default to service URLs that do not exist on an Adhar cluster. Pass `--prometheus-url` / `--tempo-url` explicitly, or port-forward first. `adhar cost` needs no flag — it reaches Prometheus through the API server's service proxy, authorised by your own RBAC.
+
+## Verify a service end to end
+
+"Configured" is not "working" — the platform learned that the hard way, with Alloy shipping metrics that Mimir refused for months while Grafana looked fine. Verify at the **reader**, with a query that must return data.
+
+1. **The monitor exists and selects your Service.**
+
+   ```bash
+   kubectl -n checkout get servicemonitor checkout
+   kubectl -n checkout get svc -l app.kubernetes.io/name=checkout   # the selector must match
+   ```
+
+2. **Prometheus is scraping it.** Port-forward and ask for the target's `up` series:
+
+   ```bash
+   kubectl -n adhar-system port-forward svc/prometheus-kube-prometheus-prometheus 9090:9090 &
+   adhar metrics list --query 'up{job="checkout"}' --prometheus-url http://localhost:9090
+   ```
+
+   *Success:* one series per pod with value `1`. No series means the selector missed; `0` means the target is down.
+
+3. **Traces arrive in Tempo.** Send one real request, then search for it:
+
+   ```bash
+   kubectl -n adhar-system port-forward svc/tempo 3200:3200 &
+   adhar traces search --service checkout --tempo-url http://localhost:3200
+   ```
+
+   *Success:* at least one trace for `checkout`. Nothing at all usually means `OTEL_EXPORTER_OTLP_ENDPOINT` points somewhere other than Alloy on 4318.
+
+4. **Logs carry Kubernetes labels.** In Grafana Explore, query Loki with `{namespace="checkout"}`. *Success:* lines appear and can be filtered by `pod` and `container`.
+
+5. **The cross-links work.** Open a trace from step 3 and follow its link into Loki. The jump filters on `service.name` / `k8s.pod.name` and the trace ID within ±5 minutes, so if it comes back empty while both stores have data, check that the spans carry `service.name` (set `OTEL_SERVICE_NAME`) and that your log lines include the trace ID.
 
 ## Adding a dashboard
 

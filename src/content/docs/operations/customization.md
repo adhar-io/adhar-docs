@@ -9,6 +9,8 @@ path: "/docs/operations/customization"
 
 The golden rule: **customizations are declarative changes to the platform stack, applied with `adhar upgrade`** — never `kubectl apply` against a managed object, because ArgoCD reverts it within a minute. If a routine customization seems to need a Go change, that is an architecture gap worth reporting, not a workflow.
 
+This page is for platform engineers who want the platform to fit their organisation: switching packages on and off, retuning one, adding their own, and extending the self-service APIs. It explains why hand-edits do not stick, then walks through each kind of change with the commands to make it and the commands to prove it landed.
+
 ## At a glance
 
 | Task | How |
@@ -17,7 +19,7 @@ The golden rule: **customizations are declarative changes to the platform stack,
 | Change a package's config | Edit `values.yaml` → `generate-manifests.sh` → `adhar upgrade` |
 | Add your own package | New dir + `adhar-package.yaml` + ApplicationSet entry |
 | Deploy team apps | `CustomPackage` CRD |
-| Add a golden path | CLI template or Console scaffolder template |
+| Add a golden path | Backstage scaffolder template (shared by the CLI and the Console) |
 | Add a self-service API | XRD + Composition (Crossplane v2) |
 | Add a cloud provider | Implement the provider interface |
 | Preview changes | `adhar upgrade --diff-only` |
@@ -69,9 +71,24 @@ Editing by hand is fine too — keep the ApplicationSet and its mirrored environ
 | Profile | ApplicationSet | Mirrored environment config |
 |---|---|---|
 | Local (Kind) | `platform/stack/adhar-appset-local.yaml` | `platform/stack/environments/local/config.yaml` |
-| Production | `platform/stack/adhar-appset-production.yaml` | `platform/stack/environments/production/config.yaml` |
+| Production | `platform/stack/adhar-appset-production.yaml` | `platform/stack/environments/prod/config.yaml` |
 
-The ApplicationSet currently carries **101 entries**; the local profile enables a curated core and production enables most of them. `adhar stack list` is always the live answer. Disabling is destructive in the ordinary GitOps sense: with prune on, ArgoCD **uninstalls** the workload.
+Two more ApplicationSets sit beside them: `adhar-appset-gitops.yaml`, and `adhar-appset-workload.yaml`, the thin agent profile deployed onto registered workload clusters. The catalogue holds 100+ entries; the local profile enables a curated core and production enables most of them. `adhar stack list` is always the live answer.
+
+*Verify* an enable or disable before you upgrade:
+
+```bash
+git diff platform/stack/                  # exactly two files changed, one line each
+adhar stack conflicts                     # no violations
+adhar upgrade --diff-only                 # the stack diff ArgoCD will see
+```
+
+And after:
+
+```bash
+adhar stack status harbor                 # declared on, live Synced + Healthy
+adhar get apps | grep harbor
+``` Disabling is destructive in the ordinary GitOps sense: with prune on, ArgoCD **uninstalls** the workload.
 
 ## Conflicts, advisories and dependencies
 
@@ -109,6 +126,12 @@ platform/stack/packages/security/cert-manager/
 Three things to know about that layout. `install.yaml` is **generated**; hand-edits are lost on the next render. Files ending `.yaml.tmpl` are rendered at seed time against the `AdharPlatform` spec, which is how host and email reach the stack without being hardcoded. And `adhar-package.yaml` is the marketplace contract — CI fails a package that lacks one (`hack/validate-packages.sh` validates it against `marketplace.schema.json`).
 
 ## Worked example: retune one package
+
+Every package change follows the same six stages. Everything before `adhar upgrade` happens in your checkout and can be thrown away; the cluster only changes at the last two.
+
+```diagram
+do-package-change
+```
 
 Run cert-manager with two replicas and a stricter DNS-01 resolver.
 
@@ -228,12 +251,19 @@ spec:
 
 ## Add a golden path
 
-- **CLI templates** — `platform/stack/templates/*.yaml`, pushed to the Gitea `templates` repo. Each is a `CompositeApplication` with `${APP_NAME}`/`${APP_NAMESPACE}` placeholders, instantiated by `adhar application deploy <name> --template <t>`. Shipped: `basic-git`, `microservice`, `frontend`.
-- **Console golden paths** — Backstage scaffolder templates in `platform/stack/packages/application/adhar-templates/`. Shipped: `microservice`, `frontend`, `data-pipeline`, `ml`. Register a new one by adding it to the `targets` list in `catalog-info.yaml`. Omit the `adhar:create-argocd-app` step if your skeleton ships `.adhar/app.yaml` — the `adhar-services` ApplicationSet already adopts such repos, and two Applications managing one set of resources is exactly the drift the platform forbids.
+Golden paths are Backstage scaffolder templates, and the CLI and the Console read the **same** collection: the `adhar/adhar-templates` repository in the platform's Gitea, a pull mirror of `github.com/adhar-io/adhar-templates`. Each template is a directory under `templates/` holding a `template.yaml` and the `skeleton/` it renders. Because the repository is a mirror, the templates a platform offers stay current without a platform release — and a new template is contributed upstream (or to a fork you point the mirror at), not edited in Gitea.
+
+```bash
+adhar application templates                 # what this platform offers
+adhar application templates <template>      # one template's parameters
+adhar application deploy my-app --template <template> --param key=value --wait
+```
+
+The stack also ships Backstage catalog templates in `platform/stack/packages/application/adhar-templates/`, registered through the `targets` list in its `catalog-info.yaml` (`basic`, `argo-workflows`, `app-with-bucket`, `microservice`, `frontend`, `data-pipeline`, `ml`). Whichever you write, omit the `adhar:create-argocd-app` step if your skeleton ships `.adhar/app.yaml` — the `adhar-services` ApplicationSet already adopts such repos, and two Applications managing one set of resources is exactly the drift the platform forbids.
 
 ## Environments and config layers
 
-Environments live in `platform/stack/environments/` (`local`, `development`, `testing`, `staging`, `production`), each with a `config.yaml` declaring that environment's package set. Promotion is Git promotion (`development → staging → production`), with Kargo available to orchestrate it.
+Environments live in `platform/stack/environments/` (`local`, `dev`, `test`, `prod`), each with a `config.yaml` declaring that environment's package set. Promotion is Git promotion, with Kargo orchestrating it — see [Promote Across Environments](/docs/guides/promote-across-environments).
 
 The root `config.yaml` has four layers, each overriding the previous — `globalSettings → providers → environmentTemplates → environments`. Keep each environment block to the minimal delta, and never put secrets in it. See [Configuration](/docs/getting-started/configuration).
 
@@ -256,6 +286,8 @@ Implement the `Provider` interface (`platform/providers/interface.go`) and regis
 | Controller crash-loops on an unknown kind | Rendered without `--include-crds` | Add the flag and re-render |
 | A pod panics parsing `<NAME>_PORT` | Service-link injection in the shared namespace | `enableServiceLinks: false` |
 | CI rejects a new package | Missing `adhar-package.yaml` | Add the contract, run `hack/validate-packages.sh` |
+| A new template never appears | You pushed it to the Gitea mirror, which the next pull overwrites | Contribute it to the mirrored source repository |
+| A package edit vanished after re-render | You edited the generated `install.yaml` | Change `values.yaml` and re-run `generate-manifests.sh` |
 
 ## Next steps
 

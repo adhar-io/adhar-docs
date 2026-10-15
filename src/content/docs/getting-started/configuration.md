@@ -11,6 +11,12 @@ A local platform needs no configuration at all — `adhar up` has working defaul
 
 Keeping that line clear is the whole point of the config file. Infrastructure shape is a CLI-time decision; platform content is a GitOps decision. Mixing them is the most common way to end up with a cluster nobody can reproduce.
 
+```diagram
+ds-config-boundary
+```
+
+This page is for whoever takes a platform off the laptop. It explains the four layers of the file and how they merge, every key the provisioner actually reads (and the ones it silently ignores), and where secrets go instead. By the end you will be able to write a config for your cloud, prove it is valid, see exactly what it resolves to, and provision from it.
+
 ## At a glance
 
 | | |
@@ -173,11 +179,11 @@ providers:
 
 environmentTemplates:
   nonprod-defaults:
-    clusterConfig:
+    clusterConfig:                    # must be non-empty; this key is inert (see above)
       - key: autoScale
         value: "true"
-    coreServices:
-      cilium:
+    coreServices:                     # required by validation, recorded but not executed —
+      cilium:                         # the real Cilium version is compiled into the binary
         chart:
           repoURL: https://helm.cilium.io/
           name: cilium
@@ -198,13 +204,56 @@ environments:
       maxWorkers: 4
 ```
 
-Scaffold, check and provision:
+## From nothing to a provisioned cluster
+
+Work through these in order. Each step has a check, and none of the first four spends money.
+
+**1. Scaffold a file for your cloud.** `adhar config create` writes a starting point with the `nonprod-defaults` template already filled in; it refuses to overwrite an existing file unless you pass `--force`.
 
 ```bash
 adhar config create --provider digitalocean --region blr1   # writes ./config.yaml
-adhar config validate ./config.yaml                         # schema + provider rules
-adhar up -f config.yaml --env dev --dry-run                 # resolve and preview only
-adhar up -f config.yaml --env dev                           # provision
+```
+
+Then edit `defaultHost` (a zone you have delegated), `email`, and the environment's `clusterConfig`. The examples in the platform repo — `examples/digitalocean-config.yaml`, `examples/aws-config.yaml` and so on — are fuller starting points.
+
+**2. Validate it.** This runs the same schema validator and provider rules the platform applies on load, and lists every problem at once:
+
+```terminal
+$ adhar config validate ./config.yaml
+▸ Validating configuration: ./config.yaml
+● Configuration is valid
+```
+
+A failure prints `✖ invalid configuration:` followed by each problem — a missing `email`, three providers, two providers with no `primary`, an environment naming a template that does not exist.
+
+**3. Read what it resolves to.** Merging is where surprises live, so look at the result rather than the input:
+
+```bash
+adhar config view --file ./config.yaml                  # the resolved configuration, YAML
+adhar config view --file ./config.yaml -o json         # the same, for jq
+adhar config export --file ./config.yaml --resolve      # templates folded into each environment
+```
+
+**4. Dry-run the environment you will provision.** This is the gate. It prints the provider, region, type and the merged `clusterConfig` list in resolution order, then exits without creating anything:
+
+```bash
+adhar up -f config.yaml --env dev --dry-run
+```
+
+Check three things in its output: the provider is the one you meant, the region is one your quota covers, and no `clusterConfig` key appears twice.
+
+**5. Provision.**
+
+```bash
+adhar up -f config.yaml --env dev
+```
+
+**6. Verify the cluster matches the file.** The CLI publishes the provider facts it used into the cluster, which is also what the in-cluster autoscaler reads — so this is the place to confirm the size you asked for is the size it will grow with:
+
+```bash
+kubectl config current-context                                   # adhar-<cluster>
+kubectl get nodes -o wide                                        # node count and versions
+kubectl -n adhar-system get configmap adhar-cluster-spec -o yaml # provider, region, size, version
 ```
 
 > **Always pass `--env <name>`.** Without it, `adhar up -f config.yaml` provisions *every* environment in the file — including a leftover sample block sized for another cloud, which will create an orphan machine and then fail. The same applies to `adhar down -f config.yaml`.
@@ -236,6 +285,19 @@ adhar stack enable harbor        # edits the stack files; nothing is pushed for 
 adhar upgrade --diff-only        # review exactly what would change
 adhar upgrade                    # converge
 ```
+
+## Common pitfalls
+
+| Symptom | Cause | Fix |
+|---|---|---|
+| `adhar up -f` created machines for an environment you did not mean | `--env` was omitted, so every environment in the file was provisioned | Always pass `--env <name>`; tear the extras down with `adhar down -f … --env <name>` |
+| New workers come up a different size from the first ones | The same `clusterConfig` key is set in the template and the environment; the autoscaler reads the first, the provisioner the last | Set each key at exactly one layer; check `adhar-cluster-spec` |
+| Autoscaler ignores `minWorkers` you set in the template | The environment declared its own `autoscaling` block, which replaces the template's whole | Declare the complete block wherever you declare it |
+| `autoScale: "true"` in `clusterConfig` does nothing | That key is never read | Use the `autoscaling:` block |
+| Provisioning stops with an error about `oidcAuth` | Deliberately rejected — the apiserver would point at a Keycloak that does not exist yet | Remove it; enable OIDC as a day-2 step |
+| Validation rejects a file with three providers | At most two are allowed | Split into two files, or drop one |
+| Certificates never issue; URLs serve the self-signed certificate | `defaultHost` is not a zone delegated to the cloud (or `dnsProvider: none`) | Delegate the zone before provisioning; check with `dig NS <zone> +short` |
+| Editing `coreServices` versions changes nothing | That block is recorded, not executed | Change the foundation through the platform stack or a newer CLI |
 
 ## Next steps
 

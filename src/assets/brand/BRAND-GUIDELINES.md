@@ -18,7 +18,7 @@ src/assets/brand/
 
 - **Name:** ADHAR (always set in uppercase wordmark)
 - **Tagline:** Open Cloud-Native Foundation
-- **Promise:** Open Internal Developer Platform — 50+ services, 10-min provisioning via `adhar up`.
+- **Promise:** Open Internal Developer Platform — 100+ services, one `adhar up` on any cloud; ~10 minutes to a running platform locally.
 - **Personality:** Premium, expressive, technical. Confident, never noisy.
 
 ---
@@ -153,7 +153,7 @@ To set the OG image globally, add to `index.html`:
 - **Show, don't promise.** Lead with commands (`adhar up`), metrics, demos.
 - **Open by default.** Mention OSS, contributors, transparency.
 - **Sentence case** for UI; **Title Case** only for proper nouns and headings.
-- Numbers as digits (`50+ services`, `10-min provisioning`).
+- Numbers as digits (`100+ services`, `~10 min`).
 
 ---
 

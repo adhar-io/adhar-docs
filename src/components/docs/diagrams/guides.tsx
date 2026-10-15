@@ -9,14 +9,14 @@ import {
  * Getting Started — Your First Service
  * ------------------------------------------------------------------ */
 
-const CompositeApplicationChain = () => (
+const ApplicationChain = () => (
   <Flow
-    label="What you declare becomes a CompositeApplication, which Crossplane expands into an ArgoCD Application, which reconciles your workload — a Deployment, a Service and an HTTPRoute."
+    label="What you declare becomes an Application (platform.adhar.io), which Crossplane expands into an ArgoCD Application, which reconciles your workload — a Deployment, a Service and an HTTPRoute."
     caption="reconciled from Git, self-healing"
     nodes={[
       { title: "you", tone: "primary" },
       {
-        title: "CompositeApplication",
+        title: "Application",
         lines: ["platform.adhar.io/", "v1alpha1", "(what you declare)"],
       },
       { title: "ArgoCD Application", lines: ["GitOps sync"] },
@@ -502,7 +502,7 @@ function GoldenPathEscapeHatch() {
 }
 
 export const guides = {
-  "gd-composite-application": CompositeApplicationChain,
+  "gd-composite-application": ApplicationChain,
   "gd-sync-states": SyncStates,
   "gd-ci-pipeline": CiPipeline,
   "gd-adhar-up-stages": AdharUpStages,

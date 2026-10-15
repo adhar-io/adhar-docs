@@ -7,7 +7,7 @@ path: "/docs/reference/cli"
 
 # CLI Reference
 
-The `adhar` binary is the platform's whole control surface: **one command creates the cluster, one converges it, and the rest inspect or drive what is running**. `adhar --help` groups commands by persona — Develop, Observe, Operate, Administer, Utilities — and `adhar <command> --help` is authoritative for flags.
+The `adhar` binary is the platform's whole control surface: **one command creates the cluster, one converges it, and the rest inspect or drive what is running**. This page is a map of every command group with a working example of each, followed by the workflows that string them together. It is for anyone who types `adhar` — platform engineers, developers and operators — and `adhar <command> --help` remains authoritative for every flag.
 
 ## At a glance
 
@@ -22,14 +22,31 @@ The `adhar` binary is the platform's whole control surface: **one command create
 
 ## Command map
 
-```text
-  DEVELOP     project  application  push  dev  pipeline  gitops
-              routes  database  bucket  cache  storage  environment  ai
-  OBSERVE     get  health  logs  metrics  traces  network
-  OPERATE     cluster  scale  backup  restore  upgrade
-  ADMINISTER  up  down  stack  config  secrets  auth  policy
-              security  compliance  cost  fleet  webhook  controller
-  UTILITIES   help  version
+`adhar --help` groups commands by who reaches for them. The map below follows that grouping exactly; the highlighted commands are where most people start.
+
+```diagram
+do-cli-map
+```
+
+| Persona | Commands | Typical first command |
+|---|---|---|
+| **Develop** — build, ship and self-serve | `ai` `application` `bucket` `cache` `database` `environment` `gitops` `pipeline` `project` `routes` `storage` | `adhar application deploy` |
+| **Observe** — health, logs, metrics, traces | `events` `get` `health` `logs` `metrics` `network` `traces` | `adhar get status` |
+| **Operate** — day-2 operations | `backup` `cluster` `restore` `scale` `upgrade` | `adhar upgrade --diff-only` |
+| **Administer** — lifecycle and governance | `auth` `compliance` `config` `controller` `cost` `down` `fleet` `policy` `secrets` `security` `stack` `up` `webhook` | `adhar up` |
+| **Utilities** — tooling | `completion` `dev` `help` `push` `version` | `adhar push` |
+
+## How the CLI finds its config and cluster
+
+Every command resolves two things before it does anything: a **config file** (which providers and environments exist) and a **kubeconfig** (which cluster to talk to). Most surprises come from one of them resolving to something you did not expect.
+
+**Config.** With `-f`/`--file` that exact path is used; without it the CLI looks for `config.yaml` in the working directory, then `~/.adhar/`, then `~`. If nothing is found and no providers are configured, it falls back to a Kind-only default — which is why a cloud command with no `--file` silently sees no clusters. Variables prefixed `ADHAR_` override file values, and the result is validated against `config.schema.json` before anything runs.
+
+**Cluster.** `--kubeconfig`, then `$KUBECONFIG`, then `~/.kube/config`. `adhar up` writes each cluster's kubeconfig to `~/.adhar/clusters/<cluster>/kubeconfig` and merges it into `~/.kube/config` as context `adhar-<cluster>`, so after an `up` the right context is usually already current. Check before you act:
+
+```bash
+kubectl config current-context      # adhar-<cluster>
+adhar get status                    # proves the CLI can reach the platform
 ```
 
 ## Global flags
@@ -45,19 +62,15 @@ The `adhar` binary is the platform's whole control surface: **one command create
 | `--theme <auto\|dark\|light>` | `auto` | Markdown rendering theme |
 | `--no-header` / `--no-footer` | `false` | Hide banner / sign-off |
 
-## Config file resolution
-
-With `-f`/`--file` that exact path is used; without it the CLI looks for `config.yaml` in the working directory, then `~/.adhar/`, then `~`. If nothing is found and no providers are configured, it falls back to a Kind-only default — which is why a cloud command with no `--file` silently sees no clusters. Variables prefixed `ADHAR_` override file values, and the result is validated against `config.schema.json` before anything runs.
-
-## Platform lifecycle
+## Administer: platform lifecycle
 
 | Command | What it does | Key flags |
 |---|---|---|
 | `up` | Create or converge the platform (local Kind by default) | see below |
-| `upgrade` | Converge the foundation, diff and re-push the stack | `--diff-only`, `-y/--yes`, `--skip-foundation`, `--stack-dir`, `--name` |
-| `upgrade split-planes` | Split a dual-role cluster into control and data planes | — |
-| `down` | Tear down an environment and its resources | `-f/--file`, `--env`, `--force`, `--purge-image-cache`, `--purge-orphaned-volumes` |
-| `controller` | Run the controller manager (in-cluster mode) | `--platform-name`, `--leader-elect` |
+| `down` | Tear down an environment and its resources | `-f/--file`, `--env`, `--force`, `--name`, `--purge-image-cache`, `--purge-orphaned-volumes` |
+| `config` | Scaffold, validate, view and edit `config.yaml` | `create`, `validate`, `view`, `get`, `set`, `export`, `list-templates` |
+| `stack` | Turn platform packages on and off, and see their state | see below |
+| `controller` | Run the controller manager (what the in-cluster Deployment runs) | `--platform-name`, `--leader-elect`, `--namespace` |
 
 `adhar up` flags:
 
@@ -68,7 +81,8 @@ With `-f`/`--file` that exact path is used; without it the CLI looks for `config
     --port <n>          # HTTPS host port (default 8443); HTTP derives as n − 363
     --host <name>       # platform host name (default adhar.localtest.me)
     --kube-version <v>  # Kubernetes version, any provider (default v1.37.0)
-    --ha                # render the foundation in HA mode
+    --ha                # render the local foundation in HA mode
+    --name <name>       # cluster name (default adhar); `adhar down --name` must match
 -d, --dry-run           # preview without applying
     --dev-password      # set ArgoCD and Gitea admin passwords to `developer`
     --in-cluster        # install the controller manager for ongoing reconciliation
@@ -79,77 +93,180 @@ With `-f`/`--file` that exact path is used; without it the CLI looks for `config
 
 `adhar up` is idempotent and status-gated: re-running it without `--recreate` resumes from the pending phase.
 
-## Inspect and observe
+**Config, end to end:**
 
-| Command | What it does | Key flags |
-|---|---|---|
-| `get status` | `AdharPlatform` conditions and package health | `-w/--watch`, `--events`, `--service-details` |
-| `get apps` | Workload readiness (ArgoCD applications) | `-n`, `-A`, `-l`, `--include-system` |
-| `get all` | Comprehensive overview | `--detailed` |
-| `get secrets` | Platform credentials | `-p <package>`, `-a/--all`, `-d/--debug` |
-| `get cluster` / `environments` / `dataplanes` | Cluster and namespace state | `--detailed`, `--quotas` |
-| `health` | Health checks (`check`, `report`, `history`) | `-c`, `-w`, `-e <fmt>` |
-| `logs` | Platform logs (`search`, `stream`, `export`) | `-f`, `-c`, `-n`, `-l`, `--since` |
-| `metrics` / `traces` | Rules, alerts, dashboards; trace search and analysis | `--format`, `-o` |
-| `network` | `diagnose`, `connectivity`, `traffic`, `policy` | `-s`, `-n`, `-d` |
+```bash
+adhar config create --provider gcp --region us-central1 --name config.yaml
+adhar config validate config.yaml
+adhar config view                          # the loaded configuration
+adhar config set enableHAMode true         # edits globalSettings.enableHAMode
+adhar config get enableHAMode              # true
+adhar config export --resolve -o resolved.yaml   # templates merged into each environment
+```
 
-`adhar get` takes `-o table|json|yaml`, `-n <namespace>` and `-A` on every subcommand.
+**Tear down:**
 
-## Platform packages (stack)
+```bash
+adhar down                                           # the local Kind platform
+adhar down -f config.yaml --env dev                  # one cloud environment
+adhar down -f config.yaml --env dev --purge-orphaned-volumes
+```
+
+**Platform packages (`stack`):**
 
 | Command | What it does |
 |---|---|
 | `stack list` | The catalogue: declared versus live state (`--category`, `--enabled`, `--problems`) |
 | `stack status [pkg]` | How converged the platform is, or one package's state |
 | `stack describe <pkg>` | Marketplace contract, live state, dependencies |
-| `stack enable <pkg>...` | Turn packages on — edits the appset and env config (`-y`) |
+| `stack enable <pkg>...` | Turn packages on — edits the ApplicationSet and environment config (`-y`) |
 | `stack disable <pkg>...` | Turn packages off; ArgoCD then **uninstalls** them |
 | `stack conflicts` | Mutual-exclusion rules, and any the profile violates |
 | `stack sync [pkg]...` | Ask ArgoCD to re-compare now instead of at the next resync |
 | `stack verify` | Record verification state from live health (`--write`) |
 
-## Clusters, environments and fleet
+```bash
+adhar stack list --problems                # only packages that are not healthy
+adhar stack describe keycloak              # contract, dependencies, live state
+adhar stack enable harbor --profile production
+```
+
+`stack` edits the profile it detects from the cluster; `--profile local|production` overrides that, and `--json` makes every subcommand machine-readable.
+
+## Operate: day-2
+
+| Command | What it does | Key flags |
+|---|---|---|
+| `upgrade` | Converge the foundation, diff and re-push the stack | `--diff-only`, `-y/--yes`, `--skip-foundation`, `--stack-dir`, `--name` |
+| `upgrade split-planes` | Move apps off a dual-role cluster onto a data plane (dry-run unless `--execute`) | `--execute`, `--name` |
+| `cluster` | Create, scale, upgrade and inspect provider clusters | `-f/--file`, `-p/--provider` |
+| `scale` | Scale a Deployment or StatefulSet, or attach an autoscaler | `-d`, `-r`, `-s`, `--min`, `--max`, `--cpu` |
+| `backup` / `restore` | Velero backups, schedules and restores | `--include-namespaces`, `--ttl`, `--from-backup` |
+
+**Upgrade:**
+
+```bash
+adhar upgrade --diff-only        # what would change; touches nothing
+adhar upgrade                    # interactive
+adhar upgrade --yes              # CI
+adhar upgrade split-planes       # print the migration plan
+```
+
+**Clusters:**
 
 ```bash
 adhar cluster create prod --provider gcp --region us-central1 --worker-replicas 3
-adhar cluster list --file config.yaml          # --file is REQUIRED
+adhar cluster list --file config.yaml          # --file is REQUIRED for cloud clusters
 adhar cluster status prod -f config.yaml
 adhar cluster scale prod --workers 5 -p digitalocean -f config.yaml
 adhar cluster upgrade prod --version 1.37.2 -p digitalocean -f config.yaml
 adhar cluster kubeconfig prod --print-only > kubeconfig
 adhar cluster debug prod                       # inspect the instance
-adhar cluster investigate prod                 # connectivity
-adhar cluster delete prod --file config.yaml   # note: -f here means --force
-
-adhar environment create dev --provider digitalocean --region blr1 --tier dev
-adhar environment list
-adhar environment switch dev --context adhar-dev
-adhar environment config dev --cpu 8 --memory 16Gi --pods 60
-adhar environment backup dev --ttl 720h0m0s
-
-adhar fleet list                               # every registered workload cluster
-adhar fleet drift                              # planes that differ from the hub
-adhar fleet upgrade                            # roll a version across the fleet in waves
+adhar cluster investigate prod -f config.yaml  # connectivity
+adhar cluster delete prod --file config.yaml   # asks first; --force skips the prompt
 ```
 
-## Applications and source
+**Workload scaling:**
+
+```bash
+adhar scale up -d orders-api -r 3 -s team-payments
+adhar scale auto -d orders-api --min 2 --max 6 --cpu 70 -s team-payments
+adhar scale status -s team-payments
+```
+
+**Backup and restore:**
+
+```bash
+adhar backup create pre-upgrade --include-namespaces adhar-system --ttl 168h
+adhar backup list
+adhar backup status pre-upgrade
+adhar backup schedule list                     # the shipped daily and weekly schedules
+adhar restore selective --from-backup pre-upgrade --include-namespaces team-payments
+adhar restore status <restore-name>
+adhar restore full --from-backup pre-upgrade --dry-run
+```
+
+## Observe: health, logs, metrics and traces
 
 | Command | What it does | Key flags |
 |---|---|---|
-| `application deploy <name>` | Deploy from a template, repo or file | `-t/--template`, `-r/--repo`, `--path`, `--param k=v`, `-w/--wait`, `--timeout`, `--project`, `--dest-namespace` |
+| `get status` | `AdharPlatform` conditions and package health | `-w/--watch`, `--events`, `--service-details` |
+| `get applications` (`apps`) | Workload readiness (ArgoCD applications) | `-n`, `-A`, `-l`, `--include-system`, `--endpoints` |
+| `get all` | Comprehensive overview | `--detailed`, `--summary` |
+| `get secrets` | Platform credentials | `-p/--provider <name>`, `-a/--all`, `-d/--debug` |
+| `get cluster` / `environments` / `dataplanes` / `agents` | Cluster, namespace, data-plane and agent state | `--detailed`, `--quotas` |
+| `health` | Health checks (`check`, `report`, `history`) | `-c`, `-w`, `-e <fmt>` |
+| `logs` | Platform logs (`search`, `stream`, `export`) | `-f`, `-c`, `-n`, `-s`, `-l`, `--since` |
+| `metrics` / `traces` | Rules, alerts, dashboards; trace search and analysis | `--prometheus-url`, `--tempo-url`, `-q` |
+| `network` | `diagnose`, `connectivity`, `traffic`, `policy` | `-n`, `-s` |
+| `events` | The platform event stream (`list`, `tail`, `topics`) | `--domain`, `--type`, `--since` |
+
+`adhar get` takes `-o table|json|yaml`, `-n <namespace>` and `-A` on every subcommand.
+
+```bash
+adhar get status --watch                       # live conditions while a sync runs
+adhar get apps -A --endpoints                  # every app, with its URLs
+adhar get secrets -p argocd                    # one credential set
+adhar health check --all
+adhar health report -f html -o health.html
+adhar logs --namespace checkout --search timeout --lines 200
+adhar network diagnose                         # CNI status and network resources
+adhar network connectivity --from frontend --to orders-api -n team-payments
+adhar events list --since 1h --domain delivery
+adhar events tail --domain platform            # follow new events
+```
+
+`adhar metrics` and `adhar traces` default to service URLs that do not exist on an Adhar cluster, so port-forward and pass the URL:
+
+```bash
+kubectl -n adhar-system port-forward svc/prometheus-kube-prometheus-prometheus 9090:9090 &
+adhar metrics list --query 'up{job="checkout"}' --prometheus-url http://localhost:9090
+
+kubectl -n adhar-system port-forward svc/tempo 3200:3200 &
+adhar traces search --service checkout --tags 'http.status_code=500' \
+  --tempo-url http://localhost:3200
+```
+
+## Develop: build, ship and self-serve
+
+| Command | What it does | Key flags |
+|---|---|---|
+| `application deploy <name>` | Deploy from a template, repo or file | `-t/--template`, `-r/--repo`, `-f/--file`, `--path`, `--param k=v`, `-w/--wait`, `--timeout`, `--env`, `--project`, `--dest-namespace` |
 | `application list` | List applications | `-A`, `-l`, `--show-labels` |
 | `application status <name>` | Application status | `-d/--detailed` |
 | `application scale <name>` | Scale a Deployment | `-r/--replicas` (required) |
 | `application restart <name>` | Rolling restart | — |
 | `application bind <name> <svc>` | Mount a backing service's connection Secret | `--secret` |
 | `application delete <name>` | Delete an application | `-f/--force` |
-| `application templates` | List the platform's templates | — |
+| `application templates [t]` | List the golden-path templates, or describe one | — |
 | `push <name>` | Build and deploy from source, `cf push`-style | `--git-url` (required), `--subpath`, `--wait` |
 | `dev [name]` | Inner loop: sync the working tree to a dev namespace | `--port`, `--local-port`, `--no-forward`, `--keep`, `--debounce` |
 
-Templates for `--template`: `basic-git`, `microservice`, `frontend`. Both `push` and `adhar routes new` drive the Tekton supply chain: buildpacks → Trivy → Cosign → Harbor → GitOps. `application` aliases to `apps` and `app`.
+Templates come from the `adhar/adhar-templates` repository in the platform's Gitea — a mirror of `github.com/adhar-io/adhar-templates` and the same collection the Console's Create wizard offers. Run `adhar application templates` for the names on your platform rather than relying on a list here. `application` aliases to `apps` and `app`.
 
-## Self-service infrastructure
+```bash
+adhar application templates                                # what --template accepts
+adhar application deploy my-app --template=go-web-service --param port=8080 --wait
+adhar push orders-api --git-url https://github.com/acme/orders --wait
+adhar dev orders-api --port 8080                           # live-sync this directory
+```
+
+Both `push` and `adhar routes new` drive the Tekton supply chain: build → scan → sign → registry → GitOps writeback.
+
+**Projects, pipelines and routes:**
+
+```bash
+adhar project create --name payments --org acme --team payments --tier dev
+adhar pipeline create --name orders-ci --type build -s payments
+adhar pipeline run --name orders-ci -s payments
+adhar pipeline status --name orders-ci -s payments
+adhar routes new --name orders-api --git-url https://github.com/acme/orders --wait
+adhar routes list -s payments
+adhar routes show --name orders-api
+adhar routes test --name orders-api
+```
+
+**Self-service infrastructure:**
 
 ```bash
 adhar database create --name orders --engine postgresql --size 20Gi
@@ -162,36 +279,28 @@ adhar cache create sessions --engine valkey --replicas 2
 adhar cache connection sessions           # host, port and URI publication
 adhar bucket create uploads --size 100Gi --versioning
 adhar bucket credentials uploads
-adhar storage create && adhar storage list && adhar storage snapshot
+adhar storage create --name scratch --size 10Gi -s payments
+adhar storage list -s payments
 
 adhar application bind my-app orders      # inject the connection Secret
 ```
 
-## GitOps, auth and governance
+**Environments and GitOps:**
 
 ```bash
-adhar gitops status [-a <app>]
-adhar gitops sync -a <app> [--prune] [--revision <rev>]
-adhar gitops rollback -a <app> --revision <rev>
-adhar gitops repo && adhar gitops workflow
+adhar environment create dev --provider digitalocean --region blr1 --tier dev
+adhar environment list
+adhar environment switch dev --context adhar-dev
+adhar environment config dev --cpu 8 --memory 16Gi --pods 60
+adhar environment backup dev --ttl 720h0m0s
 
-adhar auth login <user> [--insecure]
-adhar auth whoami                         # identity and group membership
-adhar auth token                          # bearer token on stdout, nothing else
-adhar auth token decode                   # the current token's claims
-adhar auth user|group|role|session|mfa|provider ...
-
-adhar policy list|status|apply|validate|export|delete
-adhar compliance [--failures-only] && adhar compliance export -o report.md
-adhar security scan|vulnerabilities|policies|incidents
-adhar secrets list|get|create|encrypt|rotate|audit
-adhar cost [breakdown]                    # showback per namespace
-adhar backup create|list|status|verify|schedule
-adhar restore full|database|selective|verify
-adhar webhook list|create|test|monitor|security
+adhar gitops status -a orders-api
+adhar gitops sync -a orders-api --prune
+adhar gitops rollback -a orders-api --revision <rev>
+adhar gitops repo
 ```
 
-## AI layer
+**AI layer:**
 
 ```bash
 adhar ai status                       # what is installed, keyed and reachable
@@ -203,10 +312,49 @@ adhar ai diagnose <package>           # agentic triage: pods, logs, events
 adhar ai explain deployment/adhar-console
 adhar ai tools && adhar ai autonomy && adhar ai budget
 adhar ai key set --provider anthropic # prompted, never echoed
-adhar ai mcp list && adhar ai mcp call <tool> --arg k=v
+adhar ai mcp list
 ```
 
 Persistent flags: `-n/--namespace` (default `adhar-system`), `--model`, `--endpoint`, `--timeout` (3m), `--insecure`, `--json`. Agentic commands add `--autonomy`, `--max-steps`, `--quiet`, `--mcp`, `--yes`.
+
+## Administer: identity, policy and governance
+
+```bash
+adhar auth login alice --insecure          # --insecure only for the local self-signed cert
+adhar auth whoami                          # identity and group membership
+adhar auth token                           # bearer token on stdout, nothing else
+adhar auth logout
+
+adhar policy list
+adhar policy validate my-policy.yaml --client
+adhar policy apply my-policy.yaml --mode audit
+adhar policy status                        # pass/fail/warn per PolicyReport
+adhar compliance --failures-only
+adhar compliance export -o posture.md      # or .json — the auditor artifact
+
+adhar security vulnerabilities --severity high --limit 20
+adhar security policies
+adhar secrets list --external              # ExternalSecrets and their sync state
+adhar secrets get -n myapp-config -s payments          # keys only; --reveal to decode
+adhar secrets audit
+
+adhar cost                                 # spend per namespace, against budgets
+adhar cost breakdown                       # CPU versus memory
+
+adhar fleet list                           # every registered workload cluster
+adhar fleet drift                          # planes that differ from the hub
+adhar fleet upgrade --to-version v1.37.2 --canary 1 --dry-run
+
+adhar webhook list
+```
+
+## Utilities
+
+```bash
+adhar version --short
+adhar completion zsh > "${fpath[1]}/_adhar"     # or bash, fish, powershell
+adhar help upgrade
+```
 
 ## Common workflows
 
@@ -215,8 +363,8 @@ Persistent flags: `-n/--namespace` (default `adhar-system`), `--model`, `--endpo
 ```bash
 adhar config create --provider gcp --region us-central1 --name config.yaml
 adhar config validate config.yaml
-adhar up -f config.yaml --env production --dry-run
-adhar up -f config.yaml --env production
+adhar up -f config.yaml --env prod --dry-run
+adhar up -f config.yaml --env prod
 adhar get status && adhar get secrets -p argocd
 ```
 
@@ -244,6 +392,7 @@ adhar routes show --name orders-api
 
 ```bash
 adhar get status && adhar get apps
+adhar stack list --problems
 adhar ai diagnose keycloak
 adhar gitops sync -a keycloak
 adhar logs --component keycloak --lines 200
@@ -260,7 +409,16 @@ adhar get status >/dev/null 2>&1 || echo "platform unhealthy"   # exit 1 on fail
 adhar version --short
 ```
 
-> Three flag traps. Pass `--env <name>` with `-f`, or **every** environment in the file is provisioned. `adhar cluster list/status/scale/upgrade` need `--file`, or they report "No clusters found". And on `cluster delete`, `-f` is `--force` — spell out `--file`.
+## Flag traps
+
+| Trap | What happens | Do this instead |
+|---|---|---|
+| `adhar up -f config.yaml` with no `--env` | **Every** environment in the file is provisioned | Always pass `--env <name>` with `-f` |
+| `adhar cluster list/status/scale/upgrade` with no `--file` | The default config has no cloud provider, so it reports "No clusters found" | Pass `--file config.yaml` |
+| `-f` means different things | On `up`, `down`, `cluster` and `application deploy` it is `--file`; on `application delete`, `database delete` and `environment delete` it is `--force`; on `metrics`/`traces` it is `--output` | Spell out long flags in scripts |
+| `-p` on `get secrets` | It is `--provider` (a credential set such as `argocd`), not a package path | `adhar get secrets -p argocd` |
+| `adhar metrics` / `adhar traces` return nothing | Their default URLs point at services that do not exist on Adhar | Port-forward and pass `--prometheus-url` / `--tempo-url` |
+| `adhar up --ha` against a cloud config | The cloud path reads `enableHAMode` from the config | Set `globalSettings.enableHAMode: true` |
 
 ## See also
 

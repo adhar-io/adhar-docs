@@ -9,7 +9,13 @@ path: "/docs/getting-started/installation"
 
 This page gets the Adhar CLI onto your machine and proves your environment can carry a platform. **The `adhar` binary is the only thing you install** — it creates the cluster, installs the foundation, seeds Git and hands off to GitOps, so there is no Kubernetes to set up by hand first.
 
-The work splits into two parts: prepare a *host* for the platform to run on, then install the CLI that builds it. For a laptop the host is a container engine. For a cloud it is an account, credentials and a DNS zone.
+**One `adhar up` brings up the whole platform — on your laptop or on any supported cloud.** Locally that takes about ten minutes. On a cloud, the provider's machine provisioning sets the pace: DigitalOcean is serving in about 5 minutes and usable at about 13; AWS first runs take 25–40. Preparation is what differs, and it is what this page is about.
+
+The work splits into two parts: prepare a *host* for the platform to run on, then install the CLI that builds it. For a laptop the host is a container engine. For a cloud it is an account, credentials and a DNS zone. By the end of the page you will have the CLI installed and verified, and you will know exactly what your host needs before the first `adhar up`.
+
+```diagram
+ds-install-paths
+```
 
 ## Prerequisites, and why each one matters
 
@@ -33,7 +39,7 @@ Cloud targets need no container engine at all; they provision real machines.
 
 ### Memory, CPU and disk
 
-The curated local profile enables a representative core of the package catalogue — 17 of the 101 wired entries — and those pull roughly 90 images from eight public registries on a cold machine. Size the engine for that, not for an empty cluster:
+The curated local profile enables a representative core of the 100+ wired catalogue entries (`adhar stack list --enabled` shows exactly which), and those pull roughly 90 images from eight public registries on a cold machine. Size the engine for that, not for an empty cluster:
 
 | Resource | Minimum | Comfortable | Why |
 |---|---|---|---|
@@ -121,7 +127,9 @@ brew untap adhar-io/tap        # optional — drops the tap clone as well
 
 Two limits worth knowing before you choose this route. Homebrew tracks **tagged releases only**, so unreleased `main` needs a source build. And **Windows is not published through Homebrew** — use the release archive.
 
-**Install script** — the same release archives, without Homebrew. It resolves the latest stable tag, downloads the archive for your OS and architecture, and installs to `/usr/local/bin` (override with `INSTALL_DIR`), using `sudo` only if that directory is not writable:
+### Install script
+
+The same release archives, without Homebrew. It resolves the latest stable tag, downloads the archive for your OS and architecture, and installs to `/usr/local/bin` (override with `INSTALL_DIR`), using `sudo` only if that directory is not writable:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/adhar-io/adhar/main/scripts/install.sh | bash
@@ -130,9 +138,13 @@ curl -fsSL https://raw.githubusercontent.com/adhar-io/adhar/main/scripts/install
 curl -fsSL https://raw.githubusercontent.com/adhar-io/adhar/main/scripts/install.sh | INSTALL_DIR="$HOME/.local/bin" bash
 ```
 
-**Release archive** — download and unpack by hand from [the releases page](https://github.com/adhar-io/adhar/releases). Published targets are Linux and macOS on `amd64` and `arm64` as `.tar.gz`, and Windows on `amd64` as `.zip`. Windows is archive-only; it is not published through Homebrew.
+### Release archive
 
-**From source** — needs Go 1.26+, and gives you exactly the working tree:
+Download and unpack by hand from [the releases page](https://github.com/adhar-io/adhar/releases). Published targets are Linux and macOS on `amd64` and `arm64` as `.tar.gz`, and Windows on `amd64` as `.zip`. Windows is archive-only; it is not published through Homebrew.
+
+### From source
+
+Needs Go 1.26+, and gives you exactly the working tree:
 
 ```bash
 git clone https://github.com/adhar-io/adhar.git
@@ -208,7 +220,7 @@ System Information:
 adhar up
 ```
 
-No `--file` and no `--env` means Kind. Adhar creates a cluster named `adhar`, maps host ports 8443 and 8080 to the Gateway, and prints a nine-stage checklist under the heading *Provisioning Adhar platform*. Each line shows `◌` while it runs, `✓` when it lands and `✖` if it fails. Mid-run it looks like this:
+No `--file` and no `--env` means Kind. On a warm machine this is the ten-minute path: about 2m40s to the foundation and another 6m40s for the GitOps sync of the curated core. Adhar creates a cluster named `adhar`, maps host ports 8443 and 8080 to the Gateway, and prints a nine-stage checklist under the heading *Provisioning Adhar platform*. Each line shows `◌` while it runs, `✓` when it lands and `✖` if it fails. Mid-run it looks like this:
 
 ```terminal
 $ adhar up
@@ -242,6 +254,8 @@ adhar get status               # platform and package health, with a health scor
 adhar get secrets -p argocd    # the ArgoCD admin login
 kubectl get nodes              # context is already adhar-adhar
 ```
+
+Success is an **Overall Status** of `● Healthy` from `adhar get status`, with the `GatewayReady`, `ArgoCDReady`, `GiteaReady`, `CrossplaneReady` and `GitOpsReady` conditions all true, and one `Ready` node. A few packages at `Progressing` in the first minutes is normal convergence, not failure.
 
 ### 4. Open the consoles
 
@@ -329,7 +343,25 @@ Treat a clean dry run as the gate. It catches the mistakes that are expensive to
 adhar up -f config.digitalocean.yaml --env dev
 ```
 
-The stage checklist is the same shape as local, minus the Kind line and plus the provider's own machine provisioning. When it finishes:
+The stage checklist is the same shape as local. The first three stages are replaced by cloud ones — **Preflight**, **Cloud cluster** and **Kubeconfig & TLS** — and from **Cilium & Gateway** onward it is the identical controller-driven sequence. Mid-run it looks like this:
+
+```terminal
+$ adhar up -f config.digitalocean.yaml --env dev
+
+Provisioning Adhar Platform
+
+  ✓ Preflight                      credentials, quota and API access
+  ✓ Cloud cluster                  dev · digitalocean · blr1
+  ✓ Kubeconfig & TLS               context, certificates, edge DNS
+  ✓ Cilium & Gateway               eBPF data path
+  ✓ ArgoCD                         GitOps engine
+  ◌ Gitea                          in-cluster Git server
+  ◌ GitOps repos                   packages, environments
+  ◌ Crossplane                     control plane + providers
+  ◌ GitOps sync - platform stack   platform apps via ArgoCD
+```
+
+Time here is set by the provider, not by Adhar. On DigitalOcean the cluster is serving in about 5 minutes and the platform is usable at about 13; AWS first runs take 25–40 minutes, and on AWS, GCP and Azure the catalogue keeps converging for another 30–45 minutes after the CLI returns while the autoscaler adds workers. When it finishes:
 
 ```bash
 kubectl config current-context                   # adhar-<cluster>
@@ -395,3 +427,4 @@ Your machine is ready. The next page brings a platform up on it and explains wha
 - **[Quick Start](/docs/getting-started/quick-start)** — `adhar up`, the consoles, credentials, and teardown
 - **[Local (Kind)](/docs/providers/local-kind)** — engine specifics, the image cache, and trusting the platform CA
 - **[Cloud Providers](/docs/providers/overview)** — credentials, quotas and DNS for a real cloud
+- **[Configuration](/docs/getting-started/configuration)** — the config file a cloud install needs, layer by layer
