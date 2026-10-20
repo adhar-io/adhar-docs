@@ -25,9 +25,9 @@ const PlatformStack = ({ platformCategories }: PlatformStackProps) => {
       color: "bg-gradient-to-br from-blue-50 to-indigo-50",
       tools: [
         { name: "Prometheus", icon: "https://cdn.jsdelivr.net/gh/devicons/devicon/icons/prometheus/prometheus-original.svg", color: TILE, description: "Metrics & alerting" },
-        { name: "Grafana", icon: "https://cdn.jsdelivr.net/gh/devicons/devicon/icons/grafana/grafana-original.svg", color: TILE, description: "Dashboards & visualization" },
+        { name: "Grafana", icon: "https://cdn.jsdelivr.net/gh/devicons/devicon/icons/grafana/grafana-original.svg", color: TILE, description: "Dashboards & visualisation" },
         { name: "Pixie", icon: "https://cdn.jsdelivr.net/gh/cncf/artwork/projects/pixie/icon/color/pixie-icon-color.svg", color: TILE, description: "eBPF observability" },
-        { name: "Headlamp", icon: "https://cdn.jsdelivr.net/gh/cncf/artwork/projects/headlamp/icon/color/headlamp-icon-color.svg", color: TILE, description: "Kubernetes web UI" }
+        { name: "Tempo", icon: "https://cdn.jsdelivr.net/gh/devicons/devicon/icons/grafana/grafana-original.svg", color: TILE, description: "Distributed tracing" }
       ]
     }
   ];
@@ -50,11 +50,11 @@ const PlatformStack = ({ platformCategories }: PlatformStackProps) => {
         {/* Header Section */}
         <div className="relative z-10 text-center mb-10">
           <h3 className="text-3xl font-bold text-emerald-800 dark:text-emerald-200 mb-4 relative">
-            🚀 Adhar Platform Stack
+            Adhar platform stack
             <div className="absolute -bottom-2 left-1/2 transform -translate-x-1/2 w-32 h-1 bg-gradient-to-r from-emerald-500 via-green-500 to-teal-500 rounded-full"></div>
           </h3>
           <p className="text-emerald-700 dark:text-emerald-300 text-lg max-w-2xl mx-auto leading-relaxed">
-            A comprehensive suite of tools and technologies powering modern cloud-native applications
+            100+ curated open-source packages, enabled per profile and upgraded together
           </p>
         </div>
 
@@ -63,27 +63,24 @@ const PlatformStack = ({ platformCategories }: PlatformStackProps) => {
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 2xl:grid-cols-6 gap-4 sm:gap-5 lg:gap-6 auto-rows-fr">
             {allCategories.map((category, categoryIndex) => (
               <div 
-                key={categoryIndex} 
-                className={`${category.color} relative group p-6 rounded-2xl shadow-lg hover:shadow-2xl transition-all duration-500 hover:scale-105 hover:-translate-y-2 backdrop-blur-sm h-full flex flex-col justify-between`}
-                style={{
-                  animationDelay: `${categoryIndex * 150}ms`,
-                  animation: 'fadeInUp 0.8s ease-out both'
-                }}
+                key={category.name}
+                className={`${category.color} dark:bg-none dark:bg-white/[0.04] dark:ring-1 dark:ring-white/10 relative group p-6 rounded-2xl shadow-lg hover:shadow-2xl transition-all duration-500 hover:scale-105 hover:-translate-y-2 backdrop-blur-sm h-full flex flex-col justify-between`}
+                style={{ animation: `fadeInUp 0.8s ease-out ${categoryIndex * 150}ms both` }}
               >
                 {/* Category Header */}
                 <div className="text-center mb-6">
                   <h4 className="text-sm font-bold text-gray-800 dark:text-gray-200 uppercase tracking-wide leading-tight">
                     {category.name}
                   </h4>
-                  <div className="w-8 h-0.5 bg-gradient-to-r from-gray-400 to-gray-600 mx-auto mt-2 rounded-full"></div>
+                  <div className="w-8 h-0.5 bg-gradient-to-r from-gray-400 to-gray-600 dark:from-gray-500 dark:to-gray-400 mx-auto mt-2 rounded-full"></div>
                 </div>
 
                 {/* Tools Grid */}
-                <div className="grid grid-cols-2 gap-4 flex-grow">
-                  {category.tools.map((tool, toolIndex) => (
+                <div className="grid grid-cols-2 gap-2.5 flex-grow">
+                  {category.tools.map((tool) => (
                     <div
-                      key={`${categoryIndex}-${toolIndex}`}
-                      className={`${tool.color} relative group/tool w-full h-16 rounded-xl flex items-center justify-center transition-all duration-300 hover:scale-110 hover:shadow-lg cursor-pointer`}
+                      key={tool.name}
+                      className={`${tool.color} relative group/tool w-full min-h-[76px] px-1.5 py-2.5 rounded-xl flex flex-col items-center justify-center gap-1.5 transition-all duration-300 hover:scale-105 hover:shadow-lg`}
                       title={`${tool.name} - ${tool.description}`}
                     >
                       {/* Tool Icon */}
@@ -91,8 +88,8 @@ const PlatformStack = ({ platformCategories }: PlatformStackProps) => {
                         {(tool.icon.startsWith('http') || tool.icon.startsWith('/')) ? (
                           <img 
                             src={tool.icon} 
-                            alt={tool.name}
-                            className="w-8 h-8 object-contain group-hover/tool:scale-125 transition-transform duration-300 filter drop-shadow-sm"
+                            alt=""
+                            className="w-7 h-7 object-contain group-hover/tool:scale-110 transition-transform duration-300 filter drop-shadow-sm"
                             onError={(e) => {
                               const target = e.target as HTMLImageElement;
                               target.style.display = 'none';
@@ -111,6 +108,7 @@ const PlatformStack = ({ platformCategories }: PlatformStackProps) => {
                           </span>
                         )}
                       </div>
+                      <span className="max-w-full truncate text-[11px] font-medium leading-tight text-gray-700">{tool.name}</span>
 
                       {/* Enhanced Tooltip */}
                       <div className="absolute -top-14 left-1/2 transform -translate-x-1/2 opacity-0 group-hover/tool:opacity-100 transition-all duration-300 bg-gray-900 dark:bg-gray-100 text-white dark:text-gray-900 text-xs px-3 py-2 rounded-lg whitespace-nowrap z-30 shadow-xl border border-gray-700 dark:border-gray-300">
@@ -136,7 +134,8 @@ const PlatformStack = ({ platformCategories }: PlatformStackProps) => {
             <div className="inline-flex items-center space-x-2 bg-white/20 dark:bg-black/20 px-4 py-2 rounded-full backdrop-blur-sm">
               <div className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse"></div>
               <span className="text-xs text-emerald-700 dark:text-emerald-300 font-medium">
-                {allCategories.length} Platform Categories • {allCategories.reduce((total, cat) => total + cat.tools.length, 0)} Tools & Technologies
+                {allCategories.reduce((total, cat) => total + cat.tools.length, 0)} highlights across {allCategories.length} categories ·{' '}
+                <a href="/integrations" className="underline underline-offset-2 hover:text-emerald-900 dark:hover:text-emerald-100">see all 100+ packages</a>
               </span>
             </div>
           </div>

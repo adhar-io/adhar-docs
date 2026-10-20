@@ -25,7 +25,7 @@ const MobileNavigation = ({
         size="sm"
         onClick={toggleDarkMode}
         aria-label={isDarkMode ? 'Switch to light mode' : 'Switch to dark mode'}
-        className="text-foreground hover:text-primary hover:bg-accent/50 p-2 rounded-lg transition-all duration-300"
+        className="h-9 w-9 p-0 rounded-full text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
       >
         {isDarkMode ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
       </Button>
@@ -34,7 +34,8 @@ const MobileNavigation = ({
         size="sm"
         onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
         aria-label="Toggle menu"
-        className="bg-gradient-to-r from-muted/80 to-muted hover:from-muted hover:to-muted/80 border-0 text-foreground"
+        aria-expanded={mobileMenuOpen}
+        className="h-9 w-9 p-0 rounded-full bg-muted/70 text-foreground hover:bg-muted hover:text-foreground transition-colors"
       >
         {mobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
       </Button>

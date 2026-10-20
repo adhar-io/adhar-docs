@@ -83,7 +83,7 @@ const DocumentEditor = ({ document, onSave, onPublish }: DocumentEditorProps) =>
     'Add advanced use cases and examples'
   ];
 
-  const handleInputChange = (field: keyof DocumentData, value: any) => {
+  const handleInputChange = <K extends keyof DocumentData>(field: K, value: DocumentData[K]) => {
     setDocumentData(prev => ({ ...prev, [field]: value }));
   };
 

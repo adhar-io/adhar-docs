@@ -10,7 +10,7 @@ const OrchestrationLayer = ({ orchestrationTools }: OrchestrationLayerProps) => 
   return (
     <div className="bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 dark:bg-gradient-to-br dark:from-blue-900/30 dark:via-indigo-900/20 dark:to-purple-900/20 p-8 rounded-2xl border border-blue-200 dark:border-blue-700 mb-8 shadow-xl backdrop-blur-sm">
       <h3 className="text-xl font-bold text-center mb-8 text-blue-800 dark:text-blue-200 relative">
-        Orchestration & Infrastructure
+        Orchestration & infrastructure
         <div className="absolute -bottom-2 left-1/2 transform -translate-x-1/2 w-20 h-1 bg-gradient-to-r from-blue-500 to-indigo-500 rounded-full"></div>
       </h3>
       

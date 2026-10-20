@@ -80,6 +80,8 @@ const BlogCompose = () => {
   const [draftId, setDraftId] = useState<string | undefined>(id);
   const [title, setTitle] = useState("");
   const [slug, setSlug] = useState("");
+  // New posts: the slug follows the title until someone edits it by hand.
+  const [slugEdited, setSlugEdited] = useState(false);
   const [excerpt, setExcerpt] = useState("");
   const [category, setCategory] = useState("Platform Updates");
   const [image, setImage] = useState("");
@@ -106,11 +108,6 @@ const BlogCompose = () => {
       setSavedAt(p.updatedAt);
     }
   }, [existing]);
-
-  // Auto-slug for new posts.
-  useEffect(() => {
-    if (!id && title && !slug) setSlug(slugify(title));
-  }, [title, slug, id]);
 
   const payload = () => ({
     title,
@@ -211,7 +208,7 @@ const BlogCompose = () => {
               <span className="w-px h-5 bg-[hsl(var(--blog-border))]" />
               <div>
                 <h1 className="font-semibold text-3xl text-[hsl(var(--blog-heading))] leading-none">
-                  {initial ? "Edit story" : "New story"}
+                  {id ? "Edit story" : "New story"}
                 </h1>
                 <p className="text-[10px] uppercase tracking-[0.25em] text-[hsl(var(--blog-subtle))] mt-1.5 flex items-center gap-2">
                   <Check className="w-3 h-3 text-emerald-400" /> {lastSavedLabel}
@@ -261,7 +258,10 @@ const BlogCompose = () => {
               <label className="text-[10px] uppercase tracking-[0.25em] text-[hsl(var(--blog-subtle))] font-bold">Title</label>
               <input
                 value={title}
-                onChange={(e) => setTitle(e.target.value)}
+                onChange={(e) => {
+                  setTitle(e.target.value);
+                  if (!id && !slugEdited) setSlug(slugify(e.target.value));
+                }}
                 placeholder="Your story title…"
                 className="w-full bg-transparent border-b border-[hsl(var(--blog-border))] focus:border-[hsl(var(--blog-accent))] outline-none font-semibold text-3xl md:text-4xl text-[hsl(var(--blog-heading))] placeholder:text-[hsl(var(--blog-subtle)/0.5)] py-2 transition-colors"
               />
@@ -270,7 +270,10 @@ const BlogCompose = () => {
               <label className="text-[10px] uppercase tracking-[0.25em] text-[hsl(var(--blog-subtle))] font-bold">Slug</label>
               <input
                 value={slug}
-                onChange={(e) => setSlug(slugify(e.target.value))}
+                onChange={(e) => {
+                  setSlug(slugify(e.target.value));
+                  setSlugEdited(true);
+                }}
                 placeholder="your-story-slug"
                 className="w-full bg-[hsl(var(--blog-surface))] ring-1 ring-[hsl(var(--blog-border))] focus:ring-[hsl(var(--blog-accent))] outline-none font-mono text-sm text-[hsl(var(--blog-muted))] px-3 py-2.5 transition-colors"
               />

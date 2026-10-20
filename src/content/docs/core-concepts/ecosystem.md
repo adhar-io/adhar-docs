@@ -10,4 +10,5 @@ badge: "interactive"
 
 Opening the interactive integrations explorer…
 
-This links to the [interactive Integrations explorer](/integrations) — a searchable, filterable view of every open-source project Adhar builds on, with logos and how each one is used.
+This page opens the [interactive Integrations explorer](/integrations). It lists every open-source project Adhar builds on, with its logo and how Adhar uses it. You can search and filter the list.
+

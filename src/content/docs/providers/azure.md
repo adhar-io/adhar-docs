@@ -7,9 +7,11 @@ path: "/docs/providers/azure"
 
 # Azure
 
-This page takes you from an Azure subscription to a working Adhar platform on Azure VMs: resource providers, both vCPU quotas, a VM size you can actually launch, Azure DNS, a complete config file, `adhar up`, verification and teardown. It is for platform engineers on an Azure estate. Azure is the cloud where **`adhar up` refuses to start most often, and that is deliberate** — a preflight checks resource-provider registration, VM-size availability and *both* vCPU limits before anything is created, because each of those failures otherwise arrives after a resource group, a virtual network and some VMs already exist.
+This page takes you from an Azure subscription to a working Adhar platform on Azure VMs. It covers resource providers, both vCPU quotas, a VM size you can actually launch, Azure DNS, a complete config file, `adhar up`, verification and teardown. It is for platform engineers on an Azure estate.
 
-> **Status: render-verified, not live-verified.** Provider registration, config validation and `--dry-run` pass, and the kubeadm path is shared with the live-verified DigitalOcean provider. A live bring-up on Azure reached a working cluster with real Let's Encrypt TLS, a CCM load balancer and CSI provisioning, then stalled on data-disk attach slots — which is why the default StorageClass is now node-local. **No full run has completed and time to a usable platform is unmeasured.**
+Azure is the cloud where **`adhar up` refuses to start most often, and that is deliberate**. Before anything is created, a preflight checks resource-provider registration, VM-size availability and *both* vCPU limits. Without it, each of those failures would arrive after a resource group, a virtual network and some VMs already exist.
+
+> **Status: render-verified, not live-verified.** Provider registration, config validation and `--dry-run` pass. The kubeadm path is shared with the live-verified DigitalOcean provider. A live bring-up on Azure reached a working cluster with real Let's Encrypt TLS, a CCM load balancer and CSI provisioning. It then stalled on data-disk attach slots, which is why the default StorageClass is now node-local. **No full run has completed and time to a usable platform is unmeasured.**
 
 ## At a glance
 
@@ -33,7 +35,13 @@ This page takes you from an Azure subscription to a working Adhar platform on Az
 dp-azure-topology
 ```
 
-Everything the cluster owns lives in **one resource group**: a VNet and subnet, one network security group, and for each node a NIC, a public IP and a VM with a 256 GiB OS disk. The Standard load balancer in front of the Gateway is created later by `cloud-provider-azure` running inside the cluster. That single-group shape is why Azure teardown is the simplest of the clouds.
+Everything the cluster owns lives in **one resource group**:
+
+- a VNet and subnet
+- one network security group
+- for each node: a NIC, a public IP and a VM with a 256 GiB OS disk
+
+The Standard load balancer in front of the Gateway comes later. `cloud-provider-azure`, running inside the cluster, creates it. Because everything sits in one group, Azure teardown is the simplest of the clouds.
 
 ## Two halves, two credentials
 
@@ -41,9 +49,11 @@ Everything the cluster owns lives in **one resource group**: a VNet and subnet, 
 pv-azure-ownership
 ```
 
-**`az login` is enough to create the cluster and not enough to run it.** The in-cluster controllers cannot use your CLI session, so Adhar builds `azure.json` from the service-principal fields. Given a `clientId` with an empty secret and no managed identity, `cloud-provider-azure` falls back to a default credential chain, finds no identity on a plain VM, and dies inside the Azure SDK without mentioning credentials — the visible symptom is a Gateway Service stuck at `EXTERNAL-IP <pending>`, which reads as a networking fault. Adhar refuses to write that config and names the remedy instead.
+**`az login` is enough to create the cluster, but not enough to run it.** The in-cluster controllers cannot use your CLI session. So Adhar builds `azure.json` from the service-principal fields.
 
-**Prefer `useManagedIdentity: true` over a client secret** where it fits. It sets `useManagedIdentityExtension` in `azure.json`, so no long-lived secret is written into the cluster. Where a service principal is unavoidable — notably the DNS credential — scope it to the **zone**, not the subscription.
+Suppose you give a `clientId` with an empty secret and no managed identity. `cloud-provider-azure` falls back to a default credential chain and finds no identity on a plain VM. It then dies inside the Azure SDK without mentioning credentials. The visible symptom is a Gateway Service stuck at `EXTERNAL-IP <pending>`, which looks like a networking fault. Adhar refuses to write that config and names the remedy instead.
+
+**Prefer `useManagedIdentity: true` over a client secret** where it fits. It sets `useManagedIdentityExtension` in `azure.json`, so no long-lived secret is written into the cluster. Sometimes a service principal is unavoidable, notably for the DNS credential. Then scope it to the **zone**, not the subscription.
 
 ## Step 1 — Prerequisites, in order
 
@@ -54,11 +64,11 @@ pv-azure-ownership
 | 3 | A VM size this subscription may launch in this region | `409 SkuNotAvailable … Capacity Restrictions`, after the network and NIC exist |
 | 4 | A delegated Azure DNS zone for `defaultHost` | Self-signed certificates; the platform still runs |
 
-`adhar up` checks 1–3 itself and refuses to create anything when one fails. Locally you need `adhar` (`make build`), `kubectl`, `dig` and the `az` CLI.
+`adhar up` checks 1–3 itself. If one fails, it refuses to create anything. Locally you need `adhar` (`make build`), `kubectl`, `dig` and the `az` CLI.
 
 ### 1. Register the resource providers
 
-A fresh subscription has these unregistered — on the subscription the example was built against, `Microsoft.Compute` and `Microsoft.Storage` both were. Registration is idempotent and takes a few minutes.
+A fresh subscription has these unregistered. On the subscription the example was built against, both `Microsoft.Compute` and `Microsoft.Storage` were unregistered. Registration is idempotent and takes a few minutes.
 
 ```bash
 for ns in Microsoft.Compute Microsoft.Network Microsoft.Storage; do
@@ -70,17 +80,21 @@ az provider register --namespace Microsoft.Storage
 
 ### 2. Raise the vCPU quota, on both meters
 
-Azure enforces **Total Regional vCPUs** *and* a per-family quota (`standardEBDSv5Family` for the `Standard_E4bds_v5` the example uses), and a create can fail on either.
+Azure enforces **Total Regional vCPUs** *and* a per-family quota. For the `Standard_E4bds_v5` the example uses, the family is `standardEBDSv5Family`. A create can fail on either.
 
 ```bash
 az vm list-usage --location centralindia -o table
 ```
 
-**A new subscription defaults to 4 total regional vCPUs, in every region** — measured across eleven regions. Four cannot host this platform. Size the request against the cluster's **maximum**: the shipped config is one `Standard_E4bds_v5` control plane plus up to five `Standard_E4bds_v5` workers, 4 + (5 × 4) = **24 vCPU** on both meters. Ask for more if you will raise `maxWorkers`; measured on GCP, the full catalogue was stable at ~48 vCPU of workers. Sizing to the floor is the subtle version of this mistake — the cluster boots, the catalogue needs more, the autoscaler asks, and a limit nobody checked refuses.
+**A new subscription defaults to 4 total regional vCPUs, in every region.** This was measured across eleven regions. Four cannot host this platform.
+
+Size the request against the cluster's **maximum**. The shipped config is one `Standard_E4bds_v5` control plane plus up to five `Standard_E4bds_v5` workers: 4 + (5 × 4) = **24 vCPU** on both meters. Ask for more if you will raise `maxWorkers`. Measured on GCP, the full catalogue was stable at ~48 vCPU of workers.
+
+Sizing to the floor is the subtle version of this mistake. The cluster boots, the catalogue needs more, the autoscaler asks, and a limit nobody checked refuses.
 
 ### 3. Pick a size the subscription can launch
 
-"Supported in this region" and "available to you" are different questions. A live run chose `Standard_D4s_v3`, supported in its region with no capacity for that subscription; the create failed at the first VM with `409 SkuNotAvailable … Capacity Restrictions` after the network, NSG, public IP and NIC existed. **Verify** by filtering for entries with **no restrictions**:
+"Supported in this region" and "available to you" are different questions. A live run chose `Standard_D4s_v3`. It was supported in its region, but had no capacity for that subscription. The create failed at the first VM with `409 SkuNotAvailable … Capacity Restrictions`, after the network, NSG, public IP and NIC already existed. **Verify** by filtering for entries with **no restrictions**:
 
 ```bash
 az vm list-skus --location centralindia --size Standard_E4bds_v5 -o table   # Restrictions: None
@@ -95,7 +109,7 @@ az network dns zone show --resource-group adhar-rg --name platform.example.com \
   --query nameServers --output tsv
 ```
 
-Add **four NS records named `platform`** in the `example.com` zone at your registrar. The apex stays where it is. Then create the in-cluster DNS principal scoped to the zone alone, and keep its secret in a file:
+At your registrar, add **four NS records named `platform`** in the `example.com` zone. The apex stays where it is. Then create the in-cluster DNS principal, scoped to the zone alone, and keep its secret in a file:
 
 ```bash
 az ad sp create-for-rbac --name adhar-dns --role "DNS Zone Contributor" \
@@ -112,11 +126,11 @@ dig +short NS example.com               # your registrar's, unchanged
 dig +noall +comment CAA example.com     # status: NOERROR — an empty answer is correct
 ```
 
-> **Do not delegate the whole registered domain here unless you also host its apex zone here.** Let's Encrypt reads CAA up the tree, so issuing `*.platform.example.com` also queries CAA for `example.com`; delegated to nameservers holding no zone, every lookup SERVFAILs and the order fails with a message naming CAA rather than delegation. Skipping DNS is supported — the platform comes up self-signed and cert-manager issues a trusted certificate once the delegation is fixed.
+> **Do not delegate the whole registered domain here unless you also host its apex zone here.** Let's Encrypt reads CAA records up the tree. So issuing `*.platform.example.com` also queries CAA for `example.com`. If the apex is delegated to nameservers that hold no zone, every lookup SERVFAILs. The order then fails with a message that names CAA, not delegation. You can skip DNS. The platform comes up self-signed, and cert-manager issues a trusted certificate once the delegation is fixed.
 
 ## Step 2 — Credentials
 
-The shipped example provisions with your `az login` session and gives the in-cluster half a service principal:
+The shipped example provisions with your `az login` session. It gives the in-cluster half a service principal:
 
 ```bash
 az login
@@ -132,7 +146,7 @@ The client secret resolves in this order, strongest first:
 | 3 | `AZURE_CLIENT_SECRET` | Ambient |
 | 4 | `AZURE_CLIENT_SECRET_FILE` | Ambient fallback |
 
-Why the file outranks the environment: a stale `export AZURE_CLIENT_SECRET=…` from another terminal is indistinguishable from a correct one (both are about 40 characters), and double quotes let the shell expand an unescaped `$` and truncate the value. A live run failed with `AADSTS7000215` ("invalid client secret") for exactly that reason. When both are present, Adhar uses the file and says so.
+Why does the file outrank the environment? A stale `export AZURE_CLIENT_SECRET=…` from another terminal looks exactly like a correct one; both are about 40 characters. Also, double quotes let the shell expand an unescaped `$` and truncate the value. A live run failed with `AADSTS7000215` ("invalid client secret") for exactly that reason. When both are present, Adhar uses the file and says so.
 
 ## Step 3 — Write the configuration
 
@@ -202,24 +216,26 @@ environments:                             # dev, test, prod as namespaces on ONE
   # prod: identical to dev except name: adhar-prod and type: production
 ```
 
-Two sizes, set independently: **`config.vmSize` is the control plane; `clusterConfig.machineType` is the workers.** Provider `config:` keys are matched ignoring case and separators — they used to be matched literally, and five of seven settings on a real config were silently dropped. `clusterMode: aks` and `useManagedK8s: true` are rejected with a message naming `managed`.
+You set two sizes independently: **`config.vmSize` is the control plane; `clusterConfig.machineType` is the workers.**
+
+Provider `config:` keys are matched ignoring case and separators. They used to be matched literally, and five of seven settings on a real config were silently dropped. `clusterMode: aks` and `useManagedK8s: true` are rejected with a message naming `managed`.
 
 ### Node sizing, from measurement
 
-- **Control plane: 4 vCPU / 32 GiB.** Raised from 2 vCPU on 2026-10-11 after a 2-vCPU control plane collapsed under the platform's own footprint: `kube-apiserver` alone used 1383m of 2000m with 5.2 GiB resident, a `kubectl get crd` over the platform's 616 CRDs took 33.8 seconds, and controller-manager, scheduler and CCM crashlooped on lease renewal. The `NoSchedule` taint is real, but nine pods tolerate it and belong there (Cilium, cilium-envoy, the operator, Falco, Tetragon, node-exporter, the Harbor trust DaemonSet, the OIDC loopback proxy and `adhar-controller-manager`).
-- **Workers: 4 vCPU / 32 GiB, at least two.** One worker leaves evictions and drains nowhere to go and hits the kubelet's 110-pod ceiling before CPU runs out (measured as "Too many pods" with 105 pods Pending on one 4-vCPU worker). The kubeadm path raises `maxPods` to 250.
-- **Disks: 256 GiB Premium SSD.** The containerd image cache alone measured 35 GiB; at 50 GiB the node crossed the kubelet's eviction threshold and took a `disk-pressure:NoSchedule` taint. Node-local PersistentVolumes share this disk. `StandardSSD_LRS` is cheaper but its IOPS ceiling shows up as etcd latency.
+- **Control plane: 4 vCPU / 32 GiB.** This was raised from 2 vCPU on 2026-10-11, after a 2-vCPU control plane collapsed under the platform's own footprint. `kube-apiserver` alone used 1383m of 2000m, with 5.2 GiB resident. A `kubectl get crd` over the platform's 616 CRDs took 33.8 seconds. Controller-manager, scheduler and CCM crashlooped on lease renewal. The `NoSchedule` taint is real, but nine pods tolerate it and belong there: Cilium, cilium-envoy, the operator, Falco, Tetragon, node-exporter, the Harbor trust DaemonSet, the OIDC loopback proxy and `adhar-controller-manager`.
+- **Workers: 4 vCPU / 32 GiB, at least two.** With one worker, evictions and drains have nowhere to go. It also hits the kubelet's 110-pod ceiling before CPU runs out. This was measured as "Too many pods", with 105 pods Pending on one 4-vCPU worker. The kubeadm path raises `maxPods` to 250.
+- **Disks: 256 GiB Premium SSD.** The containerd image cache alone measured 35 GiB. At 50 GiB, the node crossed the kubelet's eviction threshold and took a `disk-pressure:NoSchedule` taint. Node-local PersistentVolumes share this disk. `StandardSSD_LRS` is cheaper, but its IOPS ceiling shows up as etcd latency.
 
 ### Why the default StorageClass is node-local
 
-An Azure VM accepts a fixed number of attached data disks — **4 on a `Standard_E2bds_v5`, 8 on an `E4bds_v5`, 16 only from 8 vCPU up**. The enabled packages ask for roughly **90 PersistentVolumeClaims**, so a 1 + 4 cluster of `E4bds_v5` workers offers 32 slots. A live bring-up stalled at **39 of 75 apps** that way, every worker at its ceiling while the unschedulable pods between them asked for 1.6 CPU cores:
+An Azure VM accepts a fixed number of attached data disks: **4 on a `Standard_E2bds_v5`, 8 on an `E4bds_v5`, 16 only from 8 vCPU up**. The enabled packages ask for roughly **90 PersistentVolumeClaims**. A 1 + 4 cluster of `E4bds_v5` workers offers only 32 slots. A live bring-up stalled at **39 of 75 apps** this way. Every worker was at its ceiling, while the unschedulable pods between them asked for only 1.6 CPU cores:
 
 ```text
 0/5 nodes are available: 1 node(s) had untolerated taint(s),
                          4 node(s) exceed max volume count.
 ```
 
-So the default is `adhar-local`: directories under `/opt/adhar-local-path`, no attach limit. A node-local volume does **not** survive losing its node — durability comes from CNPG replication plus base backups into object storage. `adhar-block` is still installed; name it with `storageClassName: adhar-block`.
+So the default is `adhar-local`: directories under `/opt/adhar-local-path`, with no attach limit. A node-local volume does **not** survive losing its node. Durability comes from CNPG replication plus base backups into object storage. `adhar-block` is still installed. To use it, set `storageClassName: adhar-block`.
 
 ## Step 4 — Dry run
 
@@ -227,7 +243,7 @@ So the default is `adhar-local`: directories under `/opt/adhar-local-path`, no a
 ./adhar up -f config.yaml --env dev --dry-run
 ```
 
-Prints the resolved environment, provider, region, type and merged `clusterConfig`. It checks **no** permissions, quota or DNS; its job is to catch schema mistakes before the preflight.
+This prints the resolved environment, provider, region, type and merged `clusterConfig`. It checks **no** permissions, quota or DNS. Its job is to catch schema mistakes before the preflight.
 
 ## Step 5 — Provision
 
@@ -235,7 +251,7 @@ Prints the resolved environment, provider, region, type and merged `clusterConfi
 ./adhar up -f config.yaml --env dev
 ```
 
-The preflight runs first. Any `✖` stops the run before the first create call — a subscription at the 4-vCPU default is caught in under a second. With `--verbose` the passing checks are printed too; for a subscription with a 32-vCPU grant they read:
+The preflight runs first. Any `✖` stops the run before the first create call. A subscription at the 4-vCPU default is caught in under a second. With `--verbose`, the passing checks are printed too. For a subscription with a 32-vCPU grant, they read:
 
 ```text
 preflight ● resource group adhar-rg: exists and is readable
@@ -247,7 +263,14 @@ preflight ● VM size Standard_E4bds_v5: available to this subscription in
 preflight ● vCPU quota: 32 vCPU available, 24 needed at full size
 ```
 
-Then the checklist every cloud draws, with `Cloud cluster` reading `adhar · azure · centralindia`. After the first joins, compute mode installs `cloud-provider-azure` (reading `kube-system/azure-cloud-provider`, and `/etc/kubernetes/azure.json` on the control plane), the Azure Disk CSI driver, the `adhar-block` StorageClass and `adhar-local` as the default. The catalogue keeps converging for 30–45 minutes after the CLI returns while the autoscaler adds workers.
+Then comes the checklist every cloud draws, with `Cloud cluster` reading `adhar · azure · centralindia`. After the first joins, compute mode installs:
+
+- `cloud-provider-azure`, which reads `kube-system/azure-cloud-provider`, and `/etc/kubernetes/azure.json` on the control plane
+- the Azure Disk CSI driver
+- the `adhar-block` StorageClass
+- `adhar-local` as the default
+
+After the CLI returns, the catalogue keeps converging for 30–45 minutes while the autoscaler adds workers.
 
 ## Step 6 — Verify
 
@@ -261,7 +284,7 @@ kubectl -n adhar-system get certificate adhar-cert       # READY True once DNS-0
 ./adhar get secrets -p argocd
 ```
 
-`EXTERNAL-IP <pending>` here is the credentials fault described above, not a network one.
+If you see `EXTERNAL-IP <pending>` here, it is the credentials fault described above, not a network one.
 
 ## Day-2 operations
 
@@ -283,7 +306,13 @@ providers:
     clusterMode: managed     # AKS instead of VMs + kubeadm
 ```
 
-Creates the resource group (or uses the configured one), then an AKS cluster with `networkPlugin: none` — BYO CNI, so the bootstrap installs Cilium exactly as elsewhere — a system-assigned identity, and one agent pool per node group (the first is the System pool; names are squeezed to AKS's 12 lowercase alphanumerics). The kubeconfig is the cluster-admin credential AKS issues. AKS adds its own control-plane pricing tier.
+This creates the resource group (or uses the configured one). Then it creates:
+
+- an AKS cluster with `networkPlugin: none`. This is BYO CNI, so the bootstrap installs Cilium exactly as elsewhere.
+- a system-assigned identity
+- one agent pool per node group. The first is the System pool. Names are squeezed to AKS's 12 lowercase alphanumerics.
+
+The kubeconfig is the cluster-admin credential AKS issues. AKS adds its own control-plane pricing tier.
 
 ## Tear down, then check the bill
 
@@ -299,14 +328,23 @@ Creates the resource group (or uses the configured one), then an AKS cluster wit
 | No local state for the cluster | The tracker is rebuilt from Azure — VMs tagged `managedBy=adhar-platform` matching `<cluster>-master-N` / `-worker-N` |
 | `pvc-*` disks outside the group | Only with `--purge-orphaned-volumes`, and only in the cluster's own location |
 
-An attached disk is never deleted, whatever flags are passed. **Check nothing is billing:**
+An attached disk is never deleted, whatever flags you pass.
+
+**Check nothing is billing:**
 
 ```bash
 az resource list --resource-group adhar-rg -o table      # only the DNS zone should remain
 az disk list --query "[?diskState=='Unattached'].name" -o tsv
 ```
 
-**What you pay for while it runs:** VM hours (`maxWorkers` is the spend ceiling as much as the quota ceiling), one Standard load balancer per `LoadBalancer` Service, a public IP per node, and 256 GiB of Premium SSD per node, which costs meaningfully more per GiB than StandardSSD. Node-local volumes add nothing beyond that OS disk.
+**What you pay for while it runs:**
+
+- VM hours. `maxWorkers` is your spend ceiling as much as your quota ceiling.
+- One Standard load balancer per `LoadBalancer` Service.
+- A public IP per node.
+- 256 GiB of Premium SSD per node. This costs noticeably more per GiB than StandardSSD.
+
+Node-local volumes add nothing beyond that OS disk.
 
 ## Common pitfalls
 

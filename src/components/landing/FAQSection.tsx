@@ -1,48 +1,47 @@
-
 import { useState } from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { FileText, ChevronDown } from "lucide-react";
+import { ChevronDown } from "lucide-react";
 import { faqs } from "@/data/landingPageData";
+import SectionHeader from "./SectionHeader";
 
 const FAQSection = () => {
-  const [openFaq, setOpenFaq] = useState<number | null>(null);
+  const [openFaq, setOpenFaq] = useState<number | null>(0);
 
   return (
-    <section className="py-24 bg-background">
-      <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="text-center mb-20">
-          <Badge className="mb-6 bg-primary/10 text-primary border-primary/20">
-            <FileText className="w-4 h-4 mr-2" />
-            Frequently Asked Questions
-          </Badge>
-          <h2 className="text-4xl md:text-5xl font-bold text-foreground mb-6">
-            Everything You Need to Know
-          </h2>
-          <p className="text-xl text-muted-foreground">
-            Get answers to common questions about ADHAR platform
-          </p>
-        </div>
+    <section id="faq" aria-labelledby="faq-heading" className="relative section-padding container-padding bg-background">
+      <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-border to-transparent" />
 
-        <div className="space-y-4">
-          {faqs.map((faq, index) => (
-            <Card key={index} className="border-border hover:shadow-lg transition-all duration-300">
-              <CardHeader 
-                className="cursor-pointer hover:bg-muted/50 transition-colors p-6"
-                onClick={() => setOpenFaq(openFaq === index ? null : index)}
-              >
-                <div className="flex justify-between items-center">
-                  <CardTitle className="text-lg text-left font-semibold text-foreground">{faq.question}</CardTitle>
-                  <ChevronDown className={`w-5 h-5 transition-transform duration-200 text-muted-foreground ${openFaq === index ? 'rotate-180' : ''}`} />
+      <div className="max-w-3xl mx-auto">
+        <SectionHeader id="faq-heading" eyebrow="FAQ" title="Questions," titleMuted="answered.">
+          The short version. The docs have the details.
+        </SectionHeader>
+
+        <div className="divide-y divide-border/60 overflow-hidden rounded-2xl border border-border/70 bg-card">
+          {faqs.map((faq, index) => {
+            const open = openFaq === index;
+            const id = `faq-panel-${index}`;
+            return (
+              <div key={faq.question} className={`transition-colors ${open ? "bg-muted/30" : ""}`}>
+                <h3>
+                  <button
+                    type="button"
+                    aria-expanded={open}
+                    aria-controls={id}
+                    onClick={() => setOpenFaq(open ? null : index)}
+                    className="flex w-full items-center justify-between gap-4 p-5 sm:p-6 text-left text-base font-medium text-foreground hover:bg-muted/40 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+                  >
+                    <span>{faq.question}</span>
+                    <ChevronDown
+                      className={`h-5 w-5 shrink-0 text-muted-foreground transition-transform duration-200 ${open ? "rotate-180" : ""}`}
+                      aria-hidden
+                    />
+                  </button>
+                </h3>
+                <div id={id} role="region" hidden={!open} className="px-5 sm:px-6 pb-6 -mt-1">
+                  <p className="text-sm sm:text-[15px] text-muted-foreground leading-relaxed">{faq.answer}</p>
                 </div>
-              </CardHeader>
-              {openFaq === index && (
-                <CardContent className="pt-0 pb-6 px-6">
-                  <p className="text-muted-foreground leading-relaxed">{faq.answer}</p>
-                </CardContent>
-              )}
-            </Card>
-          ))}
+              </div>
+            );
+          })}
         </div>
       </div>
     </section>

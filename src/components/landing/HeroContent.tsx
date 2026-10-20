@@ -1,6 +1,6 @@
-
 import React from 'react';
-import HeroTitle from './HeroTitle';
+import HeroTitle, { HeroStats } from './HeroTitle';
+import { delay, rise } from './styles';
 import HeroCTA from './HeroCTA';
 import TerminalDemo from './TerminalDemo';
 import CloudProvidersGrid from './CloudProvidersGrid';
@@ -9,25 +9,26 @@ interface HeroContentProps {
   isVisible: boolean;
 }
 
-const HeroContent = ({ isVisible }: HeroContentProps) => {
-  return (
-    <div className={`text-center transition-all duration-800 ease-out hw-accelerate ${isVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-8'}`}>
-      <HeroTitle isVisible={isVisible} />
+const HeroContent = ({ isVisible }: HeroContentProps) => (
+  <div className="text-center">
+    <HeroTitle isVisible={isVisible} />
 
-      {/* Primary actions sit right under the value proposition, above the fold */}
-      <HeroCTA isVisible={isVisible} />
+    <HeroCTA isVisible={isVisible} />
 
-      {/* Enhanced Terminal Demo with smoother container animations */}
-      <div className={`mb-12 transition-all duration-1000 delay-800 ease-out hw-accelerate ${isVisible ? 'opacity-100 translate-y-0 scale-100' : 'opacity-0 translate-y-8 scale-95'}`}>
-        <TerminalDemo />
-      </div>
-
-      {/* Enhanced Cloud Providers Section */}
-      <div className={`transition-all duration-1000 delay-1000 ease-out hw-accelerate ${isVisible ? 'opacity-100 translate-y-0 scale-100' : 'opacity-0 translate-y-8 scale-95'}`}>
-        <CloudProvidersGrid />
-      </div>
+    <div className="mt-14">
+      <HeroStats isVisible={isVisible} />
     </div>
-  );
-};
+
+    {/* Product preview */}
+    <div style={delay(420)} className={`${rise(isVisible)} relative isolate mx-auto mt-16 max-w-4xl`}>
+      <div className="hero-halo" aria-hidden />
+      <TerminalDemo />
+    </div>
+
+    <div style={delay(520)} className={`${rise(isVisible)} mt-20`}>
+      <CloudProvidersGrid />
+    </div>
+  </div>
+);
 
 export default HeroContent;

@@ -18,7 +18,7 @@ const DevelopmentPhases = ({ phases }: DevelopmentPhasesProps) => {
           </h3>
           <div className="h-px w-10 bg-gradient-to-l from-transparent to-border" />
         </div>
-        <p className="text-sm text-muted-foreground">From planning to deployment, all phases in one platform.</p>
+        <p className="text-sm text-muted-foreground">Six stages, one platform — from the first idea to the next decision.</p>
       </div>
 
       {/* Phases grid */}

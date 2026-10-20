@@ -7,7 +7,9 @@ path: "/docs/security/security-best-practices"
 
 # Security Best Practices
 
-Adhar wires identity, secrets, supply-chain integrity and policy into the platform's own operation before offering them to workloads. But **"ships with" is not the same as "switched on"** — several controls are deliberately staged, and a few of the most important ones are yours to enable. This page explains what each control defends against, what the defaults actually are, and how to verify rather than assume.
+Adhar wires identity, secrets, supply-chain integrity and policy into the platform's own operation before offering them to workloads. But **"ships with" is not the same as "switched on"**. Several controls are deliberately staged, and a few of the most important ones are yours to enable.
+
+This page explains what each control defends against, what the defaults actually are, and how to verify rather than assume.
 
 ## At a glance
 
@@ -22,7 +24,7 @@ Adhar wires identity, secrets, supply-chain integrity and policy into the platfo
 
 ## Defence in depth
 
-Read the platform from the outside in. An attacker who wants a Secret has to get through every layer below, and each layer is designed on the assumption that the one outside it can fail. The diagram marks which layers are switched on in the production profile and which ship but are yours to enable.
+Read the platform from the outside in. An attacker who wants a Secret has to get through every layer below. Each layer is designed on the assumption that the one outside it can fail. The diagram marks which layers are switched on in the production profile, and which ship but are yours to enable.
 
 ```diagram
 do-defence-layers
@@ -30,15 +32,15 @@ do-defence-layers
 
 Three trust boundaries matter more than the rest:
 
-- **The edge.** The Cilium Gateway is the only public entry point. Every platform UI sits behind Keycloak SSO (an oauth2-proxy where the application has no native OIDC), and the Kubernetes API is not exposed through the Gateway at all — restricting where it *is* reachable is your job (step 9 of the checklist).
-- **The platform plane.** `adhar-system` is where the control plane lives. Every supply-chain policy excludes it twice — by namespace name and by the `adhar.io/plane: control` label — so an Enforce flip cannot brick the platform. The flip side is that admission policy does not protect that namespace; RBAC and network policy have to.
-- **The tenant namespace.** A team's authority comes from `Project`, scoped to its own namespace, with ingress limited to its own pods and `adhar-system`. That boundary is the one to test by impersonation, below.
+- **The edge.** The Cilium Gateway is the only public entry point. Every platform UI sits behind Keycloak SSO (an oauth2-proxy where the application has no native OIDC). The Kubernetes API is not exposed through the Gateway at all. Restricting where it *is* reachable is your job (step 9 of the checklist).
+- **The platform plane.** `adhar-system` is where the control plane lives. Every supply-chain policy excludes it twice: by namespace name and by the `adhar.io/plane: control` label. So an Enforce flip cannot brick the platform. The flip side is that admission policy does not protect that namespace. RBAC and network policy have to.
+- **The tenant namespace.** A team's authority comes from `Project`, scoped to its own namespace. Ingress is limited to its own pods and `adhar-system`. Test this boundary by impersonation, as shown below.
 
-What is deliberately **not** a boundary: workload-to-workload identity. There is no SPIFFE/SPIRE and no platform-provided mutual TLS between pods, so two pods that can reach each other cannot prove who they are to each other. Use network policy for reachability and application-level mTLS where you need peer identity.
+What is deliberately **not** a boundary: workload-to-workload identity. There is no SPIFFE/SPIRE and no platform-provided mutual TLS between pods. So two pods that can reach each other cannot prove who they are to each other. Use network policy for reachability, and application-level mTLS where you need peer identity.
 
 ## Threat model
 
-Each control exists against a specific attacker move. Knowing which one tells you what a gap costs.
+Each control exists to stop a specific attacker move. Knowing which move tells you what a gap costs.
 
 | Control | What it stops |
 |---|---|
@@ -58,11 +60,13 @@ Each control exists against a specific attacker move. Knowing which one tells yo
 
 ## Identity and access
 
-**Keycloak is the single identity provider.** ArgoCD, Gitea, Grafana, the Console, Kargo and every other UI authenticate against the `adhar` realm; a package gets SSO by shipping one ConfigMap labelled `adhar.io/keycloak-client`.
+**Keycloak is the single identity provider.** ArgoCD, Gitea, Grafana, the Console, Kargo and every other UI authenticate against the `adhar` realm. A package gets SSO by shipping one ConfigMap labelled `adhar.io/keycloak-client`.
 
-**Rotate the bootstrap credentials the moment SSO works.** The day-0 `gitea_admin` and ArgoCD `admin` passwords are well known. `security/adhar-credential-rotation` (on in the production profile) replaces both with random values and writes break-glass copies to `secret/adhar/bootstrap-credentials`. It is idempotent — it creates a marker Secret `bootstrap-credentials-rotated` and exits early if that exists.
+**Rotate the bootstrap credentials the moment SSO works.** The day-0 `gitea_admin` and ArgoCD `admin` passwords are well known. `security/adhar-credential-rotation` (on in the production profile) replaces both with random values and writes break-glass copies to `secret/adhar/bootstrap-credentials`. It is idempotent: it creates a marker Secret `bootstrap-credentials-rotated`, and exits early if that exists.
 
-**Kubernetes API OIDC is off by default, deliberately.** Enabling it makes Keycloak group membership a grant of Kubernetes authority, so it is the operator's call. It is also a **day-2 step, not a provisioning option** — wiring `--oidc-issuer-url` at `kubeadm init` points the apiserver at a Keycloak that does not exist yet, and against a stale cloud hostname that discovery *hangs* rather than failing fast. `oidcAuth: "true"` in `clusterConfig` is therefore rejected outright. The day-2 flags:
+**Kubernetes API OIDC is off by default, deliberately.** Enabling it makes Keycloak group membership a grant of Kubernetes authority, so it is the operator's call.
+
+It is also a **day-2 step, not a provisioning option**. Wiring `--oidc-issuer-url` at `kubeadm init` points the apiserver at a Keycloak that does not exist yet. Against a stale cloud hostname, that discovery *hangs* rather than failing fast. So `oidcAuth: "true"` in `clusterConfig` is rejected outright. The day-2 flags:
 
 ```text
 --oidc-issuer-url=https://keycloak.<host>/realms/adhar
@@ -73,7 +77,7 @@ Each control exists against a specific attacker move. Knowing which one tells yo
 --oidc-groups-prefix=oidc:
 ```
 
-Managed control planes cannot take apiserver flags this way and must use the cloud's own OIDC settings with the same claims and prefixes.
+Managed control planes cannot take apiserver flags this way. They must use the cloud's own OIDC settings, with the same claims and prefixes.
 
 | Keycloak group | Kubernetes binding |
 |---|---|
@@ -94,13 +98,15 @@ kubectl auth can-i get secrets -n team-search \
   --as=alice@example.com --as-group=oidc:ws-team-payments   # no
 ```
 
-Give Crossplane cloud access via IRSA / Workload Identity / Managed Identity — never long-lived keys.
+Give Crossplane cloud access via IRSA / Workload Identity / Managed Identity. Never use long-lived keys.
 
 ## Secrets
 
-**OpenBao is the production backend** (`security/openbao`); the `vault` package is the alternative and ships disabled. Exactly one may be enabled — both claim the `ClusterSecretStore` named `vault` and a `Service/vault`. Switching backends changes nothing downstream: a compatibility `Service/vault` in `adhar-system` selects the OpenBao pods, so anything addressing `vault.adhar-system.svc.cluster.local:8200` keeps working.
+**OpenBao is the production backend** (`security/openbao`). The `vault` package is the alternative and ships disabled. Exactly one may be enabled, because both claim the `ClusterSecretStore` named `vault` and a `Service/vault`.
 
-**Nothing secret goes in Git.** Manifests reference an `ExternalSecret`; External Secrets fetches the value at runtime:
+Switching backends changes nothing downstream. A compatibility `Service/vault` in `adhar-system` selects the OpenBao pods, so anything addressing `vault.adhar-system.svc.cluster.local:8200` keeps working.
+
+**Nothing secret goes in Git.** Manifests reference an `ExternalSecret`, and External Secrets fetches the value at runtime:
 
 ```yaml
 apiVersion: external-secrets.io/v1
@@ -114,14 +120,16 @@ spec:
       remoteRef: { key: tenants/my-team/myapp/config, property: password }
 ```
 
-The `SecretStore` lives in the tenant's namespace and logs in to OpenBao as the ServiceAccount `adhar-secrets` with the kubernetes-auth role `tenant`. That role's templated policy, `tenant-secrets`, grants read on `secret/data/tenants/<namespace>/*` and read/list on `secret/metadata/tenants/<namespace>/*`, where the namespace comes from the verified ServiceAccount token — so a namespace can only ever read its own path. [Manage Secrets End to End](/docs/guides/manage-secrets) has the full YAML.
+The `SecretStore` lives in the tenant's namespace. It logs in to OpenBao as the ServiceAccount `adhar-secrets` with the kubernetes-auth role `tenant`.
+
+That role's templated policy, `tenant-secrets`, grants read on `secret/data/tenants/<namespace>/*` and read/list on `secret/metadata/tenants/<namespace>/*`. The namespace comes from the verified ServiceAccount token, so a namespace can only ever read its own path. [Manage Secrets End to End](/docs/guides/manage-secrets) has the full YAML.
 
 Two hardening steps the shipped config does **not** do for you:
 
-1. **Auto-unseal.** The bootstrap Job runs `operator init` with one key share and stores the unseal key *and* root token in the `openbao-keys` Secret — fine on a laptop, unacceptable in production. Add a `seal "awskms"` / `"azurekeyvault"` / `"gcpckms"` stanza to the package `values.yaml` so no unseal material stays in-cluster.
+1. **Auto-unseal.** The bootstrap Job runs `operator init` with one key share. It stores the unseal key *and* root token in the `openbao-keys` Secret. That is fine on a laptop and unacceptable in production. Add a `seal "awskms"` / `"azurekeyvault"` / `"gcpckms"` stanza to the package `values.yaml`, so no unseal material stays in-cluster.
 2. **etcd encryption at rest.** Without it, a disk or snapshot yields every Secret in plaintext. On managed offerings, verify the provider default rather than assuming it.
 
-**The platform's stores serve the platform only — treat the boundary as namespace names and labels.** External Secrets' RBAC aggregates `create` on `ExternalSecret` and `SecretStore` into the built-in `edit` and `admin` roles, so every `ws-team-<team>` admin can write one in their own namespace. A `ClusterSecretStore` with no `conditions` would serve that ExternalSecret whatever it pointed at. The shipped stores are therefore restricted:
+**The platform's stores serve the platform only. Treat the boundary as namespace names and labels.** External Secrets' RBAC aggregates `create` on `ExternalSecret` and `SecretStore` into the built-in `edit` and `admin` roles. So every `ws-team-<team>` admin can write one in their own namespace. A `ClusterSecretStore` with no `conditions` would serve that ExternalSecret whatever it pointed at. That is why the shipped stores are restricted:
 
 | ClusterSecretStore | Can reach | Serves |
 |---|---|---|
@@ -131,13 +139,22 @@ Two hardening steps the shipped config does **not** do for you:
 | `platform-object-storage` | `root-creds` only (RBAC `resourceNames`) | Namespaces labelled `adhar.io/plane` `workload` or `preview` |
 | `platform-delivery` | `gitea-ci-creds` and `harbor-push` only | Namespaces labelled `adhar.io/plane` `workload` or `preview` |
 
-`vault`, `platform`, `keycloak`, `argocd` and `gitea` match by namespace **name**, which a tenant cannot create or rename; an ExternalSecret elsewhere that names them is refused. The two narrow stores exist for what the platform itself puts in tenant namespaces — database and pipeline backups to RustFS (the neo4j, MongoDB and OpenSearch compositions and the data-pipeline template), and Kargo's Git and registry credentials in a Project namespace. The `adhar.io/plane` label is set by the platform's compositions; tenant roles are namespace-scoped and cannot change it.
+`vault`, `platform`, `keycloak`, `argocd` and `gitea` match by namespace **name**, which a tenant cannot create or rename. An ExternalSecret elsewhere that names them is refused.
 
-**OpenBao's people-policies deny the platform's paths.** `platform-developer` (create, read, update, delete, list) and `platform-viewer` (read, list) keep their grants on `secret/*`, but both carry an explicit `deny` on the platform-owned paths `secret/data/…` and `secret/metadata/…` under `adhar/*`, `adhar-ai/*` and `vllm/*`, which overrides the broad grant. This was checked against a real OpenBao 2.6.2 server: both groups read team secrets and can no longer read or overwrite the break-glass credentials. `platform-admin` is unchanged.
+The two narrow stores exist for what the platform itself puts in tenant namespaces:
 
-These controls take effect once the updated packages are synced with `adhar upgrade`; a platform built from an earlier version serves `vault` to every namespace until then.
+- database and pipeline backups to RustFS (the neo4j, MongoDB and OpenSearch compositions and the data-pipeline template)
+- Kargo's Git and registry credentials in a Project namespace
 
-**How the boundary was verified.** On a disposable cluster running External Secrets v2.10.0 and OpenBao 2.6.2, configured by the platform's own bootstrap commands and store manifests, every attempt below was made from a team namespace:
+The platform's compositions set the `adhar.io/plane` label. Tenant roles are namespace-scoped and cannot change it.
+
+**OpenBao's people-policies deny the platform's paths.** `platform-developer` (create, read, update, delete, list) and `platform-viewer` (read, list) keep their grants on `secret/*`. But both carry an explicit `deny` on the platform-owned paths `secret/data/…` and `secret/metadata/…` under `adhar/*`, `adhar-ai/*` and `vllm/*`. The `deny` overrides the broad grant.
+
+This was checked against a real OpenBao 2.6.2 server. Both groups read team secrets, and can no longer read or overwrite the break-glass credentials. `platform-admin` is unchanged.
+
+These controls take effect once the updated packages are synced with `adhar upgrade`. Until then, a platform built from an earlier version serves `vault` to every namespace.
+
+**How the boundary was verified.** The test used a disposable cluster running External Secrets v2.10.0 and OpenBao 2.6.2, configured by the platform's own bootstrap commands and store manifests. Every attempt below was made from a team namespace:
 
 | Attempt | Result | Why |
 |---|---|---|
@@ -149,7 +166,7 @@ These controls take effect once the updated packages are synced with `adhar upgr
 | Use a narrow store from an unlabelled namespace | Blocked | Store's namespace selector |
 | `root-creds` / `gitea-ci-creds` through the right narrow store | Synced | Intended platform use |
 
-As a control, removing the `vault` store's `conditions` (the old configuration) let the same team namespace read the break-glass password; restoring them blocked it again. The platform's own reads in `adhar-system` kept working throughout.
+As a control, removing the `vault` store's `conditions` (the old configuration) let the same team namespace read the break-glass password. Restoring them blocked it again. The platform's own reads in `adhar-system` kept working throughout.
 
 > **Residual risk — what the boundary does not cover.**
 > - **The narrow stores are readable by every `workload` and `preview` namespace**, including PR previews. `root-creds` is the RustFS **root** credential. Per-database, scoped object-storage users are the recommended follow-up.
@@ -166,19 +183,19 @@ kubectl get clustersecretstore vault -o jsonpath='{.spec.conditions}{"\n"}'
 # [{"namespaces":["adhar-system"]}]
 ```
 
-Local platforms use a self-signed certificate. Production uses cert-manager with Let's Encrypt; the platform **wildcard** (`*.<defaultHost>`) requires a DNS-01-capable provider. See [Accessing the Platform](/docs/operations/accessing-the-platform).
+Local platforms use a self-signed certificate. Production uses cert-manager with Let's Encrypt. The platform **wildcard** (`*.<defaultHost>`) requires a DNS-01-capable provider. See [Accessing the Platform](/docs/operations/accessing-the-platform).
 
 ## Production hardening checklist
 
-Work through this in order — later steps assume earlier ones.
+Work through this in order. Later steps assume earlier ones.
 
 1. **Verify SSO** for a non-admin user in ArgoCD. If group mapping is broken you will lock yourself out at step 2.
 2. **Rotate bootstrap credentials.** Confirm with `kubectl -n adhar-system get secret bootstrap-credentials-rotated`.
-3. **Enable KMS auto-unseal**, re-init the backend, and confirm no unseal material remains in `openbao-keys`.
+3. **Enable KMS auto-unseal.** Re-init the backend, and confirm no unseal material remains in `openbao-keys`.
 4. **Enable etcd encryption at rest** (or verify the managed provider's default).
-5. **Enable apiserver OIDC** as a day-2 change, then test with a token-only kubeconfig — a check that passes with your normal kubeconfig proves nothing.
+5. **Enable apiserver OIDC** as a day-2 change. Then test with a token-only kubeconfig. A check that passes with your normal kubeconfig proves nothing.
 6. **Replace the cluster-wide `edit` binding** if developers should not read Secrets.
-7. **Run the supply-chain drill.** Only once it passes, enable the Enforce pack on your profile.
+7. **Run the supply-chain drill.** Enable the Enforce pack on your profile only after it passes.
 8. **Author network policy** from Hubble flow data, starting with your highest-value tenant.
 9. **Enable WireGuard** and restrict API-server access to a VPN or allowlist.
 10. **Promote Pod Security policies** from Audit to Enforce, reading PolicyReports between each.

@@ -7,9 +7,21 @@ path: "/docs/operations/observability"
 
 # Observability
 
-Most platforms bolt monitoring on per service, and every team solves label naming, trace propagation and retention again. Adhar is **observable by construction**: one collection contract (OpenTelemetry), one storage tier (the Grafana LGTM stack), one pane (Grafana). Enable a package and Grafana already sees it.
+Most platforms bolt monitoring on per service, so every team solves label naming, trace propagation and retention again. Adhar is **observable by construction**:
 
-This page is for platform engineers running the stack and developers who want their service visible in it. It explains how signals flow, what you get for free, the two things a service has to do itself, how to investigate an incident across metrics, traces and logs, and which alerts actually predict outages.
+- one collection contract (OpenTelemetry)
+- one storage tier (the Grafana LGTM stack)
+- one pane (Grafana)
+
+Enable a package and Grafana already sees it.
+
+This page is for platform engineers running the stack and developers who want their service visible in it. It explains:
+
+- how signals flow
+- what you get for free
+- the two things a service has to do itself
+- how to investigate an incident across metrics, traces and logs
+- which alerts actually predict outages
 
 ## At a glance
 
@@ -27,11 +39,11 @@ This page is for platform engineers running the stack and developers who want th
 
 Three decisions do most of the work.
 
-**OpenTelemetry is the collection contract.** Workloads never talk to a storage backend. They talk to Alloy — over OTLP, or by exposing `/metrics` and letting Alloy or Prometheus scrape them. That indirection is what lets the platform change where data lands without touching a single application.
+**OpenTelemetry is the collection contract.** Workloads never talk to a storage backend. They talk to Alloy, either over OTLP or by exposing `/metrics` for Alloy or Prometheus to scrape. This indirection lets the platform change where data lands without touching a single application.
 
-**The Grafana LGTM stack is storage and UX.** Loki for logs, Grafana for the pane, Tempo for traces, Mimir for long-term metrics, plus Pyroscope for profiles. All object-storage-backed, so retention is a policy decision rather than a disk limit.
+**The Grafana LGTM stack is storage and UX.** Loki for logs, Grafana for the pane, Tempo for traces, Mimir for long-term metrics, plus Pyroscope for profiles. All of them are backed by object storage, so retention is a policy decision rather than a disk limit.
 
-**Hub-and-spoke for fleets.** Running a full LGTM stack per cluster gives you N panes of glass and N retention policies. So data planes run *only* Alloy, and everything flows to the management cluster's stores, stamped with a `cluster` label. One query spans the fleet.
+**Hub-and-spoke for fleets.** A full LGTM stack per cluster would give you N panes of glass and N retention policies. So data planes run *only* Alloy. Everything flows to the management cluster's stores, stamped with a `cluster` label. One query spans the fleet.
 
 ### Signal flow
 
@@ -39,7 +51,7 @@ Three decisions do most of the work.
 gd-observability-signals
 ```
 
-Those endpoints are not compiled in. They come from the `observability-hub` ConfigMap in `adhar-system`, which Alloy reads via `envFrom`. On the management cluster the defaults are in-cluster service URLs; on a spoke you override the same four keys with the hub's external Gateway URLs and the spoke's own name:
+Those endpoints are not compiled in. They come from the `observability-hub` ConfigMap in `adhar-system`, which Alloy reads via `envFrom`. On the management cluster the defaults are in-cluster service URLs. On a spoke, override the same four keys with the hub's external Gateway URLs and the spoke's own name:
 
 ```yaml
 # kubectl -n adhar-system edit configmap observability-hub   (on the SPOKE)
@@ -50,13 +62,15 @@ data:
   HUB_CLUSTER_NAME: wl-blr1
 ```
 
-> **Non-obvious:** metrics go through `mimir-gateway`, never the distributor. Mimir runs multi-tenant, and the distributor answers `401 no org id` to any push without an `X-Scope-OrgID` header — which is every push Alloy makes. The gateway's nginx injects the tenant. This was live for months before it was caught, because Grafana read *through* the tenant-injecting gateway and looked fine while not one sample Alloy shipped had ever been accepted.
+> **Non-obvious:** metrics go through `mimir-gateway`, never the distributor. Mimir runs multi-tenant. The distributor answers `401 no org id` to any push without an `X-Scope-OrgID` header, and that is every push Alloy makes. The gateway's nginx injects the tenant.
+>
+> This bug was live for months before it was caught. Grafana read *through* the tenant-injecting gateway and looked fine, while not one sample Alloy shipped had ever been accepted.
 
-The hub's ingestion routes sit behind a Keycloak oauth2-proxy in bearer mode, so a spoke must present an access token obtained via `client_credentials` against the `mimir`, `loki` or `tempo` client.
+The hub's ingestion routes sit behind a Keycloak oauth2-proxy in bearer mode. So a spoke must present an access token, obtained via `client_credentials` against the `mimir`, `loki` or `tempo` client.
 
 ## What ships enabled
 
-The two profiles differ deliberately — the local core keeps a laptop usable.
+The two profiles differ on purpose: the local core keeps a laptop usable.
 
 | Package | Local | Prod | What it gives you |
 |---|---|---|---|
@@ -74,10 +88,11 @@ The two profiles differ deliberately — the local core keeps a laptop usable.
 
 ## What you get with zero setup
 
-- **Pod logs.** Alloy tails every container's stdout/stderr and relabels each stream with `namespace`, `pod`, `container`, `node` and `app` before writing to Loki. Without those relabels Loki only gets `job`/`instance`, which makes namespace filtering and Grafana's log-volume panel useless.
-- **Kubernetes state and node metrics**, plus every platform component — each package ships its own `ServiceMonitor`/`PodMonitor` and a Grafana dashboard.
-- **Network flows** via Hubble: every connection and every policy verdict. **Cost**, attributed per namespace by OpenCost.
-- **Automatic discovery.** Prometheus runs with `serviceMonitorSelector`, `podMonitorSelector` and `ruleSelector` all empty and `*NilUsesHelmValues: false`, so it picks up monitors and rules **anywhere in the cluster** with no extra label. The Grafana dashboard sidecar runs `searchNamespace: ALL` for the same reason.
+- **Pod logs.** Alloy tails every container's stdout/stderr. Before writing to Loki, it relabels each stream with `namespace`, `pod`, `container`, `node` and `app`. Without those relabels Loki only gets `job`/`instance`, and namespace filtering and Grafana's log-volume panel become useless.
+- **Kubernetes state and node metrics**, plus every platform component. Each package ships its own `ServiceMonitor`/`PodMonitor` and a Grafana dashboard.
+- **Network flows** via Hubble: every connection and every policy verdict.
+- **Cost**, attributed per namespace by OpenCost.
+- **Automatic discovery.** Prometheus runs with `serviceMonitorSelector`, `podMonitorSelector` and `ruleSelector` all empty and `*NilUsesHelmValues: false`. So it picks up monitors and rules **anywhere in the cluster**, with no extra label. The Grafana dashboard sidecar runs `searchNamespace: ALL` for the same reason.
 
 ## What needs instrumentation
 
@@ -120,7 +135,7 @@ adhar metrics list --query 'up{job="checkout"}' \
 
 ### Traces (and app metrics and logs) over OTLP
 
-Point your OpenTelemetry SDK at Alloy. Nothing else is required — Alloy fans the three signals out to Tempo, Mimir and Loki for you.
+Point your OpenTelemetry SDK at Alloy. Nothing else is required. Alloy fans the three signals out to Tempo, Mimir and Loki for you.
 
 ```yaml
 env:
@@ -130,9 +145,9 @@ env:
     value: checkout
 ```
 
-> **Non-obvious:** the Alloy chart publishes only its own `:12345` by default. Adhar adds `4317`/`4318` to both the container and the Service through `alloy.extraPorts`. If you run a stock Alloy chart elsewhere, that Service port is the first thing to check when OTLP "silently" does nothing.
+> **Non-obvious:** the Alloy chart publishes only its own `:12345` by default. Adhar adds `4317`/`4318` to both the container and the Service through `alloy.extraPorts`. If you run a stock Alloy chart elsewhere and OTLP "silently" does nothing, check that Service port first.
 
-If you would rather not touch the code at all, enable `observability/beyla` — eBPF auto-instrumentation that produces basic spans with no application changes. It is off by default because it is a per-node agent with real cost.
+If you would rather not touch the code at all, enable `observability/beyla`. It is eBPF auto-instrumentation that produces basic spans with no application changes. It is off by default because it is a per-node agent with real cost.
 
 ## Using it
 
@@ -154,7 +169,7 @@ do-investigation
 
 1. Start on a metric spike (`Prometheus` or `Mimir`). Exemplars carry a `trace_id` and render a **View trace** button into Tempo.
 2. In the Tempo trace, `tracesToLogsV2` jumps to the Loki lines for that `service.name` / `k8s.pod.name` within ±5 minutes, filtered by trace ID. From a Loki line, the `TraceID` derived field goes back the other way.
-3. Tempo's service map and node graph are on by default, because the metrics generator is enabled and remote-writes span metrics and service graphs into Mimir.
+3. Use Tempo's service map and node graph. They are on by default, because the metrics generator is enabled and remote-writes span metrics and service graphs into Mimir.
 
 From the CLI:
 
@@ -170,11 +185,11 @@ cilium status
 hubble observe --since 5m --namespace checkout
 ```
 
-> `adhar metrics` and `adhar traces` default to service URLs that do not exist on an Adhar cluster. Pass `--prometheus-url` / `--tempo-url` explicitly, or port-forward first. `adhar cost` needs no flag — it reaches Prometheus through the API server's service proxy, authorised by your own RBAC.
+> `adhar metrics` and `adhar traces` default to service URLs that do not exist on an Adhar cluster. Pass `--prometheus-url` / `--tempo-url` explicitly, or port-forward first. `adhar cost` needs no flag. It reaches Prometheus through the API server's service proxy, authorised by your own RBAC.
 
 ## Verify a service end to end
 
-"Configured" is not "working" — the platform learned that the hard way, with Alloy shipping metrics that Mimir refused for months while Grafana looked fine. Verify at the **reader**, with a query that must return data.
+"Configured" is not "working". The platform learned that the hard way: Alloy shipped metrics that Mimir refused for months, while Grafana looked fine. Verify at the **reader**, with a query that must return data.
 
 1. **The monitor exists and selects your Service.**
 
@@ -190,7 +205,7 @@ hubble observe --since 5m --namespace checkout
    adhar metrics list --query 'up{job="checkout"}' --prometheus-url http://localhost:9090
    ```
 
-   *Success:* one series per pod with value `1`. No series means the selector missed; `0` means the target is down.
+   *Success:* one series per pod with value `1`. No series means the selector missed. `0` means the target is down.
 
 3. **Traces arrive in Tempo.** Send one real request, then search for it:
 
@@ -203,11 +218,14 @@ hubble observe --since 5m --namespace checkout
 
 4. **Logs carry Kubernetes labels.** In Grafana Explore, query Loki with `{namespace="checkout"}`. *Success:* lines appear and can be filtered by `pod` and `container`.
 
-5. **The cross-links work.** Open a trace from step 3 and follow its link into Loki. The jump filters on `service.name` / `k8s.pod.name` and the trace ID within ±5 minutes, so if it comes back empty while both stores have data, check that the spans carry `service.name` (set `OTEL_SERVICE_NAME`) and that your log lines include the trace ID.
+5. **The cross-links work.** Open a trace from step 3 and follow its link into Loki. The jump filters on `service.name` / `k8s.pod.name` and the trace ID within ±5 minutes. If it comes back empty while both stores have data, check two things:
+
+   - the spans carry `service.name` (set `OTEL_SERVICE_NAME`)
+   - your log lines include the trace ID
 
 ## Adding a dashboard
 
-Dashboards are ConfigMaps, not clicks. Grafana runs with `allowUiUpdates: false`, so anything saved in the UI is lost on the next pod restart — export the JSON and commit it instead.
+Dashboards are ConfigMaps, not clicks. Grafana runs with `allowUiUpdates: false`, so anything saved in the UI is lost on the next pod restart. Export the JSON and commit it instead.
 
 ```yaml
 apiVersion: v1
@@ -224,7 +242,7 @@ data:
     { "title": "Checkout", "panels": [ ... ] }
 ```
 
-Pin panel datasources to the fixed UIDs — `prometheus`, `mimir`, `loki`, `tempo`, `pyroscope`, `alertmanager`. They are fixed precisely so committed dashboards resolve; a dashboard referencing a generated UID renders "datasource not found".
+Pin panel datasources to the fixed UIDs: `prometheus`, `mimir`, `loki`, `tempo`, `pyroscope`, `alertmanager`. They are fixed so that committed dashboards resolve. A dashboard that references a generated UID renders "datasource not found".
 
 ## Adding an alert
 
@@ -252,11 +270,16 @@ spec:
             runbook_url: https://github.com/adhar-io/adhar/blob/main/docs/TROUBLESHOOTING.md
 ```
 
-Routing is already wired: Alertmanager groups by `namespace` and `alertname` (`group_wait: 30s`, `group_interval: 5m`, `repeat_interval: 12h`) and delivers to the Console's Notification Center over an authenticated webhook. `Watchdog` — Alertmanager's own heartbeat — routes to `null`, and `critical` inhibits `warning` and `info` for the same namespace and alert name.
+Routing is already wired:
+
+- Alertmanager groups by `namespace` and `alertname` (`group_wait: 30s`, `group_interval: 5m`, `repeat_interval: 12h`).
+- It delivers to the Console's Notification Center over an authenticated webhook.
+- `Watchdog`, Alertmanager's own heartbeat, routes to `null`.
+- `critical` inhibits `warning` and `info` for the same namespace and alert name.
 
 ## Retention and object-storage sizing
 
-Every store writes to the platform's S3-compatible object store, so growth costs storage rather than availability. Defaults as shipped:
+Every store writes to the platform's S3-compatible object store, so growth costs storage rather than availability. The shipped defaults:
 
 | Store | Retention | Backing |
 |---|---|---|
@@ -266,11 +289,19 @@ Every store writes to the platform's S3-compatible object store, so growth costs
 | Tempo | object-store lifecycle | platform object store |
 | Alertmanager | `120h` | PVC — notification state, not telemetry |
 
-Sizing is the part people get wrong. Loki accepts `ingestion_rate_mb: 32` and asks for 30 days, and its index-shipper cache lives on the PVC. **Keep the PVC and the ingestion limits in proportion, and raise them together.** A 10Gi claim under those limits did not degrade — Loki *died*: the cache write hit `ENOSPC`, the store module failed to initialise (`err="short write"`), and `loki-0` sat in `CrashLoopBackOff` for 29 restarts. Grafana's only symptoms were "no Loki datasource configured" and "Log volume has not been configured" — two *configuration* messages for a backend that was dead.
+Sizing is the part people get wrong. Loki accepts `ingestion_rate_mb: 32` and asks for 30 days, and its index-shipper cache lives on the PVC. **Keep the PVC and the ingestion limits in proportion, and raise them together.**
+
+A 10Gi claim under those limits did not degrade. Loki *died*:
+
+- the cache write hit `ENOSPC`
+- the store module failed to initialise (`err="short write"`)
+- `loki-0` sat in `CrashLoopBackOff` for 29 restarts
+
+Grafana's only symptoms were "no Loki datasource configured" and "Log volume has not been configured". Those are two *configuration* messages for a backend that was dead.
 
 ## The alerts that actually predict outages
 
-Coverage is not the goal; leading indicators are.
+Coverage is not the goal. Leading indicators are.
 
 | Area | Alert on | Why it leads |
 |---|---|---|
@@ -283,7 +314,7 @@ Coverage is not the goal; leading indicators are.
 | Cilium | agent health, policy drop anomalies (Hubble) | Policy regressions read as application bugs |
 | Cost | `AdharNamespaceBudgetWarning` at 80% of projected spend | 100% tells you after the money is spent |
 
-Cost alerting is opt-in by construction: `adhar-cost-governance` ships its budget rule group **empty**, so installing it cannot start paging anyone. Declare a budget to switch it on:
+Cost alerting is opt-in by construction. `adhar-cost-governance` ships its budget rule group **empty**, so installing it cannot start paging anyone. Declare a budget to switch it on:
 
 ```yaml
 # in the adhar.cost.budgets group of the adhar-cost-governance PrometheusRule
@@ -292,11 +323,21 @@ Cost alerting is opt-in by construction: `adhar-cost-governance` ships its budge
   expr: vector(500)
 ```
 
-The figures are the cost of resource **requests**, not usage — what the scheduler reserves, and therefore what denies capacity to everyone else.
+The figures are the cost of resource **requests**, not usage. That is what the scheduler reserves, and so what denies capacity to everyone else.
 
 ## Production readiness scorecards
 
-The `application/adhar-scorecards` package grades every service 0–100 (A–F) from in-cluster signals — ArgoCD health and sync, probes, resource requests, no-`:latest`, Kyverno PolicyReport pass rate, HTTPRoute exposure, backup presence. A CronJob runs every 30 minutes; run it on demand with:
+The `application/adhar-scorecards` package grades every service 0–100 (A–F) from in-cluster signals:
+
+- ArgoCD health and sync
+- probes
+- resource requests
+- no-`:latest`
+- Kyverno PolicyReport pass rate
+- HTTPRoute exposure
+- backup presence
+
+A CronJob runs every 30 minutes. To run it on demand:
 
 ```bash
 kubectl -n adhar-system create job \

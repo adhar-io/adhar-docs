@@ -7,7 +7,14 @@ path: "/docs/operations/accessing-the-platform"
 
 # Accessing the Platform
 
-Every Adhar service — Console, ArgoCD, Gitea, Keycloak, Harbor — is reached the same way: **one hostname per service, derived from one base domain, served by one Gateway holding one certificate**. Nothing in the stack hardcodes a host, a port or a cloud; `adhar up` records the edge configuration on the `AdharPlatform` resource and everything else renders from it. This page is for anyone who needs to reach the platform — the operator signing in on day one, a developer looking for a URL, a script that needs a token. It explains how those layers fit together, walks through the first sign-in step by step, shows how to test each layer on its own, and what to do when one of them is down.
+You reach every Adhar service (Console, ArgoCD, Gitea, Keycloak, Harbor) the same way: **one hostname per service, derived from one base domain, served by one Gateway holding one certificate**. Nothing in the stack hardcodes a host, a port or a cloud. `adhar up` records the edge configuration on the `AdharPlatform` resource, and everything else renders from it.
+
+This page is for anyone who needs to reach the platform: the operator signing in on day one, a developer looking for a URL, or a script that needs a token. It explains:
+
+- how those layers fit together
+- the first sign-in, step by step
+- how to test each layer on its own
+- what to do when one of them is down
 
 ## At a glance
 
@@ -24,15 +31,20 @@ Every Adhar service — Console, ArgoCD, Gitea, Keycloak, Harbor — is reached 
 
 ## The request path
 
-Understanding this chain is what makes the failures readable — each arrow is a layer you can test on its own.
+Once you understand this chain, failures become easy to read. Each arrow is a layer you can test on its own.
 
 ```diagram
 gd-request-path
 ```
 
-Two consequences worth internalising. First, **TLS is a Gateway concern, not an application concern** — backends serve plain HTTP inside the cluster, so a certificate problem never looks like an application problem. Second, **a service is reachable only if its package ships an `HTTPRoute`**; a healthy pod with no route has no URL.
+Two things follow from this:
 
-In-cluster clients take the same path. On Kind, CoreDNS rewrites `*.adhar.localtest.me` to `cilium-gateway-adhar-gateway.adhar-system.svc.cluster.local`, so ArgoCD performing OIDC discovery against the Keycloak issuer uses the identical FQDN a browser does. That is also why the local Gateway carries a third listener on `:8443`: externally the host's 8443 maps to the 443 node port, but in-cluster callers connect to the Service on 8443 directly.
+- **TLS is a Gateway concern, not an application concern.** Backends serve plain HTTP inside the cluster, so a certificate problem never looks like an application problem.
+- **A service is reachable only if its package ships an `HTTPRoute`.** A healthy pod with no route has no URL.
+
+In-cluster clients take the same path. On Kind, CoreDNS rewrites `*.adhar.localtest.me` to `cilium-gateway-adhar-gateway.adhar-system.svc.cluster.local`. So when ArgoCD performs OIDC discovery against the Keycloak issuer, it uses the same FQDN a browser does.
+
+That is also why the local Gateway has a third listener on `:8443`. From outside, the host's 8443 maps to the 443 node port. In-cluster callers connect to the Service on 8443 directly.
 
 ## Local Kind versus cloud
 
@@ -44,7 +56,7 @@ In-cluster clients take the same path. On Kind, CoreDNS rewrites `*.adhar.localt
 | Certificate | Self-signed; browser warning is expected | Let's Encrypt wildcard `*.<defaultHost>` via DNS-01 |
 | DNS setup | None required, and none possible | Delegate the zone **before** `adhar up` |
 
-`adhar up --port 9443` moves the HTTPS host port; the HTTP port derives as *port − 363* (so `9080`). If the port you ask for is already in use, the Kind provider picks the next free one and reports it — so check the output rather than assuming 8443.
+`adhar up --port 9443` moves the HTTPS host port. The HTTP port derives as *port − 363* (so `9080`). If the port you ask for is already in use, the Kind provider picks the next free one and reports it. Check the output rather than assuming 8443.
 
 ## Your domain drives every URL
 
@@ -67,11 +79,11 @@ globalSettings:
 | Harbor | `https://harbor.<defaultHost>` |
 | Nexus | `https://nexus.<defaultHost>` |
 
-Because the port is standard on cloud, OIDC issuer URLs such as `https://keycloak.<defaultHost>/realms/adhar` match exactly — no port suffix to keep in step.
+On cloud the port is standard, so OIDC issuer URLs such as `https://keycloak.<defaultHost>/realms/adhar` match exactly. There is no port suffix to keep in step.
 
 ## kubeconfig is set up for you
 
-`adhar up` writes the cluster's kubeconfig to `~/.adhar/clusters/<cluster>/kubeconfig` (mode `0600`) and merges the cluster, user and context into `~/.kube/config` as `adhar-<cluster>`, making it current. Re-running `adhar up` for the same cluster **replaces** those entries rather than duplicating them.
+`adhar up` writes the cluster's kubeconfig to `~/.adhar/clusters/<cluster>/kubeconfig` (mode `0600`). It also merges the cluster, user and context into `~/.kube/config` as `adhar-<cluster>`, and makes it current. Re-running `adhar up` for the same cluster **replaces** those entries rather than duplicating them.
 
 ```bash
 kubectl config current-context      # adhar-dev
@@ -95,15 +107,27 @@ adhar get secrets -p keycloak
 adhar get secrets --all           # every credential in the cluster
 ```
 
-`-p` is `--provider`: a credential set such as `argocd`, `gitea`, `keycloak`, `adhar-console`, `openbao`, `harbor` or `rustfs`. Packages that keep their own login publish a Secret labelled `adhar.io/cli-secret=true` with `adhar.io/package-name=<package>`, so `-p <package>` works for them with no per-app code in the CLI.
+`-p` is `--provider`: a credential set such as `argocd`, `gitea`, `keycloak`, `adhar-console`, `openbao`, `harbor` or `rustfs`.
 
-The **Console** uses Keycloak SSO — sign in at `https://console.<defaultHost>` with your Keycloak user rather than pasting a secret. In production, rotate the day-0 `gitea_admin` and ArgoCD `admin` passwords by enabling the `credential-rotation` package; it writes break-glass copies to the secrets backend at `secret/adhar/bootstrap-credentials`.
+Packages that keep their own login publish a Secret labelled `adhar.io/cli-secret=true` with `adhar.io/package-name=<package>`. So `-p <package>` works for them, with no per-app code in the CLI.
 
-**The secrets backend is OpenBao** (`security/openbao`); the `vault` package ships disabled and exactly one may be on. OpenBao is API-compatible, so nothing changed for the platform's own consumers: the External Secrets provider is still `vault:`, the `ClusterSecretStore` is still named `vault`, and the in-cluster address is still `vault.adhar-system.svc.cluster.local:8200`. That store serves `adhar-system` only; application namespaces read OpenBao through their own `SecretStore` — see [Manage Secrets End to End](/docs/guides/manage-secrets).
+The **Console** uses Keycloak SSO. Sign in at `https://console.<defaultHost>` with your Keycloak user rather than pasting a secret.
+
+In production, enable the `credential-rotation` package to rotate the day-0 `gitea_admin` and ArgoCD `admin` passwords. It writes break-glass copies to the secrets backend at `secret/adhar/bootstrap-credentials`.
+
+**The secrets backend is OpenBao** (`security/openbao`). The `vault` package ships disabled, and exactly one may be on.
+
+OpenBao is API-compatible, so nothing changed for the platform's own consumers:
+
+- the External Secrets provider is still `vault:`
+- the `ClusterSecretStore` is still named `vault`
+- the in-cluster address is still `vault.adhar-system.svc.cluster.local:8200`
+
+That store serves `adhar-system` only. Application namespaces read OpenBao through their own `SecretStore`. See [Manage Secrets End to End](/docs/guides/manage-secrets).
 
 ## Sign in for the first time
 
-Day-0 credentials exist so you can get in before SSO is proven. The goal of the first session is to retire them safely: prove SSO, then let the platform rotate the local admin passwords and keep break-glass copies where only the secrets backend can read them.
+Day-0 credentials exist so you can get in before SSO is proven. The goal of the first session is to retire them safely. First prove SSO. Then let the platform rotate the local admin passwords and keep break-glass copies where only the secrets backend can read them.
 
 ```diagram
 do-credential-lifecycle
@@ -116,7 +140,7 @@ do-credential-lifecycle
    adhar get status                      # Ready, with package health
    ```
 
-2. **Read the day-0 credentials** for ArgoCD and Gitea, and sign in to each once as the local admin to confirm the edge works.
+2. **Read the day-0 credentials** for ArgoCD and Gitea. Sign in to each once as the local admin to confirm the edge works.
 
    ```bash
    adhar get secrets -p argocd
@@ -125,11 +149,11 @@ do-credential-lifecycle
 
    *Verify:* both UIs load over HTTPS at `https://argocd.<defaultHost>` and `https://gitea.<defaultHost>` (locally, with the `:8443` suffix).
 
-3. **Sign in through Keycloak as a non-admin user.** Open the Console at `https://console.<defaultHost>` and use your Keycloak user in realm `adhar`; then sign in to ArgoCD with *Log in via Keycloak*.
+3. **Sign in through Keycloak as a non-admin user.** Open the Console at `https://console.<defaultHost>` and use your Keycloak user in realm `adhar`. Then sign in to ArgoCD with *Log in via Keycloak*.
 
-   *Verify:* the ArgoCD application list is **not** empty. An empty list after a successful SSO login is an RBAC defect (see [Troubleshooting](/docs/reference/troubleshooting)) — fix it before going further, or rotation will lock you out.
+   *Verify:* the ArgoCD application list is **not** empty. An empty list after a successful SSO login is an RBAC defect (see [Troubleshooting](/docs/reference/troubleshooting)). Fix it before going further, or rotation will lock you out.
 
-4. **Rotate the bootstrap credentials.** In the production profile the `credential-rotation` package is already on; elsewhere enable it:
+4. **Rotate the bootstrap credentials.** In the production profile the `credential-rotation` package is already on. Elsewhere, enable it:
 
    ```bash
    adhar stack enable adhar-credential-rotation
@@ -142,11 +166,17 @@ do-credential-lifecycle
    kubectl -n adhar-system get secret bootstrap-credentials-rotated
    ```
 
-5. **Know where the break-glass copies are.** The rotated passwords are written to `secret/adhar/bootstrap-credentials` in the secrets backend. Tenants cannot reach it: `ClusterSecretStore/vault` serves only `adhar-system`, a tenant's own `SecretStore` reads only `secret/tenants/<namespace>/`, and OpenBao's `platform-developer` and `platform-viewer` policies deny `secret/adhar/*`. Reading it takes `platform-admin` in OpenBao, the root token, or rights in `adhar-system` ([Security Best Practices](/docs/security/security-best-practices)). On a platform built before these restrictions, run `adhar upgrade` before relying on it as break-glass. To rotate again, delete the `bootstrap-credentials-rotated` marker Secret.
+5. **Know where the break-glass copies are.** The rotated passwords are written to `secret/adhar/bootstrap-credentials` in the secrets backend. Tenants cannot reach it:
+
+   - `ClusterSecretStore/vault` serves only `adhar-system`.
+   - A tenant's own `SecretStore` reads only `secret/tenants/<namespace>/`.
+   - OpenBao's `platform-developer` and `platform-viewer` policies deny `secret/adhar/*`.
+
+   Reading it takes `platform-admin` in OpenBao, the root token, or rights in `adhar-system` (see [Security Best Practices](/docs/security/security-best-practices)). On a platform built before these restrictions, run `adhar upgrade` before you rely on it as break-glass. To rotate again, delete the `bootstrap-credentials-rotated` marker Secret.
 
 ### Tokens for the CLI and scripts
 
-For API access without a browser, the CLI performs an OIDC login against the `adhar-cli` Keycloak client and prints a bearer token on stdout, with nothing else:
+For API access without a browser, the CLI performs an OIDC login against the `adhar-cli` Keycloak client. It prints a bearer token on stdout, with nothing else:
 
 ```bash
 adhar auth login alice \
@@ -156,18 +186,20 @@ TOKEN=$(adhar auth token)
 curl -H "Authorization: Bearer $TOKEN" https://<service>.<defaultHost>/…
 ```
 
-Services fronted by the platform's oauth2-proxy in bearer mode accept that token directly, which is how API-shaped services are reached from scripts.
+Services fronted by the platform's oauth2-proxy in bearer mode accept that token directly. That is how scripts reach API-shaped services.
 
 ## DNS and TLS are automatic
 
 | Piece | Behaviour |
 |---|---|
-| **DNS provider** | Derived from the environment's cloud; override with `globalSettings.dnsProvider` (`cloudflare` for on-prem, `none` to disable). The zone must be `<defaultHost>`, delegated to that provider |
-| **Credentials** | Materialised by the CLI into the `adhar-dns-provider` Secret in `adhar-system` — never written to Git |
-| **external-dns** | Runs with `--domain-filter=<defaultHost>` and a per-cluster TXT owner id, publishing a record per platform HTTPRoute hostname pointing at the Gateway LB address |
-| **cert-manager** | Issues `*.<defaultHost>` through the DNS-01 `adhar-letsencrypt-dns` ClusterIssuer into `Secret/adhar-cert`; without a DNS-01-capable provider the Gateway keeps `adhar-selfsigned` |
+| **DNS provider** | Derived from the environment's cloud. Override with `globalSettings.dnsProvider` (`cloudflare` for on-prem, `none` to disable). The zone must be `<defaultHost>`, delegated to that provider |
+| **Credentials** | Written by the CLI into the `adhar-dns-provider` Secret in `adhar-system`; never written to Git |
+| **external-dns** | Runs with `--domain-filter=<defaultHost>` and a per-cluster TXT owner id. Publishes one record per platform HTTPRoute hostname, pointing at the Gateway LB address |
+| **cert-manager** | Issues `*.<defaultHost>` through the DNS-01 `adhar-letsencrypt-dns` ClusterIssuer into `Secret/adhar-cert`. Without a DNS-01-capable provider, the Gateway keeps `adhar-selfsigned` |
 
-> On AWS the Route 53 solver **requires a region**. Without one the ACME challenge sits pending forever, no `_acme-challenge` TXT record is written, and every URL fails TLS while DNS, the load balancer and the Gateway all look healthy. Temporary credentials (SSO, assumed role) work until they expire, then certificate renewal stops silently — use a long-lived key for the platform's DNS identity.
+> On AWS the Route 53 solver **requires a region**. Without one, the ACME challenge sits pending forever and no `_acme-challenge` TXT record is written. Every URL then fails TLS, while DNS, the load balancer and the Gateway all look healthy.
+>
+> Temporary credentials (SSO, assumed role) work until they expire. Then certificate renewal stops silently. Use a long-lived key for the platform's DNS identity.
 
 ## Verify each layer independently
 
@@ -194,15 +226,15 @@ curl -sI https://console.<defaultHost> | head -1     # 7. HTTP/2 200
 kubectl get clusterproviderconfigs.kubernetes.m.crossplane.io
 ```
 
-Then sign in to ArgoCD **through Keycloak**, not as the local admin, and confirm you see the full application list — an empty list after a successful SSO login is an RBAC defect, not a missing cluster.
+Then sign in to ArgoCD **through Keycloak**, not as the local admin. Confirm you see the full application list. An empty list after a successful SSO login is an RBAC defect, not a missing cluster.
 
 ## The debugging ladder
 
-Climb it in order; each rung removes one layer from the picture.
+Climb it in order. Each rung removes one layer from the picture.
 
-1. **Is anything serving?** `curl -sk -o /dev/null -w 'HTTP %{http_code}\n' https://<svc>.<host>`. `000` means the socket opened but nothing answered — the Gateway is not Programmed. A TLS error means the Gateway is fine and the certificate is not.
+1. **Is anything serving?** `curl -sk -o /dev/null -w 'HTTP %{http_code}\n' https://<svc>.<host>`. `000` means the socket opened but nothing answered: the Gateway is not Programmed. A TLS error means the Gateway is fine and the certificate is not.
 2. **Bypass DNS, keep the edge.** `curl -k --resolve <svc>.<host>:443:<LB-IP> https://<svc>.<host>` sends the right SNI and Host to the right address. If this works, the problem is DNS only.
-3. **Bypass the edge, keep the Service.** Port-forward the backend and hit it directly. If this works, the problem is Gateway, route or certificate — not the application.
+3. **Bypass the edge, keep the Service.** Port-forward the backend and hit it directly. If this works, the problem is the Gateway, route or certificate, not the application.
 
    ```bash
    kubectl port-forward -n adhar-system svc/argo-cd-argocd-server 8443:443
@@ -211,7 +243,7 @@ Climb it in order; each rung removes one layer from the picture.
    # http://localhost:3000
    ```
 
-4. **Bypass the Service, keep the pod.** `kubectl port-forward -n adhar-system pod/<pod> <port>:<port>`. Working here but not at step 3 means the Service selector or endpoints are wrong.
+4. **Bypass the Service, keep the pod.** `kubectl port-forward -n adhar-system pod/<pod> <port>:<port>`. If this works but step 3 did not, the Service selector or endpoints are wrong.
 5. **Read the pod.** `kubectl -n adhar-system logs <pod>` and `kubectl -n adhar-system describe pod <pod>`.
 
 To remove the local browser warning entirely, trust the platform CA:

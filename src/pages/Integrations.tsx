@@ -334,7 +334,7 @@ const Integrations = () => {
 
                 <div className="rounded-xl border border-border/70 bg-muted/30 p-4 text-sm text-muted-foreground">
                   Ships as a GitOps package — enabled with a one-line change and reconciled by ArgoCD. See{" "}
-                  <Link to="/docs/core-concepts/platform-services" className="text-primary hover:underline">Platform Services</Link>.
+                  <Link to="/docs/$" params={{ _splat: "core-concepts/platform-services" }} className="text-primary hover:underline">Platform Services</Link>.
                 </div>
               </div>
 
@@ -343,7 +343,7 @@ const Integrations = () => {
                   className="btn-primary-modern inline-flex items-center justify-center gap-2 rounded-full h-11 px-5 text-sm font-medium">
                   Visit {selected.name} <ArrowUpRight className="w-4 h-4" />
                 </a>
-                <Link to="/docs/core-concepts/architecture" className="btn-secondary-modern inline-flex items-center justify-center gap-2 rounded-full h-11 px-5 text-sm font-medium">
+                <Link to="/docs/$" params={{ _splat: "core-concepts/architecture" }} className="btn-secondary-modern inline-flex items-center justify-center gap-2 rounded-full h-11 px-5 text-sm font-medium">
                   <BookOpen className="w-4 h-4" /> How it all fits together
                 </Link>
               </div>
@@ -362,7 +362,7 @@ const Integrations = () => {
                 Every tool here ships pre-integrated, secured, and observable. <code className="px-1.5 py-0.5 rounded bg-muted text-sm">adhar up</code> stands the whole stack up in under 10 minutes.
               </p>
               <div className="mt-6 flex flex-wrap justify-center gap-3">
-                <Link to="/docs/getting-started/quick-start" className="btn-primary-modern inline-flex items-center gap-2 rounded-full h-11 px-6 text-sm font-medium">
+                <Link to="/docs/$" params={{ _splat: "getting-started/quick-start" }} className="btn-primary-modern inline-flex items-center gap-2 rounded-full h-11 px-6 text-sm font-medium">
                   Get started <ArrowRight className="w-4 h-4" />
                 </Link>
                 <Link to="/docs" className="btn-secondary-modern inline-flex items-center gap-2 rounded-full h-11 px-6 text-sm font-medium">

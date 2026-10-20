@@ -253,7 +253,7 @@ const BlogAdmin = () => {
                   <div className="flex items-center gap-2 shrink-0">
                     {p.status === "published" && p.slug && (
                       <Link
-                        to={`/blog/${p.slug}`}
+                        to="/blog/$slug" params={{ slug: p.slug }}
                         className="inline-flex items-center gap-1.5 px-3 py-2 border border-[hsl(var(--blog-border))] hover:border-[hsl(var(--blog-accent))] text-[10px] font-bold uppercase tracking-[0.2em] text-[hsl(var(--blog-muted))] hover:text-[hsl(var(--blog-heading))] transition-colors"
                       >
                         View <ArrowRight className="w-3 h-3" />

@@ -23,11 +23,11 @@ interface Item {
 }
 
 const items: Item[] = [
-  { to: "/about", icon: Building2, title: "About us", description: "Our story and mission to build the future of development." },
-  { to: "/contributors", icon: Users, title: "Contributors", description: "The people building ADHAR together." },
+  { to: "/about", icon: Building2, title: "About us", description: "Who builds Adhar, and why." },
+  { to: "/contributors", icon: Users, title: "Contributors", description: "The people building Adhar in the open." },
   { to: "/careers", icon: Briefcase, title: "Careers", description: "Open roles and what it's like to work here." },
   { to: "/contact", icon: MessageCircle, title: "Contact", description: "Get in touch with our team for support or inquiries." },
-  { to: "/pricing", icon: Tag, title: "Pricing", description: "Choose the plan that fits your development needs." },
+  { to: "/pricing", icon: Tag, title: "Pricing", description: "Self-host for free, or let us host it with Adhar Cloud." },
 ];
 
 const CompanyDropdown = () => {

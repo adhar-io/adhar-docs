@@ -7,7 +7,9 @@ path: "/adhar-kit/modules/config"
 
 # Config
 
-`adhar-kit-config` provides multi-source, priority-merged configuration with startup validation, dynamic refresh, and transparent AES/GCM property encryption. The problem it solves is that **a service in production draws settings from four places at once** — environment variables, a mounted ConfigMap, Consul or Vault, and a packaged file — and without one merge order and one validation pass, the effective configuration is whatever the last framework to load happened to win.
+`adhar-kit-config` merges configuration from several sources by priority. It adds startup validation, dynamic refresh, and transparent AES/GCM property encryption.
+
+The problem it solves: **a service in production draws settings from four places at once**. These are environment variables, a mounted ConfigMap, Consul or Vault, and a packaged file. Without one merge order and one validation pass, the effective configuration is whatever the last framework to load happened to win.
 
 ## At a glance
 
@@ -22,15 +24,18 @@ path: "/adhar-kit/modules/config"
 
 ## How it works
 
-`ConfigManager` is the single owner of the merged view. Sources register with a numeric priority; the manager keeps them sorted and resolves a key from the highest-priority source that has it. A `PropertyEncryptor`, when present, sits in the read path so `ENC(...)` values are decrypted at the moment they are read — never stored in plaintext.
+`ConfigManager` is the single owner of the merged view. Each source registers with a numeric priority. The manager keeps them sorted, and resolves a key from the highest-priority source that has it. If a `PropertyEncryptor` is present, it sits in the read path. So `ENC(...)` values are decrypted at the moment they are read, and never stored in plaintext.
 
 ```diagram
 kit-config-priority
 ```
 
-Two things happen around that core. At startup `ConfigValidationRunner` runs `ConfigValidator` over the merged map and can abort the boot. At runtime `ConfigRefreshManager` re-reads refreshable sources and notifies `@RefreshConfig` methods and registered `ConfigChangeListener`s.
+Two things happen around that core:
 
-**`ConfigManager` is a parallel view, not Spring's `Environment`.** The module registers no `PropertySource`, so `@Value`, `@ConfigurationProperties` and `Environment.getProperty(...)` resolve through Spring's own machinery and never see a Consul, Vault or ConfigMap source declared here. Read through `ConfigManager` / `ConfigFacade` when you want the merged view. This is also what makes the refresh story precise — see below.
+- At startup, `ConfigValidationRunner` runs `ConfigValidator` over the merged map. It can abort the boot.
+- At runtime, `ConfigRefreshManager` re-reads refreshable sources. It notifies `@RefreshConfig` methods and registered `ConfigChangeListener`s.
+
+**`ConfigManager` is a parallel view, not Spring's `Environment`.** The module registers no `PropertySource`. So `@Value`, `@ConfigurationProperties` and `Environment.getProperty(...)` resolve through Spring's own machinery. They never see a Consul, Vault or ConfigMap source declared here. When you want the merged view, read through `ConfigManager` / `ConfigFacade`. This also defines exactly who sees a refresh — see below.
 
 ## Install
 
@@ -44,17 +49,23 @@ Two things happen around that core. At startup `ConfigValidationRunner` runs `Co
 
 ## Key APIs
 
-- **`ConfigManager`** — the merge engine: `addSource`, `removeSource`, `getProperty(key)`, `getProperty(key, type)`, `getProperty(key, type, default)`, `getRequiredProperty`, `getPropertiesWithPrefix`, `containsProperty`, `refreshAll`, `refreshSource`, `addChangeListener`, `removeChangeListener`, `getHealthStatus`, `setEncryptor`.
-- **`ConfigFacade`** — the read-only convenience view (`getInstance()`): `get`, `getOptional`, `getInt`, `getLong`, `getBoolean`, `getDouble`, `getPropertiesWithPrefix`, `containsKey`, `getActiveProfile`, `refresh`, `isRefreshable`. This is what `AdharFacade.getConfig()` returns.
-- **`ConfigSource`** — the extension point. Implement `getType`, `loadConfig`, `getProperty`, and optionally `getPriority` (default 100), `isEnabled`, `supportsRefresh`, `refresh`, `isHealthy`. Shipped implementations: `EnvironmentConfigSource`, `FileConfigSource`, `ConsulConfigSource`, `VaultConfigSource`, `ConfigMapConfigSource`, `DaprConfigSource`, `DaprSecretConfigSource`. A source published as a Spring bean is picked up automatically.
+- **`ConfigManager`** — The merge engine: `addSource`, `removeSource`, `getProperty(key)`, `getProperty(key, type)`, `getProperty(key, type, default)`, `getRequiredProperty`, `getPropertiesWithPrefix`, `containsProperty`, `refreshAll`, `refreshSource`, `addChangeListener`, `removeChangeListener`, `getHealthStatus`, `setEncryptor`.
+- **`ConfigFacade`** — The read-only convenience view (`getInstance()`): `get`, `getOptional`, `getInt`, `getLong`, `getBoolean`, `getDouble`, `getPropertiesWithPrefix`, `containsKey`, `getActiveProfile`, `refresh`, `isRefreshable`. This is what `AdharFacade.getConfig()` returns.
+- **`ConfigSource`** — The extension point.
+  - Implement `getType`, `loadConfig` and `getProperty`.
+  - Optionally implement `getPriority` (default 100), `isEnabled`, `supportsRefresh`, `refresh`, `isHealthy`.
+  - Shipped implementations: `EnvironmentConfigSource`, `FileConfigSource`, `ConsulConfigSource`, `VaultConfigSource`, `ConfigMapConfigSource`, `DaprConfigSource`, `DaprSecretConfigSource`.
+  - A source published as a Spring bean is picked up automatically.
 - **`PropertyEncryptor`** — `encrypt`, `decrypt`, `isEncrypted`, `decryptIfNeeded`.
 - **`ConfigValidator`** (+ `ConfigValidationRunner`) — `addRequiredProperty`, `addPatternRule`, `addRangeRule`, `addCustomRule`, `validate(Map)`, `validateOrThrow(Map)`.
-- **`FeatureFlagService`** / `FeatureFlag` — percentage rollouts with allow/deny lists.
-- **`ConfigChangeAuditPublisher`** / `ConfigChangeEvent` / `ConfigMasking` — an audit trail of what changed, with secret values masked.
+- **`FeatureFlagService`** / `FeatureFlag` — Percentage rollouts with allow/deny lists.
+- **`ConfigChangeAuditPublisher`** / `ConfigChangeEvent` / `ConfigMasking` — An audit trail of what changed, with secret values masked.
 
 ## The source stack
 
-The auto-configuration always adds `EnvironmentConfigSource` first, at priority **200**, so an environment variable overrides everything by default. Declared sources default to **100**; the Dapr configuration and secret sources sit at **150** and **160**. `EnvironmentConfigSource` lowercases each variable name and turns `_` into `.`, so `DATABASE_URL` resolves the key `database.url`.
+The auto-configuration always adds `EnvironmentConfigSource` first, at priority **200**. So by default an environment variable overrides everything. Declared sources default to **100**. The Dapr configuration and secret sources sit at **150** and **160**.
+
+`EnvironmentConfigSource` lowercases each variable name and turns `_` into `.`. So `DATABASE_URL` resolves the key `database.url`.
 
 ```java
 import com.adhar.kit.config.manager.ConfigManager;
@@ -91,13 +102,13 @@ adhar:
           kvVersion: "2"
 ```
 
-Recognised `type` values are `file`, `environment`, `vault`, `consul`, and `configmap` (alias `k8s`). `springcloud` is accepted but only logs — Spring Cloud Config stays on its own path. An unknown type logs a warning and is skipped.
+Recognised `type` values are `file`, `environment`, `vault`, `consul`, and `configmap` (alias `k8s`). `springcloud` is accepted but only logs; Spring Cloud Config stays on its own path. An unknown type logs a warning and is skipped.
 
-Merging is **key-level, not deep**. Each source's `loadConfig()` map is applied with `putAll`, lowest priority first, so a higher source replaces individual keys but never merges nested structures. A key the high-priority source does not define falls through to the next source down.
+Merging is **key-level, not deep**. Each source's `loadConfig()` map is applied with `putAll`, lowest priority first. So a higher source replaces individual keys, but never merges nested structures. If the high-priority source does not define a key, it falls through to the next source down.
 
 ## A realistic refreshable component
 
-The whole point of `@RefreshConfig` is rebuilding a derived object — a client, a pool, a rate limiter — when its inputs change. Note that it is a **method-level** annotation:
+`@RefreshConfig` exists to rebuild a derived object — a client, a pool, a rate limiter — when its inputs change. Note that it is a **method-level** annotation:
 
 ```java
 import com.adhar.kit.config.annotation.RefreshConfig;
@@ -131,15 +142,15 @@ public class PricingClient {
 }
 ```
 
-`refreshOnStartup = true` makes the post-processor call `rebuild()` once at bean initialization, so the constructor can stay empty and there is exactly one code path that builds the client. Declare the field `volatile`: the rebuild runs on the refresh thread while request threads read it.
+`refreshOnStartup = true` makes the post-processor call `rebuild()` once at bean initialization. So the constructor can stay empty, and exactly one code path builds the client. Declare the field `volatile`, because the rebuild runs on the refresh thread while request threads read it.
 
 ## How it behaves
 
-**Reads are map lookups, not source calls.** `ConfigManager` keeps a `ConcurrentHashMap` cache of the merged view. `getProperty` never contacts Vault or Consul; it reads the cache and then, if an encryptor is attached, decrypts. Sources are only contacted at `addSource`, `refreshAll` and `refreshSource`.
+**Reads are map lookups, not source calls.** `ConfigManager` keeps a `ConcurrentHashMap` cache of the merged view. `getProperty` never contacts Vault or Consul. It reads the cache, then decrypts if an encryptor is attached. Sources are contacted only at `addSource`, `refreshAll` and `refreshSource`.
 
-**Decryption is per read.** `decryptIfNeeded` runs on every `getProperty` that returns a `String`, and a value starting with `ENC(` is decrypted each time. Key derivation (PBKDF2) happens once in the `PropertyEncryptor` constructor, but the AES/GCM operation does not — so read a secret once into a field, never inside a loop or a per-request path.
+**Decryption is per read.** `decryptIfNeeded` runs on every `getProperty` that returns a `String`. A value starting with `ENC(` is decrypted each time. Key derivation (PBKDF2) happens once, in the `PropertyEncryptor` constructor, but the AES/GCM operation does not. So read a secret once into a field. Never read it inside a loop or on a per-request path.
 
-**Refresh clears before it repopulates.** `refreshCache()` calls `cache.clear()` and then re-applies every source from lowest to highest priority. A read that lands inside that window can see a key as absent — `getProperty` returns `null`, `getRequiredProperty` throws `IllegalArgumentException`. Resolve configuration into fields at startup or in a `@RefreshConfig` method rather than reading `ConfigManager` on a hot request path.
+**Refresh clears before it repopulates.** `refreshCache()` calls `cache.clear()`, then re-applies every source from lowest to highest priority. A read that lands inside that window can see a key as missing: `getProperty` returns `null`, and `getRequiredProperty` throws `IllegalArgumentException`. Resolve configuration into fields at startup or in a `@RefreshConfig` method. Do not read `ConfigManager` on a hot request path.
 
 **Who sees a new value after a refresh.**
 
@@ -152,17 +163,22 @@ public class PricingClient {
 | `@Value`-injected fields | No |
 | `@ConfigurationProperties` beans, Spring's `Environment` | No |
 
-**Failure behaviour is degrade-and-log, not fail.** If a source cannot be constructed (bad Vault URL, missing token) `addConfigSource` catches the exception and logs an error — the application still starts, simply without that source. If a source throws during `loadConfig()`, `refreshCache()` logs it and continues with the others. The symptom is a missing key much later, not a startup failure. Use `getRequiredProperty` or the startup validator to turn that into a loud failure, and check `getHealthStatus()` (and the `adharconfig` endpoint) for per-source health.
+**Failure behaviour is degrade-and-log, not fail.**
 
-**Scheduled refresh is doubly gated and off by default.** `ConfigRefreshScheduler` is created only when `adhar.config.refresh.enabled=true` **and** `org.springframework.cloud.context.refresh.ContextRefresher` is on the classpath. It runs with a fixed delay of `adhar.config.refresh.interval` (default `PT30S`) after an initial delay of `adhar.config.refresh.initial-delay` (default `PT10S`). A refresh that throws is logged; `max-retries` and `retry-delay` are bound and logged but do not drive a retry loop — the next scheduled tick is the retry.
+- If a source cannot be constructed (bad Vault URL, missing token), `addConfigSource` catches the exception and logs an error. The application still starts, just without that source.
+- If a source throws during `loadConfig()`, `refreshCache()` logs it and carries on with the others.
 
-**Change notification is synchronous and serial.** `refreshAll()` diffs the old and new cache and calls every registered listener, in registration order, on the refreshing thread. A listener that blocks delays every later listener and the refresh itself; a listener that throws is caught and logged, and the remaining listeners still run.
+The symptom is a missing key much later, not a startup failure. To turn that into a loud failure, use `getRequiredProperty` or the startup validator. Check `getHealthStatus()` (and the `adharconfig` endpoint) for per-source health.
 
-**Concurrency.** `ConfigManager` holds sources and listeners in `CopyOnWriteArrayList`s and the merged view in a `ConcurrentHashMap`, so it is safe to share and safe to read from many threads. The encryptor field is `volatile`. `ConfigFacade` is a process-wide singleton whose `ConfigManager` is swapped in by the auto-configuration.
+**Scheduled refresh has two gates and is off by default.** `ConfigRefreshScheduler` is created only when `adhar.config.refresh.enabled=true` **and** `org.springframework.cloud.context.refresh.ContextRefresher` is on the classpath. It waits an initial delay of `adhar.config.refresh.initial-delay` (default `PT10S`). It then runs with a fixed delay of `adhar.config.refresh.interval` (default `PT30S`). A refresh that throws is logged. `max-retries` and `retry-delay` are bound and logged, but they do not drive a retry loop. The next scheduled tick is the retry.
+
+**Change notification is synchronous and serial.** `refreshAll()` diffs the old and new cache. It then calls every registered listener, in registration order, on the refreshing thread. A listener that blocks delays every later listener and the refresh itself. A listener that throws is caught and logged, and the remaining listeners still run.
+
+**Concurrency.** `ConfigManager` holds sources and listeners in `CopyOnWriteArrayList`s, and the merged view in a `ConcurrentHashMap`. So it is safe to share and to read from many threads. The encryptor field is `volatile`. `ConfigFacade` is a process-wide singleton. The auto-configuration swaps in its `ConfigManager`.
 
 ## Encryption
 
-Encryption is **off by default** (`adhar.config.encryption.enabled=false`), and so is refresh. Turn encryption on and a `PropertyEncryptor` is built and attached to the `ConfigManager`.
+Encryption is **off by default** (`adhar.config.encryption.enabled=false`), and so is refresh. When you turn encryption on, a `PropertyEncryptor` is built and attached to the `ConfigManager`.
 
 The v2 format is `ENC(v2:<base64(iv + ciphertext + gcm-tag)>)`:
 
@@ -175,9 +191,9 @@ The v2 format is `ENC(v2:<base64(iv + ciphertext + gcm-tag)>)`:
 | Iterations | `adhar.config.encryption.key-iterations`, default `210000` |
 | Salt | `adhar.config.encryption.salt`, default `adhar-kit-config-salt` |
 
-Values written as `ENC(<base64>)` without the `v2:` marker are legacy v1 (AES/ECB) and are still decrypted for backward compatibility; `encrypt(...)` always emits v2 for AES. A non-AES `algorithm` falls back to the legacy cipher path entirely. Decryption failure — wrong key, changed salt, altered ciphertext — throws a `RuntimeException`, it does not return the raw value.
+Values written as `ENC(<base64>)` without the `v2:` marker are legacy v1 (AES/ECB). They are still decrypted, for backward compatibility. `encrypt(...)` always emits v2 for AES. A non-AES `algorithm` falls back to the legacy cipher path entirely. A decryption failure — wrong key, changed salt, altered ciphertext — throws a `RuntimeException`. It does not return the raw value.
 
-The key is resolved from `adhar.config.encryption.key` first, then the `ADHAR_CONFIG_ENCRYPTION_KEY` environment variable. **`key-location` is not implemented**: it is logged and ignored, and if nothing else supplied a key the bean throws `IllegalStateException` and the application fails to start. Supply the key through the property or the environment variable.
+The key is read from `adhar.config.encryption.key` first, then from the `ADHAR_CONFIG_ENCRYPTION_KEY` environment variable. **`key-location` is not implemented.** It is logged and ignored. If nothing else supplied a key, the bean throws `IllegalStateException` and the application fails to start. Supply the key through the property or the environment variable.
 
 ```yaml
 adhar:
@@ -197,13 +213,19 @@ adhar:
         "[database.url]": "^jdbc:.*"
 ```
 
-Keep `salt` and `key-iterations` stable for the life of a ciphertext — changing either derives a different key and every existing `ENC(v2:...)` value stops decrypting.
+Keep `salt` and `key-iterations` stable for the life of a ciphertext. Changing either one derives a different key, and every existing `ENC(v2:...)` value stops decrypting.
 
 ## Startup validation
 
-`ConfigValidationRunner` implements `InitializingBean`, so validation runs during bean initialization, after the `ConfigManager` exists. It merges the property-declared `required` keys and `patterns` into the `ConfigValidator`, validates the whole merged map, and — with `fail-on-error` true (the default) — throws `IllegalStateException` so the context fails to start. With it false, violations are logged as warnings when `log-warnings` is on.
+`ConfigValidationRunner` implements `InitializingBean`. So validation runs during bean initialization, after the `ConfigManager` exists. It does three things:
 
-The mutator methods return `void`, so configure the validator statement by statement:
+1. Merges the `required` keys and `patterns` declared in properties into the `ConfigValidator`.
+2. Validates the whole merged map.
+3. With `fail-on-error` true (the default), throws `IllegalStateException`, so the context fails to start.
+
+With `fail-on-error` false, violations are logged as warnings when `log-warnings` is on.
+
+The mutator methods return `void`, so configure the validator one statement at a time:
 
 ```java
 ConfigValidator validator = new ConfigValidator();
@@ -216,17 +238,19 @@ validator.validateOrThrow(configManager.getPropertiesWithPrefix(""));
 
 ## `@RefreshConfig` mechanics
 
-`@RefreshConfig` is **not** an aspect, which makes it the one annotation in this group that is immune to the self-invocation trap. `RefreshConfigBeanPostProcessor` scans every bean's user-declared methods, and for each annotated method registers a `ConfigChangeListener` that invokes it reflectively on the target object — `ReflectionUtils.makeAccessible` is applied, so a private method works, and calling the method from inside the same class is irrelevant because the post-processor holds a direct reference.
+`@RefreshConfig` is **not** an aspect. That makes it the one annotation in this group that is immune to the self-invocation trap.
+
+`RefreshConfigBeanPostProcessor` scans every bean's user-declared methods. For each annotated method, it registers a `ConfigChangeListener` that invokes the method by reflection on the target object. `ReflectionUtils.makeAccessible` is applied, so a private method works. Calling the method from inside the same class does not matter, because the post-processor holds a direct reference.
 
 What does bite:
 
-- The annotation targets **methods only** (`@Target(ElementType.METHOD)`); putting it on a class will not compile.
+- The annotation targets **methods only** (`@Target(ElementType.METHOD)`). Putting it on a class will not compile.
 - Only two signatures are supported: zero-argument, or `(String key, Object oldValue, Object newValue)`. Any other arity logs a warning at startup and is skipped entirely.
-- Matching is per changed key: `keys` matches an exact key, `prefix` matches by `startsWith`, and **neither set means every change matches**.
+- Matching is per changed key. `keys` matches an exact key, and `prefix` matches by `startsWith`. **If neither is set, every change matches.**
 - **The method is invoked once per matching changed key.** A method watching `{a, b}` runs twice when both change in the same refresh. Make it idempotent and cheap, or guard it.
-- `refreshOnStartup = true` only works on zero-argument methods; on a three-argument method it logs a warning and skips the startup call.
-- An exception inside the method is caught and logged — it does not abort the refresh or surface to the caller.
-- Refresh defaults to off, so none of this fires until `adhar.config.refresh.enabled=true` (or you call `configManager.refreshAll()` yourself).
+- `refreshOnStartup = true` works only on zero-argument methods. On a three-argument method, it logs a warning and skips the startup call.
+- An exception inside the method is caught and logged. It does not abort the refresh or reach the caller.
+- Refresh defaults to off. So none of this fires until `adhar.config.refresh.enabled=true` (or until you call `configManager.refreshAll()` yourself).
 
 ## Configuration
 
@@ -253,16 +277,20 @@ What does bite:
 
 ## Testing
 
-- **Build the manager by hand.** `new ConfigManager()` needs no Spring. Add a tiny `ConfigSource` returning a fixed `Map` from `loadConfig()` at a chosen priority, and you can assert override order, prefix lookups and `getRequiredProperty` failures in a plain unit test.
-- **Assert refresh wiring without the scheduler.** Call `configManager.refreshAll()` directly; `@RefreshConfig` methods and listeners fire exactly as they would on a scheduled tick, with no clock involved. Keep `adhar.config.refresh.enabled=false` in tests so nothing fires behind your back.
-- **Round-trip encryption.** `new PropertyEncryptor(key, "AES", salt, iterations)` is directly constructible. Lower `iterations` in tests — 210,000 PBKDF2 rounds per constructor call is deliberate and slow. Assert `isEncrypted`, `decrypt(encrypt(x)).equals(x)`, and that a mutated ciphertext throws.
-- **Validation.** `ConfigValidator.validate(map)` returns the error list, so assert messages without catching an exception; use `validateOrThrow` only when the failure itself is the behaviour under test.
-- **Watch the facade singleton.** `ConfigFacade.getInstance()` is process-wide and the auto-configuration mutates it with `setConfigManager`. Across several Spring test contexts in one JVM, the facade points at whichever context started last — inject `ConfigManager` in tests rather than reaching for the facade.
-- **Disable the module.** `adhar.config.enabled=false` removes everything; `adhar.config.validation.enabled=false` lets a deliberately incomplete test fixture boot.
+- **Build the manager by hand.** `new ConfigManager()` needs no Spring. Add a tiny `ConfigSource` that returns a fixed `Map` from `loadConfig()` at a chosen priority. You can then assert override order, prefix lookups and `getRequiredProperty` failures in a plain unit test.
+- **Test refresh wiring without the scheduler.** Call `configManager.refreshAll()` directly. `@RefreshConfig` methods and listeners fire exactly as they would on a scheduled tick, with no clock involved. Keep `adhar.config.refresh.enabled=false` in tests, so nothing fires behind your back.
+- **Round-trip encryption.** You can construct `new PropertyEncryptor(key, "AES", salt, iterations)` directly. Lower `iterations` in tests: 210,000 PBKDF2 rounds per constructor call is deliberate and slow. Assert `isEncrypted`, `decrypt(encrypt(x)).equals(x)`, and that a mutated ciphertext throws.
+- **Validation.** `ConfigValidator.validate(map)` returns the error list, so you can assert messages without catching an exception. Use `validateOrThrow` only when the failure itself is what you are testing.
+- **Watch the facade singleton.** `ConfigFacade.getInstance()` is process-wide, and the auto-configuration changes it with `setConfigManager`. With several Spring test contexts in one JVM, the facade points at whichever context started last. In tests, inject `ConfigManager` instead of reaching for the facade.
+- **Disable the module.** `adhar.config.enabled=false` removes everything. `adhar.config.validation.enabled=false` lets a deliberately incomplete test fixture boot.
 
 ## Interaction with sibling modules
 
-Secrets decrypted here are typically consumed by [Security](/adhar-kit/modules/security); the ConfigMap and Secret sources are the in-cluster half of [Kubernetes](/adhar-kit/modules/kubernetes). When `adhar-kit-dapr` is on the classpath and `adhar.dapr.enabled=true`, `DaprConfigSource` (priority 150) and `DaprSecretConfigSource` (priority 160) are contributed as beans and merged automatically — both above declared file sources, below environment variables. `ConfigChangeAuditPublisher` emits each change as a Spring `ConfigChangeEvent` with secret values masked by `ConfigMasking`, which is the hook to forward configuration drift into [Logging](/adhar-kit/modules/logging)'s audit event stream. Errors raised here use the exception hierarchy from [Commons](/adhar-kit/modules/commons).
+[Security](/adhar-kit/modules/security) usually consumes the secrets decrypted here. The ConfigMap and Secret sources are the in-cluster half of [Kubernetes](/adhar-kit/modules/kubernetes).
+
+When `adhar-kit-dapr` is on the classpath and `adhar.dapr.enabled=true`, `DaprConfigSource` (priority 150) and `DaprSecretConfigSource` (priority 160) are added as beans and merged automatically. Both sit above declared file sources and below environment variables.
+
+`ConfigChangeAuditPublisher` emits each change as a Spring `ConfigChangeEvent`, with secret values masked by `ConfigMasking`. Use this hook to forward configuration drift into [Logging](/adhar-kit/modules/logging)'s audit event stream. Errors raised here use the exception hierarchy from [Commons](/adhar-kit/modules/commons).
 
 ## Common pitfalls
 

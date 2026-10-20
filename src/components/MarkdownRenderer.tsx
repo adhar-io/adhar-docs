@@ -164,7 +164,9 @@ const MarkdownRenderer = ({ content, className }: MarkdownRendererProps) => {
             );
           },
           pre: ({ children }) => {
-            const codeEl: any = Array.isArray(children) ? children[0] : children;
+            const codeEl = (Array.isArray(children) ? children[0] : children) as
+              | { props?: { className?: string; children?: ReactNode } }
+              | undefined;
             const codeClassName: string | undefined = codeEl?.props?.className;
             const codeChildren: ReactNode = codeEl?.props?.children;
             // A ```diagram fence names an SVG architecture diagram rather than

@@ -1,17 +1,20 @@
 
-import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
-import { ExternalLink, GitBranch } from "lucide-react";
+import { Github } from "@/components/brand-icons";
 import { Link } from "@tanstack/react-router";
 import Logo from "@/components/ui/Logo";
+import { focusRing } from "./styles";
+
+const linkClass = `rounded-sm text-muted-foreground hover:text-foreground transition-colors duration-300 hover:underline underline-offset-4 ${focusRing}`;
 
 const Footer = () => {
   const footerSections = [
     {
       title: "Platform",
       links: [
-        { label: "Features", href: "#features" },
-        { label: "Capabilities", href: "#capabilities", to: "/capabilities" },
+        { label: "The 6 D's", href: "/#features" },
+        { label: "Capabilities", to: "/capabilities" },
+        { label: "Adhar AI", href: "/#adhar-ai" },
         { label: "Integrations", to: "/integrations" },
         { label: "Pricing", to: "/pricing" },
         { label: "Security", to: "/security" }
@@ -47,7 +50,7 @@ const Footer = () => {
   ];
 
   return (
-    <footer className="bg-gray-950 dark:bg-gray-950 text-foreground border-t border-border">
+    <footer className="dark bg-gray-950 text-foreground border-t border-border">
       <div className="section-padding">
         <div className="max-width-content container-padding">
           <div className="grid md:grid-cols-5 gap-12 mb-16">
@@ -58,34 +61,24 @@ const Footer = () => {
               </div>
               
               <p className="text-muted-foreground leading-relaxed mb-8 text-lg">
-                Empowering enterprises to build, deploy, and scale cloud-native applications 
-                with confidence. Built on Kubernetes, designed for the future.
+                The open-source Internal Developer Platform. 100+ curated cloud-native packages, wired together and
+                brought up with a single <code className="font-mono text-foreground text-base">adhar up</code>.
               </p>
               
               <div className="flex space-x-4">
-                <a href="https://github.com/adhar-io/adhar" target="_blank" rel="noopener noreferrer">
-                  <Button 
-                    variant="ghost" 
-                    size="sm" 
-                    className="text-muted-foreground hover:text-foreground hover:bg-muted p-2 rounded-lg transition-all duration-300"
-                    aria-label="GitHub"
-                  >
-                    <GitBranch className="w-5 h-5" />
-                  </Button>
-                </a>
-                <a href="https://github.com/adhar-io/adhar" target="_blank" rel="noopener noreferrer">
-                  <Button 
-                    variant="ghost" 
-                    size="sm" 
-                    className="text-muted-foreground hover:text-foreground hover:bg-muted p-2 rounded-lg transition-all duration-300"
-                    aria-label="External Links"
-                  >
-                    <ExternalLink className="w-5 h-5" />
-                  </Button>
+                <a
+                  href="https://github.com/adhar-io/adhar"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  aria-label="Adhar on GitHub"
+                  className={`inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm text-muted-foreground hover:text-foreground hover:bg-muted transition-colors ${focusRing}`}
+                >
+                  <Github className="w-5 h-5" />
+                  <span>Star on GitHub</span>
                 </a>
               </div>
             </div>
-            
+
             {/* Navigation sections */}
             {footerSections.map((section) => (
               <div key={section.title}>
@@ -96,14 +89,14 @@ const Footer = () => {
                       {link.to ? (
                         <Link 
                           to={link.to} 
-                          className="text-muted-foreground hover:text-foreground transition-colors duration-300 hover:underline underline-offset-4"
+                          className={linkClass}
                         >
                           {link.label}
                         </Link>
                       ) : (
                         <a 
                           href={link.href} 
-                          className="text-muted-foreground hover:text-foreground transition-colors duration-300 hover:underline underline-offset-4"
+                          className={linkClass}
                         >
                           {link.label}
                         </a>
@@ -128,7 +121,7 @@ const Footer = () => {
                 <Link 
                   key={link.label}
                   to={link.to} 
-                  className="text-muted-foreground hover:text-foreground transition-colors duration-300 text-sm hover:underline underline-offset-4"
+                  className={`${linkClass} text-sm`}
                 >
                   {link.label}
                 </Link>

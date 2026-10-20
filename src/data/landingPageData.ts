@@ -1,338 +1,237 @@
-import { 
-  Target, 
-  Palette, 
-  Code, 
-  Rocket, 
-  Sparkles, 
-  Hexagon,
-  Globe,
-  Zap,
+import {
+  Target,
+  PenTool,
+  Code,
+  Rocket,
+  Search,
+  Compass,
+  GitBranch,
+  Boxes,
+  KeyRound,
+  LockKeyhole,
+  Activity,
+  ShieldCheck,
+  LayoutDashboard,
   Cloud,
-  Shield,
-  Network,
-  TrendingUp,
-  Users,
-  Building,
-  Server,
-  Clock,
-  BarChart3,
-  Brain,
-  Bot
+  Download,
+  MessageSquare,
 } from "lucide-react";
 
+// Landing-page copy. Every claim here should be checkable against the docs or
+// the platform repo — no invented metrics, customers or compliance badges.
+
+/**
+ * The 6 D's — Adhar's lifecycle model (see /docs/core-concepts/ds-framework).
+ * Each stage names the question it answers and the artifacts it hands on.
+ */
 export const features = [
   {
     icon: Target,
     title: "Define",
-    description: "Comprehensive requirement gathering, user story definition, and project scoping with built-in templates and best practices.",
-    gradient: "from-blue-500 to-cyan-500",
-    delay: "0ms",
-    details: ["Requirements Analysis", "User Story Mapping", "Project Scoping", "Stakeholder Alignment"]
+    question: "What are we building, and who owns it?",
+    description:
+      "Ownership is a real object, not a wiki page: a catalog entry plus a Project with its team, quota and tier.",
+    details: ["Catalog entry", "Project", "API contract"],
   },
   {
-    icon: Palette,
-    title: "Design", 
-    description: "Cloud-native architecture design with governance frameworks, security policies, and scalability patterns.",
-    gradient: "from-purple-500 to-pink-500",
-    delay: "100ms",
-    details: ["Architecture Design", "Security Patterns", "Governance Framework", "Scalability Planning"]
+    icon: PenTool,
+    title: "Design",
+    question: "How will it be built, and within what limits?",
+    description:
+      "Platform engineers write the rules once — infrastructure APIs, policies and quotas — and every team inherits them.",
+    details: ["Crossplane XRDs & Compositions", "Kyverno policies", "Quotas"],
   },
   {
     icon: Code,
     title: "Develop",
-    description: "Accelerated development with paved roads, pre-configured environments, and integrated developer tools.",
-    gradient: "from-green-500 to-emerald-500",
-    delay: "200ms",
-    details: ["Code Generation", "Dev Environments", "Testing Tools", "Quality Gates"]
+    question: "Does the code work against the real platform?",
+    description:
+      "Teams start from golden-path templates and test on the same platform they ship to, with a preview environment for every pull request.",
+    details: ["Golden-path templates", "Tests", "Preview environment"],
   },
   {
     icon: Rocket,
     title: "Deliver",
-    description: "Seamless deployments with automated CI/CD workflows, progressive delivery, and rollback capabilities.",
-    gradient: "from-orange-500 to-red-500",
-    delay: "300ms",
-    details: ["CI/CD Automation", "Progressive Delivery", "Rollback Systems", "Release Management"]
+    question: "How does a commit become production, safely?",
+    description:
+      "A commit is built, scanned and signed, then promoted by GitOps. The cluster only admits images it can verify.",
+    details: ["Signed image", "ArgoCD Application", "Promotion"],
   },
   {
-    icon: Sparkles,
+    icon: Search,
     title: "Discover",
-    description: "Advanced analytics, component discovery, performance monitoring, and continuous improvement insights.",
-    gradient: "from-teal-500 to-blue-500",
-    delay: "400ms",
-    details: ["Performance Analytics", "Component Discovery", "Usage Insights", "Optimization Recommendations"]
+    question: "What is it actually doing in production?",
+    description:
+      "Metrics, logs and traces arrive with no per-service setup, next to cost data and production-readiness scorecards.",
+    details: ["Metrics, logs & traces", "Cost", "Scorecards"],
   },
   {
-    icon: BarChart3,
+    icon: Compass,
     title: "Decide",
-    description: "Transform business insights from the Discover stage into strategic decisions with data-driven roadmap planning and growth strategies.",
-    gradient: "from-indigo-500 to-purple-500",
-    delay: "500ms",
-    details: ["Business Intelligence", "Strategic Planning", "Growth Analytics", "Data-Driven Decisions"]
-  }
+    question: "What should we do next, and why?",
+    description:
+      "What you learn in production shapes budgets and the roadmap, and feeds the next Define. The six stages form a loop.",
+    details: ["Budgets", "Roadmap changes", "Input for the next Define"],
+  },
 ];
 
+/** What ships out of the box (mirrors the docs overview table). */
 export const capabilities = [
   {
-    icon: Hexagon,
-    title: "Kubernetes-Native Foundation",
-    description: "Built on Kubernetes, ADHAR provides enterprise-grade orchestration, auto-scaling, self-healing, and seamless workload management across any cloud or on-premises infrastructure.",
-    color: "bg-blue-50 border-blue-200 dark:bg-blue-900/10 dark:border-blue-700/50",
-    stats: "K8s Native",
-    highlight: true
+    icon: GitBranch,
+    title: "GitOps delivery",
+    description:
+      "ArgoCD reconciles the cluster against an in-cluster Gitea repository. A Git commit is the only way to change the platform.",
+    stats: "ArgoCD · Gitea",
+    highlight: true,
   },
   {
-    icon: Globe,
-    title: "Multi-Language & Framework Support",
-    description: "Support for 15+ languages including Angular, Spring Boot, Quarkus, Go, Java, JavaScript, Python, Node.js, React, TypeScript, and more with intelligent project scaffolding.",
-    color: "bg-purple-50 border-purple-200 dark:bg-purple-900/10 dark:border-purple-700/50",
-    stats: "15+ Languages"
+    icon: Boxes,
+    title: "Self-service infrastructure",
+    description:
+      "Developers request databases, caches and buckets as ordinary Kubernetes resources — no ticket, no waiting.",
+    stats: "Crossplane v2",
   },
   {
-    icon: Zap,
-    title: "Enhanced Developer Experience",
-    description: "Fast feedback loops, self-service capabilities, intelligent code completion, and automated testing reduce development time by up to 60%.",
-    color: "bg-green-50 border-green-200 dark:bg-green-900/10 dark:border-green-700/50",
-    stats: "60% Faster Development"
+    icon: KeyRound,
+    title: "Single sign-on",
+    description:
+      "One identity for every platform service and the Kubernetes API, through OIDC.",
+    stats: "Keycloak",
   },
   {
-    icon: Cloud,
-    title: "Multi-Cloud & Hybrid Ready",
-    description: "Deploy seamlessly across AWS, Azure, GCP, and hybrid environments. Automatic scaling, load balancing, disaster recovery, and vendor lock-in prevention.",
-    color: "bg-orange-50 border-orange-200 dark:bg-orange-900/10 dark:border-orange-700/50",
-    stats: "Zero Lock-in"
+    icon: LockKeyhole,
+    title: "Secrets, never in Git",
+    description:
+      "Secrets live in a Vault-compatible store and sync into workloads only where they are needed.",
+    stats: "OpenBao · External Secrets",
   },
   {
-    icon: Shield,
-    title: "Enterprise Security & Compliance",
-    description: "SOC 2, GDPR, HIPAA compliant with zero-trust architecture, automated security scanning, vulnerability management, and comprehensive audit trails.",
-    color: "bg-red-50 border-red-200 dark:bg-red-900/10 dark:border-red-700/50",
-    stats: "Enterprise Grade"
+    icon: ShieldCheck,
+    title: "Signed supply chain",
+    description:
+      "Every image is built, scanned and signed before it is stored, and the cluster refuses to run anything unsigned.",
+    stats: "Tekton · Buildpacks · Trivy · Cosign · Harbor · Kyverno",
   },
   {
-    icon: Network,
-    title: "Service Mesh & Observability",
-    description: "Built-in service mesh capabilities with distributed tracing, metrics collection, and advanced observability for microservices architectures.",
-    color: "bg-indigo-50 border-indigo-200 dark:bg-indigo-900/10 dark:border-indigo-700/50",
-    stats: "Full Observability"
+    icon: Activity,
+    title: "Observability built in",
+    description:
+      "Metrics, logs, traces and network flows are collected for every service, with no per-service setup.",
+    stats: "Grafana · Loki · Tempo · Mimir · Prometheus · Hubble",
   },
   {
-    icon: Brain,
-    title: "Intelligent Business Decisions",
-    description: "Transform Discover stage insights into strategic decisions with AI-powered analytics, data-driven roadmap planning, and growth optimization recommendations.",
-    color: "bg-teal-50 border-teal-200 dark:bg-teal-900/10 dark:border-teal-700/50",
-    stats: "Data-Driven Decisions"
-  },
-  {
-    icon: Bot,
-    title: "AI Assisted Workflows",
-    description: "Every platform user gets personalized AI assistance tailored to their role and tasks. From developers to architects to business analysts, our AI provides contextual guidance, automates repetitive tasks, and accelerates decision-making.",
-    color: "bg-violet-50 border-violet-200 dark:bg-violet-900/10 dark:border-violet-700/50",
-    stats: "Universal AI Assistant"
-  }
-];
-
-export const integrations = [
-  { 
-    name: "Kubernetes", 
-    icon: "https://cdn.jsdelivr.net/gh/devicons/devicon/icons/kubernetes/kubernetes-plain.svg", 
-    color: "bg-blue-100 border-blue-300", 
-    description: "Container Orchestration",
-    isFoundation: true
-  },
-  { 
-    name: "ArgoCD", 
-    icon: "https://cdn.jsdelivr.net/gh/simple-icons/simple-icons/icons/argo.svg", 
-    color: "bg-orange-100 border-orange-300", 
-    description: "GitOps Delivery" 
-  },
-  { 
-    name: "Keycloak", 
-    icon: "https://cdn.jsdelivr.net/gh/simple-icons/simple-icons/icons/keycloak.svg", 
-    color: "bg-green-100 border-green-300", 
-    description: "Identity Management" 
-  },
-  { 
-    name: "Kyverno", 
-    icon: "https://cdn.jsdelivr.net/gh/simple-icons/simple-icons/icons/kyverno.svg", 
-    color: "bg-purple-100 border-purple-300", 
-    description: "Policy Engine" 
-  },
-  { 
-    name: "Harbor", 
-    icon: "https://cdn.jsdelivr.net/gh/simple-icons/simple-icons/icons/harbor.svg", 
-    color: "bg-cyan-100 border-cyan-300", 
-    description: "Container Registry" 
-  },
-  { 
-    name: "Backstage", 
-    icon: "https://cdn.jsdelivr.net/gh/simple-icons/simple-icons/icons/backstage.svg", 
-    color: "bg-pink-100 border-pink-300", 
-    description: "Developer Portal" 
-  },
-  { 
-    name: "Prometheus", 
-    icon: "https://cdn.jsdelivr.net/gh/devicons/devicon/icons/prometheus/prometheus-original.svg", 
-    color: "bg-red-100 border-red-300", 
-    description: "Monitoring & Metrics" 
-  },
-  { 
-    name: "Grafana", 
-    icon: "https://cdn.jsdelivr.net/gh/devicons/devicon/icons/grafana/grafana-original.svg", 
-    color: "bg-yellow-100 border-yellow-300", 
-    description: "Visualization" 
-  },
-  { 
-    name: "Istio", 
-    icon: "https://cdn.jsdelivr.net/gh/simple-icons/simple-icons/icons/istio.svg", 
-    color: "bg-indigo-100 border-indigo-300", 
-    description: "Service Mesh" 
-  },
-  { 
-    name: "PostgreSQL", 
-    icon: "https://cdn.jsdelivr.net/gh/devicons/devicon/icons/postgresql/postgresql-original.svg", 
-    color: "bg-blue-100 border-blue-300", 
-    description: "Database" 
-  },
-  { 
-    name: "Tekton", 
-    icon: "https://cdn.jsdelivr.net/gh/simple-icons/simple-icons/icons/tekton.svg", 
-    color: "bg-green-100 border-green-300", 
-    description: "CI/CD Pipelines" 
-  },
-  { 
-    name: "Helm", 
-    icon: "https://cdn.jsdelivr.net/gh/devicons/devicon/icons/helm/helm-original.svg", 
-    color: "bg-teal-100 border-teal-300", 
-    description: "Package Manager" 
-  }
-];
-
-export const enterpriseBenefits = [
-  {
-    icon: TrendingUp,
-    title: "70% Faster Time-to-Market",
-    description: "Accelerate your delivery cycles with automated workflows and pre-built components"
-  },
-  {
-    icon: Shield,
-    title: "Enterprise-Grade Security",
-    description: "Built-in compliance frameworks and zero-trust architecture from day one"
+    icon: LayoutDashboard,
+    title: "Developer console",
+    description:
+      "A Backstage-based portal with the service catalog, golden-path templates, scorecards and a cloud shell.",
+    stats: "Adhar Console · Backstage",
   },
   {
     icon: Cloud,
-    title: "Multi-Cloud Freedom",
-    description: "Deploy anywhere without vendor lock-in - AWS, Azure, GCP, or hybrid"
+    title: "Runs where you do",
+    description:
+      "The same platform on a laptop, on AWS, Azure, GCP, DigitalOcean or Civo, or on your own hosts.",
+    stats: "Kind · public clouds · on-prem",
   },
-  {
-    icon: Users,
-    title: "Developer Productivity",
-    description: "Self-service capabilities that empower developers and reduce operational overhead"
-  }
 ];
+
 export const pricingPlans = [
   {
     name: "Open Source",
-    subtitle: "Self-Hosted",
+    subtitle: "Self-hosted",
     price: "Free",
-    period: "/forever",
-    description: "Fully functional platform for self-hosting on your infrastructure. All features included, all development happens in open source.",
+    description:
+      "The whole platform, free to run wherever you like. Every feature is included — nothing held back.",
     features: [
-      "Complete source code access",
-      "All platform features included",
-      "Self-host on any infrastructure",
-      "Active open source development",
-      "Community support & forums",
-      "Unlimited projects & workspaces",
-      "Full GitOps automation",
-      "Multi-cloud & hybrid support",
-      "No vendor lock-in"
+      "All 100+ packages and every platform feature",
+      "Run it on your laptop, any supported cloud or your own hosts",
+      "Full source code, Apache 2.0",
+      "Unlimited projects and teams",
+      "Community support on GitHub",
     ],
-    cta: "Download & Deploy",
-    popular: false,
-    highlight: "FREE FOREVER"
+    cta: "Read the quick start",
+    to: "/docs/getting-started/quick-start",
+    icon: Download,
+    popular: true,
+    highlight: "APACHE 2.0",
   },
   {
     name: "Adhar Cloud",
-    subtitle: "Managed SaaS",
-    price: "$99",
-    period: "/month per team",
-    description: "Fully managed service for teams who don't want infrastructure hassle. Premium UI, AI features, support, and training included.",
+    subtitle: "Hosted SaaS",
+    price: "Coming soon",
+    description:
+      "The same open-source platform, hosted and run for you. For teams who would rather build products than operate infrastructure.",
     features: [
-      "Everything in Open Source",
-      "Fully managed cloud platform",
-      "Premium UI with advanced features",
-      "AI-powered automation & insights",
-      "Priority support (24/7)",
-      "Training & certification programs",
-      "Automated updates & maintenance",
-      "Advanced monitoring & analytics",
-      "99.9% SLA guarantee"
+      "The same platform and features as Open Source",
+      "We run the clusters and apply upgrades",
+      "No infrastructure for your team to operate",
+      "Move to self-hosting at any time — it's the same platform",
     ],
-    cta: "Start Free Trial",
-    popular: true,
-    highlight: "MOST POPULAR"
+    cta: "Join the waitlist",
+    to: "/contact",
+    icon: Cloud,
+    popular: false,
+    highlight: "",
   },
   {
-    name: "Enterprise",
-    subtitle: "Custom Solutions",
-    price: "Custom",
-    description: "Tailored for large organizations requiring customization, dedicated integrations, and on-premise or cloud deployment with custom pricing.",
+    name: "Get help",
+    subtitle: "Adopting Adhar",
+    price: "Talk to us",
+    description:
+      "Rolling Adhar out across a larger organisation? Tell us what you're planning and we'll talk it through.",
     features: [
-      "Everything in Adhar Cloud",
-      "Custom integrations & workflows",
-      "Dedicated cloud or on-prem setup",
-      "White-label options available",
-      "Custom feature development",
-      "Dedicated success manager",
-      "Advanced security & compliance",
-      "Private support channels",
-      "Custom SLA agreements"
+      "Questions about architecture and rollout",
+      "Running Adhar on-prem or in your own cloud accounts",
+      "Ideas for what Adhar should support next",
     ],
-    cta: "Contact Sales",
+    cta: "Contact us",
+    to: "/contact",
+    icon: MessageSquare,
     popular: false,
-    highlight: "CUSTOM PRICING"
-  }
+    highlight: "",
+  },
 ];
 
 export const faqs = [
   {
-    question: "How does ADHAR leverage Kubernetes for enterprise workloads?",
-    answer: "ADHAR is built on Kubernetes as its core foundation, providing enterprise-grade container orchestration, automatic scaling, self-healing capabilities, and seamless workload management. This enables consistent deployment across any cloud or on-premises infrastructure while maintaining high availability and performance standards."
+    question: "What is Adhar?",
+    answer:
+      "Adhar is an open-source Internal Developer Platform. It assembles 100+ curated open-source packages — GitOps, self-service infrastructure, SSO, secrets, a signed supply chain, observability and a developer console — and wires them together into one platform. You run it yourself, or soon, let us host it with Adhar Cloud.",
   },
   {
-    question: "What makes ADHAR suitable for multi-cloud and hybrid deployments?",
-    answer: "ADHAR's Kubernetes-native architecture ensures consistent behavior across AWS, Azure, GCP, DigitalOcean, CIVO and on-premises environments. Our platform abstracts cloud-specific complexities while providing unified management, monitoring, and security policies across all deployment targets."
+    question: "How long does it take to get a running platform?",
+    answer:
+      "About ten minutes on a laptop, with a single adhar up. On a supported cloud it's the same command; the time depends mostly on how quickly the provider creates machines.",
   },
   {
-    question: "Which programming languages and frameworks are supported?",
-    answer: "ADHAR supports 15+ languages including Angular, Spring Boot, Quarkus, Go, Java, JavaScript, Python, Node.js, React, TypeScript, .NET, Ruby, PHP, and more. We provide intelligent project scaffolding and deployment templates optimized for Kubernetes environments."
+    question: "What do I need to try it locally?",
+    answer:
+      "A container engine — Docker, Podman, nerdctl or Finch — with at least 8 GB of RAM, 4 CPU cores and 20 GB of free disk given to it. 16 GB of RAM is more comfortable. You don't need kubectl to install, though you'll want it for exploring.",
   },
   {
-    question: "How does ADHAR ensure enterprise security and compliance?",
-    answer: "ADHAR implements zero-trust architecture with SOC 2, GDPR, and HIPAA compliance built-in. We provide automated security scanning, vulnerability management, policy enforcement through Kyverno, and comprehensive audit trails for all platform activities."
+    question: "Where can I run it?",
+    answer:
+      "Locally on Kind; on AWS, Azure, GCP, DigitalOcean or Civo; or on your own hosts. Local and production run the same controllers, GitOps flow and package model — only the sizing differs.",
   },
   {
-    question: "What open-source tools power the ADHAR platform?",
-    answer: "ADHAR is built on proven open-source technologies including Kubernetes, ArgoCD for GitOps, Kargo for software supply chain management, Keycloak for identity and access management, Harbor for container registry, Grafana and Prometheus for monitoring, Cilium for networking and service mesh, and many others, ensuring transparency and avoiding vendor lock-in."
+    question: "How do developers get a database or a cache?",
+    answer:
+      "They apply a small Kubernetes resource in their own namespace, or run a CLI command such as adhar database create. Crossplane provisions it within the platform's quotas and puts the connection details in a Secret. No ticket and no manual approval.",
   },
   {
-    question: "How does ADHAR support DevOps and GitOps workflows?",
-    answer: "ADHAR provides native GitOps capabilities through ArgoCD integration, automated CI/CD pipelines with Argo Workflows, infrastructure as code, and progressive delivery strategies. This enables teams to implement best practices for continuous deployment and infrastructure management."
-  }
-];
-
-export const stats = [
-  { label: "Enterprise Customers", value: "500+", icon: Building },
-  { label: "Kubernetes Clusters", value: "10,000+", icon: Server },
-  { label: "Applications Deployed", value: "100,000+", icon: Rocket },
-  { label: "Developer Hours Saved", value: "1M+", icon: Clock }
-];
-
-export const cloudProviders = [
-  { name: "AWS", supported: true },
-  { name: "Azure", supported: true },
-  { name: "Google Cloud", supported: true },
-  { name: "DigitalOcean", supported: true },
-  { name: "CIVO", supported: true },
-  { name: "On-Premises", supported: true }
+    question: "How do I change or upgrade the platform?",
+    answer:
+      "Commit to the platform repository, then run adhar upgrade. ArgoCD reconciles the cluster against Git about once a minute, so manual kubectl edits to managed objects are reverted. Git is the single source of truth.",
+  },
+  {
+    question: "Is it really free? What is the licence?",
+    answer:
+      "Yes. Adhar is Apache 2.0 throughout. Every feature is in the open-source release — no proprietary tier and nothing held back. Adhar Cloud, when it launches, is that same platform, hosted for you.",
+  },
+  {
+    question: "Is Adhar production-ready?",
+    answer:
+      "Adhar is at v0.1.x and in active development. The local and single-cluster production paths are verified end to end. Each provider page in the docs says how far that cloud has been verified, so check yours before you rely on it.",
+  },
 ];

@@ -13,10 +13,10 @@ const TeamsSection = ({ teams }: TeamsSectionProps) => {
       <div className="text-center mb-8">
         <div className="flex items-center justify-center space-x-4 mb-4">
           <div className="w-12 h-0.5 bg-gradient-to-r from-transparent to-purple-500"></div>
-          <h3 className="text-2xl font-bold text-gray-800 dark:text-white">Development Teams</h3>
+          <h3 className="text-2xl font-bold text-gray-800 dark:text-white">Who works on it</h3>
           <div className="w-12 h-0.5 bg-gradient-to-l from-transparent to-purple-500"></div>
         </div>
-        <p className="text-gray-600 dark:text-gray-300 text-sm">Cross-functional teams driving innovation and excellence</p>
+        <p className="text-gray-600 dark:text-gray-300 text-sm">One shared platform for every role, from idea to production</p>
       </div>
 
       {/* Teams grid */}
@@ -56,8 +56,8 @@ const TeamsSection = ({ teams }: TeamsSectionProps) => {
       {/* Background decorative grid — desktop only */}
       <div className="absolute inset-0 opacity-5 pointer-events-none hidden md:block">
         <div className="grid grid-cols-6 gap-6 h-full">
-          {Array.from({ length: 6 }).map((_, i) => (
-            <div key={i} className="border-l border-gray-300 dark:border-gray-600"></div>
+          {["a", "b", "c", "d", "e", "f"].map((col) => (
+            <div key={col} className="border-l border-gray-300 dark:border-gray-600"></div>
           ))}
         </div>
       </div>

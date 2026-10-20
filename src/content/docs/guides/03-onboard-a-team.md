@@ -7,7 +7,16 @@ path: "/docs/guides/onboard-a-team"
 
 # Onboard a Team
 
-This guide gives a new application team a home on the platform: an identity group, a set of guard-railed namespaces, a quota ceiling, and the access its engineers need to the Console, Gitea and the Kubernetes API. It is written for a platform engineer doing the onboarding, with one section the new engineer follows on their first day. At the end the team can deploy into its own dev and test environments, read its prod environment, and reach nothing that belongs to another team — and you will be able to prove that by impersonation rather than by reading manifests.
+This guide gives a new application team a home on the platform. The team gets:
+
+- an identity group
+- a set of namespaces with guardrails
+- a quota ceiling
+- the access its engineers need to the Console, Gitea and the Kubernetes API
+
+It is for the platform engineer doing the onboarding. One section is for the new engineer to follow on their first day.
+
+By the end, the team can deploy into its own dev and test environments and read its prod environment. It cannot reach anything that belongs to another team. You will prove this by impersonating a team member, not by reading manifests.
 
 ## What you will build
 
@@ -17,7 +26,9 @@ A team called `payments` in the platform's organisation `adhar`, owning one proj
 ha-team-objects
 ```
 
-Every level is a namespaced Crossplane composite in `platform.adhar.io`, and every object they compose carries the same ownership labels (`adhar.io/organisation`, `adhar.io/team`, `adhar.io/project`, `adhar.io/environment`), so one selector answers "everything team payments owns". Identity — who is *in* the team — stays in Keycloak, because people are not infrastructure. Everything the team is *granted* is composed from the objects that name its group.
+Every level is a namespaced Crossplane composite in `platform.adhar.io`. Every object they compose carries the same ownership labels: `adhar.io/organisation`, `adhar.io/team`, `adhar.io/project` and `adhar.io/environment`. So one selector answers "everything team payments owns".
+
+Identity (who is *in* the team) stays in Keycloak, because people are not infrastructure. Everything the team is *granted* is composed from the objects that name its group.
 
 ### Prerequisites
 
@@ -32,11 +43,11 @@ Every level is a namespaced Crossplane composite in `platform.adhar.io`, and eve
 
 ## How access is granted
 
-Read this before you run anything — it explains every verify step below.
+Read this before you run anything. It explains every verify step below.
 
-**The team is a Keycloak group named `ws-team-<team>`.** Members get it in the `groups` claim of every token the realm issues. The Kubernetes API server is configured with `--oidc-groups-claim=groups` and `--oidc-groups-prefix=oidc:`, so a member of `ws-team-payments` arrives at the API server as group `oidc:ws-team-payments`. The prefix keeps OIDC identities from colliding with built-in `system:` groups.
+**The team is a Keycloak group named `ws-team-<team>`.** Members get this group in the `groups` claim of every token the realm issues. The Kubernetes API server is configured with `--oidc-groups-claim=groups` and `--oidc-groups-prefix=oidc:`. So a member of `ws-team-payments` arrives at the API server as group `oidc:ws-team-payments`. The prefix stops OIDC identities from colliding with built-in `system:` groups.
 
-**The Project and its Environments bind that group, per namespace.** There is no cluster-wide grant for an application team:
+**The Project and its Environments bind that group, one namespace at a time.** An application team gets no cluster-wide grant:
 
 ```diagram
 ha-team-access
@@ -49,13 +60,19 @@ ha-team-access
 | `payments-test` | Environment | `admin` | `oidc:org-adhar-admin` → `admin` |
 | `payments-prod` | Environment | **`view`** | `oidc:org-adhar-admin` → `admin` |
 
-`view` in prod is deliberate: production changes arrive through a `Release` committed to Git, not through `kubectl`. Each environment entry can override it with `access: admin | edit | view`.
+`view` in prod is deliberate. Production changes arrive through a `Release` committed to Git, not through `kubectl`. Each environment entry can override this with `access: admin | edit | view`.
 
-**The platform team's groups are separate, and cluster-wide.** The `keycloak` package binds them with ClusterRoleBindings: `platform-admin` and `platform-engineer` → `cluster-admin`, `platform-developer` → `edit`, `platform-viewer` → `view`. Self-registered users land in `base-user`, which grants nothing. Do not put application engineers in `platform-developer` to "give them access": on current Kubernetes the built-in `edit` role **can read Secrets in every namespace**.
+**The platform team's groups are separate, and cluster-wide.** The `keycloak` package binds them with ClusterRoleBindings:
+
+- `platform-admin` and `platform-engineer` → `cluster-admin`
+- `platform-developer` → `edit`
+- `platform-viewer` → `view`
+
+Self-registered users land in `base-user`, which grants nothing. Do not put application engineers in `platform-developer` to "give them access". On current Kubernetes, the built-in `edit` role **can read Secrets in every namespace**.
 
 ## Step 1 — Create the team's Keycloak group and add people
 
-In normal operation the Adhar Console creates the group and manages its membership when you create a team there. To do it from the CLI, you need a token allowed to manage the `adhar` realm: your logged-in session if your user holds realm-management rights, otherwise a Keycloak admin token passed with `--admin-token`.
+Normally, the Adhar Console creates the group and manages its membership when you create a team there. To do it from the CLI, you need a token that may manage the `adhar` realm. Use your logged-in session if your user holds realm-management rights. Otherwise, pass a Keycloak admin token with `--admin-token`.
 
 ```bash
 # Locally the defaults point at https://keycloak.adhar.localtest.me:8443;
@@ -76,9 +93,9 @@ adhar auth group add-member ws-team-payments bob@example.com
 adhar auth group get ws-team-payments
 ```
 
-The output names the group (path `/ws-team-payments`) and lists `alice@example.com` and `bob@example.com` as members.
+The output names the group (path `/ws-team-payments`). It lists `alice@example.com` and `bob@example.com` as members.
 
-> **Spell the group exactly.** The compositions build the subject as `oidc:ws-team-<team>` from the Team's name. A group called `payments` or `ws-team-Payments` authenticates fine and then matches no RoleBinding — the user signs in and sees nothing.
+> **Spell the group exactly.** The compositions build the subject as `oidc:ws-team-<team>` from the Team's name. A group called `payments` or `ws-team-Payments` signs in fine but matches no RoleBinding. The user signs in and sees nothing.
 
 ## Step 2 — Declare the Team
 
@@ -106,7 +123,7 @@ spec:
 kubectl apply -f team-payments.yaml
 ```
 
-A Team composes nothing that costs money: a Gitea team `payments` inside organisation `adhar`, and a status record of the Keycloak group it expects. It has no namespace and no quota of its own — its projects do.
+A Team composes nothing that costs money. It creates a Gitea team `payments` inside organisation `adhar`, and a status record of the Keycloak group it expects. It has no namespace and no quota of its own; its projects have those.
 
 **Verify:**
 
@@ -119,17 +136,19 @@ The output is `ws-team-payments  adhar/payments  Provisioned`.
 
 ## Step 3 — Set the team's quota ceiling
 
-Every environment namespace gets its own `ResourceQuota`, which stops *one* namespace exhausting the cluster. It does nothing about a team creating many individually reasonable projects. The `adhar-tenant-quotas` package adds the ceiling above it: a validating admission webhook on `Project` create and update that sums what the team already holds and refuses a project that would take it over its allowance.
+Every environment namespace gets its own `ResourceQuota`. That stops *one* namespace from exhausting the cluster. It does nothing to stop a team creating many projects that are each reasonable on their own.
+
+The `adhar-tenant-quotas` package adds a ceiling above that. It is a validating admission webhook on `Project` create and update. It adds up what the team already holds and refuses a project that would take the team over its allowance.
 
 What it enforces, exactly:
 
 - **Four axes:** `cpu`, `memory`, `pods`, and `projects` (a count). The vocabulary is ResourceQuota's.
 - **It sums the `Project` parameters** `cpuQuota`, `memoryQuota` and `podQuota` across every Project whose `parameters.team` is this team. A project being updated is not counted twice.
-- **An omitted axis is unlimited**, not zero — you can cap memory without inventing a CPU number.
+- **An omitted axis is unlimited**, not zero. You can cap memory without inventing a CPU number.
 - **Empty by default.** With no entry, nothing is enforced. A team without its own entry falls back to a `default` entry, if you declare one.
-- **It fails open.** `failurePolicy` is `Ignore`: if the controller is down, projects are admitted. A quota ceiling is a governance control, not a security boundary.
+- **It fails open.** `failurePolicy` is `Ignore`, so if the controller is down, projects are admitted. A quota ceiling is a governance control, not a security boundary.
 
-The allowances live in the ConfigMap `adhar-tenant-quotas` in `adhar-system`, shipped by the package at `platform/stack/packages/security/adhar-tenant-quotas/manifests/allowances.yaml`. ArgoCD manages it, so edit the file in your platform stack rather than the live object:
+The allowances live in the ConfigMap `adhar-tenant-quotas` in `adhar-system`. The package ships it at `platform/stack/packages/security/adhar-tenant-quotas/manifests/allowances.yaml`. ArgoCD manages it, so edit the file in your platform stack, not the live object:
 
 ```yaml
 # platform/stack/packages/security/adhar-tenant-quotas/manifests/allowances.yaml
@@ -154,7 +173,7 @@ data:
     projects: 10
 ```
 
-Then converge with `adhar upgrade`. On a local platform the package is off; turn it on with `adhar stack enable adhar-tenant-quotas` first.
+Then converge with `adhar upgrade`. On a local platform the package is off, so first turn it on with `adhar stack enable adhar-tenant-quotas`.
 
 **Verify:**
 
@@ -163,11 +182,11 @@ kubectl -n adhar-system get configmap adhar-tenant-quotas -o jsonpath='{.data.pa
 kubectl get validatingwebhookconfiguration adhar-tenant-quotas
 ```
 
-The first prints the allowance; the second exists. Step 4 proves enforcement.
+The first command prints the allowance. The second shows that the webhook exists. Step 4 proves that it enforces the limit.
 
 ## Step 4 — Create the team's Project
 
-The Project is where the team's environments, RBAC and delivery plumbing come from. Create it in `adhar-system`, where the paved-road pipelines look projects up:
+The Project creates the team's environments, RBAC and delivery plumbing. Create it in `adhar-system`, because that is where the paved-road pipelines look projects up:
 
 ```yaml
 # project-payments.yaml
@@ -206,7 +225,7 @@ spec:
 kubectl apply -f project-payments.yaml
 ```
 
-`adhar project create --org adhar --team payments --name payments --cpu 4 --memory 8Gi --pods 30` creates the same object with the default environments.
+To create the same object with the default environments, run `adhar project create --org adhar --team payments --name payments --cpu 4 --memory 8Gi --pods 30`.
 
 **Verify** — the namespaces, their guardrails, and the published environment list:
 
@@ -219,9 +238,15 @@ kubectl -n adhar-system get projects.platform.adhar.io payments \
 kubectl -n adhar-system get appprojects.argoproj.io payments
 ```
 
-You see four namespaces (`payments`, `payments-dev`, `payments-test`, `payments-prod`); each environment has a `<ns>-quota`, a `<ns>-limits` LimitRange (containers default to 500m / 512Mi limits, 100m / 128Mi requests) and a `<ns>-default-deny` NetworkPolicy; prod has `payments-prod-team-view` and `payments-prod-org-admin`; the status lists `dev=payments-dev`, `test=payments-test`, `prod=payments-prod`; and the AppProject exists.
+You should see:
 
-**Prove the quota ceiling.** With the allowance above (`projects: 10`, `cpu: "32"`), a dry-run project asking for more CPU than remains is refused at admission:
+- Four namespaces: `payments`, `payments-dev`, `payments-test` and `payments-prod`.
+- In each environment: a `<ns>-quota`, a `<ns>-limits` LimitRange and a `<ns>-default-deny` NetworkPolicy. The LimitRange gives containers default limits of 500m / 512Mi and default requests of 100m / 128Mi.
+- In prod: `payments-prod-team-view` and `payments-prod-org-admin`.
+- A status listing `dev=payments-dev`, `test=payments-test`, `prod=payments-prod`.
+- The AppProject.
+
+**Prove the quota ceiling.** The allowance above is `projects: 10`, `cpu: "32"`. Submit a dry-run project that asks for more CPU than remains. Admission refuses it:
 
 ```bash
 kubectl apply --dry-run=server -f - <<'EOF'
@@ -235,11 +260,11 @@ EOF
 
 The response is a denial: `project exceeds the "payments" team's tenant quota — cpu: 64 requested + 4 already committed = 68, over the team's 32. Raise the team's entry in the adhar-tenant-quotas ConfigMap, or reduce this project's quotas.`
 
-> **What the ceiling counts.** It sums the Project-level parameters, once per project. Each environment *inherits* those numbers unless it overrides them, so the namespaces of one project can together hold several times `cpuQuota`. Size allowances with that in mind.
+> **What the ceiling counts.** It sums the Project-level parameters, once per project. Each environment *inherits* those numbers unless it overrides them. So the namespaces of one project can together hold several times `cpuQuota`. Size allowances with that in mind.
 
 ## Step 5 — Prove the boundary
 
-Check the grants by impersonating a team member, not by reading YAML. The username does not matter for group bindings; the group does:
+Check the grants by impersonating a team member, not by reading YAML. For group bindings the username does not matter; the group does:
 
 ```bash
 AS="--as=oidc:alice@example.com --as-group=oidc:ws-team-payments"
@@ -253,28 +278,43 @@ kubectl auth can-i get pods          -n adhar-system  $AS   # no
 kubectl auth can-i get pods          -n other-team-dev $AS  # no
 ```
 
-Every line answers as commented. If a "yes" comes back "no", the group name in Keycloak and the Team name disagree — see Step 1.
+Every line should answer as its comment says. If a "yes" comes back "no", the group name in Keycloak and the Team name do not match. See Step 1.
 
 ## Step 6 — Give the team its tools
 
-**The Console** (`https://console.<host>`) signs users in through Keycloak and talks to the API server *as the user*: its tokens carry the `kubernetes` audience and the `groups` claim, and the Console impersonates them. A team member therefore sees exactly what Step 5 allows — their namespaces, read-only prod — and nothing else. There is nothing to configure.
+**The Console** (`https://console.<host>`) signs users in through Keycloak and talks to the API server *as the user*. Its tokens carry the `kubernetes` audience and the `groups` claim, and the Console impersonates them. So a team member sees exactly what Step 5 allows: their namespaces and read-only prod, and nothing else. There is nothing to configure.
 
-**Gitea** (`https://gitea.<host>`) offers Keycloak sign-in; the account is created on first login. Two things are not automatic for application teams:
+**Gitea** (`https://gitea.<host>`) offers Keycloak sign-in, and creates the account on first login. Two things are not automatic for application teams:
 
-- The Keycloak → Gitea team mapping shipped by the `keycloak` package covers only the platform groups (`platform-admin` → `Owners`, `platform-developer` → `developers`, `platform-viewer` → `viewers` in organisation `adhar`). Membership of `ws-team-payments` is **not** synced into the Gitea team `payments`. After each engineer has signed in once, add them in Gitea: organisation `adhar` → Teams → `payments` → Add member.
-- The Gitea team is created with `includes_all_repositories: false`, so grant it repositories explicitly — at least `adhar/payments` and each application repo the team owns.
+- The `keycloak` package ships a Keycloak → Gitea team mapping that covers only the platform groups: `platform-admin` → `Owners`, `platform-developer` → `developers`, `platform-viewer` → `viewers`, in organisation `adhar`. Membership of `ws-team-payments` is **not** synced into the Gitea team `payments`. After each engineer has signed in once, add them in Gitea: organisation `adhar` → Teams → `payments` → Add member.
+- The Gitea team is created with `includes_all_repositories: false`, so grant it repositories one by one. Grant at least `adhar/payments` and each application repo the team owns.
 
-**ArgoCD** maps groups to roles in `argocd-rbac-cm`: `platform-admin` → `role:admin`, `platform-developer` → a role that may get, sync and run actions on applications, `platform-viewer` → `role:readonly`, and `policy.default` is empty. **No ArgoCD role is composed for `ws-team-*` groups**, so a team member signs in to ArgoCD and sees no applications. This is not available out of the box; the Console is the supported view of sync and health for application teams. Adding team roles is a change to the platform's ArgoCD configuration, not something a Project does.
+**ArgoCD** maps groups to roles in `argocd-rbac-cm`:
 
-**OpenBao**, where the production secrets live, maps only `platform-admin`, `platform-developer` and `platform-viewer` to policies. Team members signing in get the `default` policy, which reads no secrets. The team's workloads read their secrets through a `SecretStore` in their own namespace, which OpenBao confines to `secret/tenants/<namespace>/`; the platform's `ClusterSecretStore/vault` does not serve team namespaces. How teams supply secrets is covered in [Manage Secrets End to End](/docs/guides/manage-secrets).
+- `platform-admin` → `role:admin`
+- `platform-developer` → a role that may get, sync and run actions on applications
+- `platform-viewer` → `role:readonly`
+- `policy.default` is empty.
+
+**No ArgoCD role is composed for `ws-team-*` groups.** A team member who signs in to ArgoCD sees no applications. This is not available out of the box. For application teams, the Console is the supported view of sync and health. Adding team roles means changing the platform's ArgoCD configuration; a Project does not do it.
+
+**OpenBao** holds the production secrets. It maps only `platform-admin`, `platform-developer` and `platform-viewer` to policies. Team members who sign in get the `default` policy, which reads no secrets.
+
+The team's workloads read their secrets through a `SecretStore` in their own namespace. OpenBao confines that store to `secret/tenants/<namespace>/`. The platform's `ClusterSecretStore/vault` does not serve team namespaces. [Manage Secrets End to End](/docs/guides/manage-secrets) covers how teams supply secrets.
 
 ## Step 7 — The new engineer's first day: kubectl through OIDC
 
 This section is for the engineer who was just added.
 
-**Is the API server trusting Keycloak?** On a local Kind platform, yes — the OIDC flags are set when the cluster is created. On a cloud platform built with kubeadm it is a deliberate day-2 step your platform team takes once Keycloak is serving; on a managed control plane (EKS, AKS, GKE, DOKS) it is the cloud's own OIDC setting with the same claims and prefixes. See [Security Best Practices](/docs/security/security-best-practices) for the flags. If it is not enabled, ask your platform team — no client-side step works around it.
+**Check that the API server trusts Keycloak.**
 
-**Sign in and use the token.** The CLI performs the password grant against the realm, stores the session and refreshes it:
+- On a local Kind platform, it does. The OIDC flags are set when the cluster is created.
+- On a cloud platform built with kubeadm, your platform team enables it as a deliberate day-2 step once Keycloak is serving.
+- On a managed control plane (EKS, AKS, GKE, DOKS), it is the cloud's own OIDC setting, with the same claims and prefixes.
+
+See [Security Best Practices](/docs/security/security-best-practices) for the flags. If it is not enabled, ask your platform team. No client-side step works around it.
+
+**Sign in and get a token.** The CLI performs the password grant against the realm, stores the session and refreshes it:
 
 ```bash
 # Local:
@@ -286,9 +326,9 @@ adhar auth whoami
 adhar auth token --show
 ```
 
-`--show` prints who the token is for, its groups, and when it expires. You should see `ws-team-payments` among the groups.
+`--show` prints who the token is for, its groups and when it expires. You should see `ws-team-payments` among the groups.
 
-**Point kubectl at the cluster** with your identity. You need the API server address and its CA certificate from your platform team (they are in any admin kubeconfig). Then pass the token per call — `adhar auth token` refreshes it when it has expired, which a token pasted into a kubeconfig would not:
+**Point kubectl at the cluster** with your identity. Get the API server address and its CA certificate from your platform team; both are in any admin kubeconfig. Then pass the token on each call. `adhar auth token` refreshes the token when it has expired, which a token pasted into a kubeconfig would not do:
 
 ```bash
 kubectl config set-cluster adhar --server=https://<api-server> \
@@ -306,17 +346,19 @@ kubectl --token "$(adhar auth token)" auth whoami
 kubectl --token "$(adhar auth token)" auth can-i create deployments -n payments-dev
 ```
 
-The first reports username `oidc:alice@example.com` with group `oidc:ws-team-payments`; the second answers `yes`.
+The first command reports username `oidc:alice@example.com` with group `oidc:ws-team-payments`. The second answers `yes`.
 
 ## Offboarding
 
-Remove the person from the group — one switch for every service that reads the claim:
+Remove the person from the group. This one change covers every service that reads the claim:
 
 ```bash
 adhar auth group remove-member ws-team-payments alice@example.com
 ```
 
-Their next token carries no team group, so Kubernetes, the Console and every SSO service stop granting team access. A token already issued stays valid until it expires; disable the user in Keycloak (`adhar auth user update alice@example.com --status inactive`) to stop new sign-ins entirely, and remove them from the Gitea team by hand, since that membership was added by hand.
+Their next token carries no team group, so Kubernetes, the Console and every SSO service stop granting team access. A token already issued stays valid until it expires.
+
+To stop new sign-ins entirely, disable the user in Keycloak: `adhar auth user update alice@example.com --status inactive`. Also remove them from the Gitea team by hand, since that membership was added by hand.
 
 ## Troubleshooting
 

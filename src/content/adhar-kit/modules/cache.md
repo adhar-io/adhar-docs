@@ -7,7 +7,9 @@ path: "/adhar-kit/modules/cache"
 
 # Cache
 
-`adhar-kit-cache` is high-performance caching built on Caffeine: a fluent builder facade, loading caches, TTL/TTI/size eviction, statistics, a central cache manager, and eleven declarative annotations. It solves the part of caching that is genuinely hard — not storing a value, but **doing so without stampedes, without unbounded growth, and without going blind** to whether the cache is helping at all.
+`adhar-kit-cache` is high-performance caching built on Caffeine. It gives you a fluent builder facade, loading caches, TTL/TTI/size eviction, statistics, a central cache manager, and eleven declarative annotations.
+
+Storing a value is easy. The hard part is **doing so without stampedes, without unbounded growth, and without going blind** to whether the cache is helping at all. That is the part this module solves.
 
 ## At a glance
 
@@ -21,17 +23,17 @@ path: "/adhar-kit/modules/cache"
 
 ## How it works
 
-`CacheManager` is a registry of named `CacheFacade` instances, each wrapping a Caffeine cache. The aspects resolve a cache by name through the manager, so a cache configured in code and one created by an annotation are the same object — and both appear in the statistics.
+`CacheManager` is a registry of named `CacheFacade` instances. Each one wraps a Caffeine cache. The aspects look up a cache by name through the manager. So a cache configured in code and one created by an annotation are the same object, and both appear in the statistics.
 
 ```diagram
 kit-cache-layers
 ```
 
-`CacheManager` is an eagerly-initialised singleton backed by a `ConcurrentHashMap`, and `CacheFacade` additionally keeps its own static registry that every `build()` writes into. Both are process-wide and shared by every thread; neither is a Spring bean you can scope. Building a second cache with a name already in use silently replaces the registry entry, so treat cache names as global constants.
+`CacheManager` is a singleton, created eagerly and backed by a `ConcurrentHashMap`. `CacheFacade` also keeps its own static registry, which every `build()` writes into. Both are process-wide and shared by every thread. Neither is a Spring bean you can scope. If you build a second cache with a name already in use, it silently replaces the registry entry. Treat cache names as global constants.
 
 ## Eviction: four policies, and they are not interchangeable
 
-Caffeine applies whichever of these you configured, and an entry leaves when the *first* of them fires.
+Caffeine applies whichever of these you configured. An entry leaves when the *first* of them fires.
 
 | Builder option | Clock starts at | Removes an entry when |
 |---|---|---|
@@ -40,24 +42,29 @@ Caffeine applies whichever of these you configured, and an entry leaves when the
 | `expireAfterAccess(d)` | The last read *or* write | `d` has elapsed with no access — a time-to-idle |
 | `refreshAfterWrite(d)` | The last write | Nothing is removed; see below |
 
-Two consequences catch people out. First, **eviction and expiry are lazy**: Caffeine does its housekeeping on the back of other operations, so an expired entry can linger until something touches the cache. `size()` reports `estimatedSize()`, and `cleanUp()` forces a maintenance pass — use it in tests rather than sleeping and hoping.
+Two consequences catch people out.
 
-Second, **`refreshAfterWrite` never serves a miss.** Past the interval, the next read returns the *existing, stale* value immediately and schedules an asynchronous reload; only a later reader sees the new value. One reload runs per key, and if it fails the old value stays. That is right for a hot key whose freshness matters less than its latency, and wrong when a stale answer is incorrect rather than merely old.
+First, **eviction and expiry are lazy**. Caffeine does its housekeeping during other operations. So an expired entry can linger until something touches the cache. `size()` reports `estimatedSize()`. `cleanUp()` forces a maintenance pass. In tests, call it instead of sleeping and hoping.
 
-> `refreshAfterWrite` requires a loader. `CacheFacade.builder()` accepts the option and then calls Caffeine's no-loader `build()`, which rejects the combination at build time. Use `CacheFacade.loadingBuilder()` with `.loader(...)` whenever you set it.
+Second, **`refreshAfterWrite` never serves a miss.** Once the interval has passed, the next read returns the *existing, stale* value at once and schedules an asynchronous reload. Only a later reader sees the new value. One reload runs per key, and if it fails the old value stays. This is right for a hot key where latency matters more than freshness. It is wrong when a stale answer is incorrect, not merely old.
+
+> `refreshAfterWrite` requires a loader. `CacheFacade.builder()` accepts the option, but then calls Caffeine's no-loader `build()`, which rejects the combination at build time. Whenever you set it, use `CacheFacade.loadingBuilder()` with `.loader(...)`.
 
 ## Stampede protection
 
-Two mechanisms, with different scope.
+There are two mechanisms, with different scope.
 
-- **`get(key, loader)` and `@Cacheable(sync = true)`** both compile down to Caffeine's atomic `Cache.get(key, mappingFunction)`. Concurrent callers for the same key block on the compute; exactly one runs the loader and the rest receive its result. Different keys compute in parallel. Checked exceptions thrown by the method body are tunnelled through a wrapper and unwrapped before they reach you. Note that in `sync` mode the aspect skips the `unless` and post-`#result` `condition` checks — the value is cached by the compute itself.
-- **`@CacheLock`** widens that guard to any expensive operation, cached or not, keyed by a SpEL expression. It is implemented as a `ConcurrentHashMap<String, CompletableFuture<Object>>`: the first caller for a key becomes the leader and the rest await its future. **It is an in-JVM guard, not a distributed lock** — every pod will elect its own leader. `waitTime` is in **seconds**; when a follower's wait expires it logs and computes the value locally rather than failing, so the guard degrades to no guard under heavy contention. Set `failFast = true` to get a `CacheLockAcquisitionException` instead. `leaseTime` is advisory and is not read by the aspect.
+- **`get(key, loader)` and `@Cacheable(sync = true)`** both compile down to Caffeine's atomic `Cache.get(key, mappingFunction)`. Concurrent callers for the same key block on the compute. Exactly one runs the loader, and the rest get its result. Different keys compute in parallel. Checked exceptions thrown by the method body pass through a wrapper and are unwrapped before they reach you. Note that in `sync` mode the aspect skips the `unless` and post-`#result` `condition` checks, because the compute itself caches the value.
+- **`@CacheLock`** extends that guard to any expensive operation, cached or not, keyed by a SpEL expression. It is implemented as a `ConcurrentHashMap<String, CompletableFuture<Object>>`. The first caller for a key becomes the leader, and the rest wait on its future.
+  - **It is an in-JVM guard, not a distributed lock.** Every pod elects its own leader.
+  - `waitTime` is in **seconds**. When a follower's wait runs out, it logs and computes the value locally instead of failing. So under heavy contention the guard degrades to no guard. Set `failFast = true` to get a `CacheLockAcquisitionException` instead.
+  - `leaseTime` is advisory. The aspect does not read it.
 
 ## The second level is in-process by default
 
-This is the most important caveat on the page. The `SecondLevelCache` bean registered by `AdharCacheAspectsAutoConfiguration` is `InMemorySecondLevelCache` — a `ConcurrentHashMap` of maps with its own TTL bookkeeping, living inside the JVM. **`@MultiLevelCache` is therefore not distributed out of the box.** Every pod has its own L1 *and* its own L2, and an entry written on one pod is invisible to the others.
+This is the most important caveat on the page. `AdharCacheAspectsAutoConfiguration` registers `InMemorySecondLevelCache` as the `SecondLevelCache` bean. That is a `ConcurrentHashMap` of maps with its own TTL bookkeeping, living inside the JVM. **`@MultiLevelCache` is therefore not distributed out of the box.** Every pod has its own L1 *and* its own L2. An entry written on one pod is invisible to the others.
 
-Publish your own `SecondLevelCache` bean to make it real. The SPI is four methods:
+To make it really distributed, publish your own `SecondLevelCache` bean. The SPI has four methods:
 
 ```java
 Object get(String cacheName, Object key);
@@ -66,13 +73,13 @@ void evict(String cacheName, Object key);
 void clear(String cacheName);
 ```
 
-Three implementations ship, each with a caveat worth knowing before you pick one:
+Three implementations ship. Each has a caveat to know before you pick one:
 
-- `SpringCacheSecondLevelCache`, over a Redis Spring `CacheManager`. **It ignores the `ttl` argument on every `put`** — Spring's `Cache` has no per-entry TTL — so `l2Ttl` is dead and your Redis cache configuration decides expiry. Every operation is a silent no-op when the named Spring cache does not exist.
-- `DaprSecondLevelCache`, over a Dapr state store, registered only when `adhar.dapr.enabled=true` (no `matchIfMissing`). A read failure is caught, logged at WARN and **treated as a miss** — the degradation you want. A write failure propagates. `clear(name)` always throws `UnsupportedOperationException`, because state stores cannot enumerate keys.
+- `SpringCacheSecondLevelCache`, over a Redis Spring `CacheManager`. **It ignores the `ttl` argument on every `put`**, because Spring's `Cache` has no per-entry TTL. So `l2Ttl` does nothing, and your Redis cache configuration decides expiry. If the named Spring cache does not exist, every operation is a silent no-op.
+- `DaprSecondLevelCache`, over a Dapr state store. It is registered only when `adhar.dapr.enabled=true` (no `matchIfMissing`). A read failure is caught, logged at WARN and **treated as a miss**, which is the degradation you want. A write failure propagates. `clear(name)` always throws `UnsupportedOperationException`, because state stores cannot list their keys.
 - `InMemorySecondLevelCache`, the default, for tests.
 
-On a read, `MultiLevelCacheService` peeks L1, then L2, and **promotes an L2 hit back into L1** before returning. Only on a double miss does it call your loader. The result goes to L1 always, and to L2 only when `writeThrough` is true (the default).
+On a read, `MultiLevelCacheService` checks L1, then L2. It **promotes an L2 hit back into L1** before returning. It calls your loader only when both miss. The result always goes to L1. It goes to L2 only when `writeThrough` is true (the default).
 
 ## Install
 
@@ -86,13 +93,18 @@ On a read, `MultiLevelCacheService` peeks L1, then L2, and **promotes an L2 hit 
 
 ## Key APIs
 
-- **`CacheFacade`** — one named cache. Writes: `put`, `putAll`, `putIfAbsent`. Reads: `get(key)`, `get(key, Class)`, `get(key, loader)`, `getAll(keys)`. Maintenance: `evict`, `evictAll`, `clear`, `cleanUp`. Introspection: `stats()`, `size()`, `keys()`, `containsKey`. Statics: `builder()`, `loadingBuilder()`, `getCache(name)`, `getAllCaches()`, `clearAll()`.
+- **`CacheFacade`** — one named cache.
+  - Writes: `put`, `putAll`, `putIfAbsent`.
+  - Reads: `get(key)`, `get(key, Class)`, `get(key, loader)`, `getAll(keys)`.
+  - Maintenance: `evict`, `evictAll`, `clear`, `cleanUp`.
+  - Introspection: `stats()`, `size()`, `keys()`, `containsKey`.
+  - Statics: `builder()`, `loadingBuilder()`, `getCache(name)`, `getAllCaches()`, `clearAll()`.
 - **`CacheManager`** — `getInstance()`, `createCache(name)`, `getOrCreateCache(name)`, `getCache(name)`, `registerCache`, `getCacheNames`, `removeCache`, `clearAll`, `cleanUpAll`, `getAllStats`, `getCacheStats(name)`, `getHealthMetrics`, `getTotalEntries`, plus defaults via `setDefaultMaxSize` / `setDefaultExpireAfterWrite` / `setDefaultRecordStats`.
 - **Core annotations** — `@Cacheable`, `@CachePut`, `@CacheEvict`.
 - **Protection annotations** — `@CacheLock` (single-flight on an expensive load), `@CacheCircuitBreaker` (stop hammering a failing load path), `@CacheRateLimit` (bound concurrent and per-second loads).
 - **Topology annotations** — `@MultiLevelCache` (L1 over L2), `@CachePartition` (per-tenant key namespacing), `@CacheRefresh` (proactive refresh of hot entries), `@CacheWarmup` (populate at startup), `@CacheMonitor` (alert on a poor hit rate).
 
-`get(key, Class)` returns `null` and logs a warning on a type mismatch rather than throwing. `CacheManager.createCache(name)` returns `null` when the name is already registered — prefer `getOrCreateCache`.
+On a type mismatch, `get(key, Class)` returns `null` and logs a warning instead of throwing. `CacheManager.createCache(name)` returns `null` if the name is already registered, so prefer `getOrCreateCache`.
 
 ## A minimal cache
 
@@ -165,24 +177,31 @@ public class ProductService {
 }
 ```
 
-`@Cacheable` also takes `condition` (decided before the call) and `unless` (decided on the result). `@CacheEvict` adds `allEntries` and `beforeInvocation`; with `beforeInvocation = true` the eviction happens even when the method throws.
+`@Cacheable` also takes `condition` (decided before the call) and `unless` (decided on the result). `@CacheEvict` adds `allEntries` and `beforeInvocation`. With `beforeInvocation = true`, the eviction happens even if the method throws.
 
 ### Expression and proxy mechanics
 
-Key, `condition` and `unless` expressions are SpEL, parsed once and memoised. The evaluation context exposes `#<parameterName>` for every parameter, the positional aliases `#p0`/`#a0`, `#result` (null before the call), and a root object giving `#root.methodName`, `#root.target`, `#root.args` and `#root.method`. Named parameters require the class to be compiled with `-parameters`; without it, use `#p0`. Leave `key` blank and the default is `declaringClass.methodName:<deepHashCode of args>`.
+Key, `condition` and `unless` expressions are SpEL. Each is parsed once and memoised. The evaluation context exposes:
 
-Aspects are registered by `AdharCacheAspectsAutoConfiguration`, which carries `@EnableAspectJAutoProxy(proxyTargetClass = true)` and is gated on `adhar.cache.aspects.enabled` (default `true`). Only two aspects declare an order — `@CacheRateLimit` is outermost, then `@CacheCircuitBreaker`; the rest are unordered relative to each other, so do not rely on `@CacheLock` and `@MultiLevelCache` composing in a particular direction when you stack more than two.
+- `#<parameterName>` for every parameter;
+- the positional aliases `#p0`/`#a0`;
+- `#result` (null before the call);
+- a root object giving `#root.methodName`, `#root.target`, `#root.args` and `#root.method`.
 
-> **Self-invocation silently disables every annotation here.** The aspects are Spring AOP around-advice and only fire on calls that arrive through the proxy. A `this.findProduct(id)` call from another method in `ProductService` runs the raw method — no cache, no lock, no warning. Inject the bean into a collaborator and call it from there. The same trap applies to `@CacheRefresh`, which reflectively invokes the **raw target method** on its refresh schedule, so any other annotation on that method is bypassed on refresh.
+Named parameters need the class to be compiled with `-parameters`. Without it, use `#p0`. If you leave `key` blank, the default is `declaringClass.methodName:<deepHashCode of args>`.
+
+`AdharCacheAspectsAutoConfiguration` registers the aspects. It carries `@EnableAspectJAutoProxy(proxyTargetClass = true)` and is gated on `adhar.cache.aspects.enabled` (default `true`). Only two aspects declare an order: `@CacheRateLimit` is outermost, then `@CacheCircuitBreaker`. The rest have no order relative to each other. When you stack more than two, do not rely on `@CacheLock` and `@MultiLevelCache` combining in a particular direction.
+
+> **Self-invocation silently disables every annotation here.** The aspects are Spring AOP around-advice. They fire only on calls that arrive through the proxy. A `this.findProduct(id)` call from another method in `ProductService` runs the raw method: no cache, no lock, no warning. Inject the bean into a collaborator and call it from there. The same trap applies to `@CacheRefresh`. On its refresh schedule, it invokes the **raw target method** by reflection, so any other annotation on that method is bypassed on refresh.
 
 ## How it behaves
 
-- **Thread safety.** `CacheFacade` holds only a name and the Caffeine cache, so it is safe to share; `CacheManager` and the facade registry are `ConcurrentHashMap`s. Every aspect is a stateless singleton apart from its own concurrent bookkeeping maps.
-- **TTL is fixed at creation.** When an annotation's `ttl` causes a cache to be built, that TTL is baked in. A second method naming the same `cacheName` with a different `ttl` silently gets the existing cache and its original TTL.
-- **Scheduled work.** `CacheRefreshScheduler` runs on its own two-thread daemon pool (`adhar-cache-refresh-N`) with `scheduleAtFixedRate`; `CacheWarmupProcessor` runs on another (`adhar-cache-warmup-N`) triggered by `ApplicationReadyEvent`. Neither uses Spring's `TaskScheduler`. Both are registered with `destroyMethod = "close"`, so shutdown calls `shutdownNow()` and in-flight refreshes are dropped, not drained.
-- **Startup is never blocked by warmup failures.** `@CacheWarmup` scans every bean definition once the context is ready; a warmup method that throws is caught and logged at WARN. A `Map` result is bulk-loaded with `putAll`; any other non-null result is stored under the method name. `delay` here is in **milliseconds**, unlike the minute-based `@CacheRefresh`.
-- **Failure behaviour.** A refresh loader that throws is swallowed at WARN and the periodic task survives. Kafka invalidation send failures are logged at ERROR only — the local mutation already happened and is not rolled back. A non-Dapr L2 that throws on read is *not* caught by `MultiLevelCacheService` and fails the whole call.
-- **Resource bounds.** `maximumSize` defaults to 1000 on both builders, and `getOrCreateCache` picks up `CacheManager`'s defaults of 1000 entries and a 10-minute write TTL. A cache built with neither a size nor an expiry bound grows until the heap does not.
+- **Thread safety.** `CacheFacade` holds only a name and the Caffeine cache, so it is safe to share. `CacheManager` and the facade registry are `ConcurrentHashMap`s. Every aspect is a stateless singleton, apart from its own concurrent bookkeeping maps.
+- **TTL is fixed at creation.** When an annotation's `ttl` causes a cache to be built, that TTL is baked in. A second method that names the same `cacheName` with a different `ttl` silently gets the existing cache, with its original TTL.
+- **Scheduled work.** `CacheRefreshScheduler` runs on its own two-thread daemon pool (`adhar-cache-refresh-N`) with `scheduleAtFixedRate`. `CacheWarmupProcessor` runs on another pool (`adhar-cache-warmup-N`), triggered by `ApplicationReadyEvent`. Neither uses Spring's `TaskScheduler`. Both are registered with `destroyMethod = "close"`. So shutdown calls `shutdownNow()`, and in-flight refreshes are dropped, not drained.
+- **Startup is never blocked by warmup failures.** Once the context is ready, `@CacheWarmup` scans every bean definition. A warmup method that throws is caught and logged at WARN. A `Map` result is bulk-loaded with `putAll`. Any other non-null result is stored under the method name. `delay` here is in **milliseconds**, unlike `@CacheRefresh`, which uses minutes.
+- **Failure behaviour.** A refresh loader that throws is swallowed at WARN, and the periodic task survives. Failures to send Kafka invalidation messages are only logged at ERROR. The local change already happened and is not rolled back. A non-Dapr L2 that throws on read is *not* caught by `MultiLevelCacheService`, and the whole call fails.
+- **Resource bounds.** `maximumSize` defaults to 1000 on both builders. `getOrCreateCache` picks up `CacheManager`'s defaults of 1000 entries and a 10-minute write TTL. A cache built with neither a size bound nor an expiry bound grows until the heap runs out.
 
 ## Statistics
 
@@ -196,7 +215,15 @@ When `micrometer-core` is present, `CacheMetricsBinder` (a `MeterBinder`) publis
 | `adhar.cache.hit.ratio` | gauge | — | `stats().hitRate()` |
 | `adhar.cache.size` | gauge | — | `estimatedSize()` |
 
-Binding is idempotent and lazy: caches created after `bindTo` are picked up on the next pass. `@CacheMonitor` emits its own set under `metricsPrefix` (default `cache`) — `<prefix>.gets` tagged `method` and `result`, a `<prefix>.latency` timer, and a `<prefix>.alerts` counter tagged `type=hit-rate` or `type=eviction-rate`. These land next to your other [metrics](/adhar-kit/modules/metrics). **Statistics are only collected on caches built with `recordStats(true)`**, which the builders default to `false` and the manager defaults to `true`.
+Binding is idempotent and lazy. Caches created after `bindTo` are picked up on the next pass.
+
+`@CacheMonitor` emits its own set under `metricsPrefix` (default `cache`):
+
+- `<prefix>.gets`, tagged `method` and `result`;
+- a `<prefix>.latency` timer;
+- a `<prefix>.alerts` counter, tagged `type=hit-rate` or `type=eviction-rate`.
+
+These land next to your other [metrics](/adhar-kit/modules/metrics). **Statistics are only collected on caches built with `recordStats(true)`.** The builders default it to `false`; the manager defaults it to `true`.
 
 ## Configuration
 
@@ -214,18 +241,21 @@ Binding is idempotent and lazy: caches created after `bindTo` are picked up on t
 | `adhar.cache.kafka.topic-prefix` | Invalidation topic prefix | `adhar-cache` |
 | `adhar.kit.cache.dapr.state-store` | State store behind `DaprSecondLevelCache` | `statestore` |
 
-Two gates are worth calling out. `AdharCacheAutoConfiguration` — the Kafka invalidation path and the `cacheManager` bean — is additionally `@ConditionalOnClass` on `org.apache.kafka.clients.producer.KafkaProducer`, so none of it exists without Kafka on the classpath. And `RedisConfig` is **not** listed in `AutoConfiguration.imports`: the `adhar.cache.redis.*` keys only take effect once you import that configuration explicitly.
+Two gates are worth calling out:
 
-Invalidation messages flow over `<topic-prefix>-put`, `-evict` and `-clear`. Each carries a `sourceInstanceId`, and `KafkaCacheListener` skips messages originating from the same instance so a write does not echo back.
+- `AdharCacheAutoConfiguration` covers the Kafka invalidation path and the `cacheManager` bean. It is also `@ConditionalOnClass` on `org.apache.kafka.clients.producer.KafkaProducer`. So none of it exists without Kafka on the classpath.
+- `RedisConfig` is **not** listed in `AutoConfiguration.imports`. The `adhar.cache.redis.*` keys take effect only once you import that configuration explicitly.
+
+Invalidation messages flow over `<topic-prefix>-put`, `-evict` and `-clear`. Each carries a `sourceInstanceId`. `KafkaCacheListener` skips messages that came from the same instance, so a write does not echo back.
 
 Builder options on `CacheFacade.builder()`: `cacheName`, `maximumSize`, `initialCapacity`, `expireAfterWrite`, `expireAfterAccess`, `refreshAfterWrite`, `recordStats`. `loadingBuilder()` has the same set minus `initialCapacity`, plus a required `loader`.
 
 ## Testing
 
-- **Isolate between tests.** The manager and the facade registry are process-wide singletons, so a cache populated by one test is visible to the next. Call `CacheFacade.clearAll()` in an `@AfterEach`.
-- **Do not sleep for expiry.** Build the cache with a very short `expireAfterWrite` and call `cleanUp()` to force a maintenance pass, then assert on `size()` or `containsKey`.
-- **Test the aspect, not the object.** `new ProductService(...)` has no proxy, so annotations do nothing. Use a slice context importing `AdharCacheAspectsAutoConfiguration`, or set `adhar.cache.aspects.enabled=false` to turn caching off and test the plain method.
-- **Prove the stampede guard.** Fire N threads at one key through a `CountDownLatch` and assert the loader ran exactly once — that is what distinguishes `sync = true` from a plain `@Cacheable`.
+- **Isolate between tests.** The manager and the facade registry are process-wide singletons. A cache filled by one test is visible to the next. Call `CacheFacade.clearAll()` in an `@AfterEach`.
+- **Do not sleep for expiry.** Build the cache with a very short `expireAfterWrite`. Call `cleanUp()` to force a maintenance pass, then assert on `size()` or `containsKey`.
+- **Test the aspect, not the object.** `new ProductService(...)` has no proxy, so annotations do nothing. Use a slice context that imports `AdharCacheAspectsAutoConfiguration`. Or set `adhar.cache.aspects.enabled=false` to turn caching off and test the plain method.
+- **Prove the stampede guard.** Fire N threads at one key through a `CountDownLatch`, and assert the loader ran exactly once. That is what sets `sync = true` apart from a plain `@Cacheable`.
 - **For a real distributed L2**, `adhar-kit-test-commons` provides `@AdharIntegrationTest(AdharContainer.REDIS)` and `RedisIntegrationTest`.
 
 ## Common pitfalls

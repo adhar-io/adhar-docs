@@ -130,10 +130,6 @@ const BlogSearch = ({ posts, className = "" }: Props) => {
   }, [q, index]);
 
   useEffect(() => {
-    setActiveIdx(0);
-  }, [q]);
-
-  useEffect(() => {
     const onClick = (e: MouseEvent) => {
       if (!containerRef.current?.contains(e.target as Node)) setOpen(false);
     };
@@ -187,6 +183,7 @@ const BlogSearch = ({ posts, className = "" }: Props) => {
           value={q}
           onChange={(e) => {
             setQ(e.target.value);
+            setActiveIdx(0); // a new query starts at the top result
             setOpen(true);
           }}
           onFocus={() => setOpen(true)}
@@ -200,6 +197,7 @@ const BlogSearch = ({ posts, className = "" }: Props) => {
             <button
               onClick={() => {
                 setQ("");
+                setActiveIdx(0);
                 inputRef.current?.focus();
               }}
               className="p-1 rounded text-muted-foreground hover:text-foreground transition-colors"

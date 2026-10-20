@@ -7,7 +7,9 @@ path: "/adhar-kit/modules/notification"
 
 # Notification
 
-"Send the customer an email" turns into a surprising amount of code: an SMTP client, a retry loop, template rendering, a way to stop a retry storm from sending the same message four times, and some record of what actually went out. `adhar-kit-notification` **collapses that into one call against a channel-agnostic service**, then adds the operational parts — idempotency, rate limiting, preferences, digesting, and bounded history — as configuration rather than code.
+"Send the customer an email" turns into a surprising amount of code. You need an SMTP client, a retry loop and template rendering. You need a way to stop a retry storm from sending the same message four times. And you need some record of what actually went out.
+
+`adhar-kit-notification` **turns that into one call against a channel-agnostic service**. It then adds the operational parts as configuration, not code: idempotency, rate limiting, preferences, digesting, and bounded history.
 
 ## At a glance
 
@@ -21,7 +23,7 @@ path: "/adhar-kit/modules/notification"
 
 ## How it works
 
-A `Notification` is an immutable record — `id`, `type`, `recipient`, `subject`, `body`, `metadata`, `createdAt`. `DefaultNotificationService` routes it to a `NotificationChannel`, then runs the cross-cutting guards around that delivery.
+A `Notification` is an immutable record: `id`, `type`, `recipient`, `subject`, `body`, `metadata`, `createdAt`. `DefaultNotificationService` routes it to a `NotificationChannel`, then runs the shared guards around that delivery.
 
 ```diagram
 kit-notification-send
@@ -29,19 +31,23 @@ kit-notification-send
 
 ### The routing order, exactly
 
-`send(notification)` does these things in this sequence, and the order is load-bearing:
+`send(notification)` does these steps in this order, and the order matters:
 
-1. **`findChannel(notification)`** — the first channel in the injected `List<NotificationChannel>` whose `supports(type)` returns true. If none matches, this throws `UnsupportedOperationException: No notification channel found for type: <TYPE>` **immediately**. Because channel resolution happens *first*, an unsupported type throws even for a recipient who has opted out, and even when an idempotency key would have suppressed the send.
+1. **`findChannel(notification)`** — picks the first channel in the injected `List<NotificationChannel>` whose `supports(type)` returns true. If none matches, it throws `UnsupportedOperationException: No notification channel found for type: <TYPE>` **immediately**. Channel lookup happens *first*. So an unsupported type throws even for a recipient who has opted out, and even when an idempotency key would have suppressed the send.
 2. **Opt-out** — `NotificationPreferenceStore.isOptedOut(recipient, type)`. A match logs at INFO and returns. No history entry.
 3. **Rate limit** — `NotificationRateLimiter.tryAcquire(recipient, type)`. A rejection logs at WARN, records a **failure** history entry with `Rate limit exceeded`, and returns.
-4. **Idempotency** — only when the notification's metadata carries a non-blank `idempotencyKey` entry (the constant `DefaultNotificationService.IDEMPOTENCY_KEY_METADATA`). A key already registered within the TTL logs at INFO and returns. No history entry.
+4. **Idempotency** — runs only when the notification's metadata carries a non-blank `idempotencyKey` entry (the constant `DefaultNotificationService.IDEMPOTENCY_KEY_METADATA`). If the key was already registered within the TTL, it logs at INFO and returns. No history entry.
 5. **Delivery** — `channel.send(notification)`, then a history entry and (if a publisher is wired) a CloudEvent.
 
-All three guards short-circuit by returning `void`. The caller cannot tell a suppressed send from a delivered one by return value — only the logs and the history show the difference.
+All three guards stop the send by returning `void`. From the return value, the caller cannot tell a suppressed send from a delivered one. Only the logs and the history show the difference.
 
-`NotificationChannel` is a **sealed interface** permitting exactly `EmailNotificationChannel`, `WebhookNotificationChannel`, `InAppNotificationChannel`, `SmsNotificationChannel` and `DaprBindingNotificationChannel`. You cannot write a sixth implementation; the compiler will refuse. Extend reach by configuring the SMS or Dapr channel to point at a provider, by replacing one of the permitted channels with your own bean of that exact type, or by replacing `NotificationService` outright.
+`NotificationChannel` is a **sealed interface**. It permits exactly `EmailNotificationChannel`, `WebhookNotificationChannel`, `InAppNotificationChannel`, `SmsNotificationChannel` and `DaprBindingNotificationChannel`. You cannot write a sixth implementation; the compiler will refuse. To reach more providers, you can:
 
-Channel availability is conditional, and the defaults are stricter than most readers expect:
+- configure the SMS or Dapr channel to point at a provider
+- replace one of the permitted channels with your own bean of that exact type
+- replace `NotificationService` outright
+
+Each channel is registered only under certain conditions, and the defaults are stricter than most readers expect:
 
 | Channel | Enabled by | Notes |
 | --- | --- | --- |
@@ -49,13 +55,18 @@ Channel availability is conditional, and the defaults are stricter than most rea
 | Email | `email.enabled=true` **and** `JavaMailSender` on the classpath | Default is `false` |
 | Webhook | `webhook.enabled=true` **and** `WebClient` on the classpath | Default is `false` |
 | SMS | `sms.enabled=true` | Default is `false`; needs `sms.url` and a `payload-template` |
-| Dapr binding | `adhar-kit-dapr` present, `adhar.dapr.enabled=true`, a `DaprFacade` bean, and `notification.dapr.enabled` (default `true`) | Registered after the native channels so a configured native channel wins for its type |
+| Dapr binding | `adhar-kit-dapr` present, `adhar.dapr.enabled=true`, a `DaprFacade` bean, and `notification.dapr.enabled` (default `true`) | Registered after the native channels, so a configured native channel wins for its type |
 
 ### Async means `sendAsync`, not `send`
 
-`adhar.notification.async` (default `true`) selects the `Executor` used by `sendAsync` only: `Executors.newVirtualThreadPerTaskExecutor()` when true, `Runnable::run` when false. **`send(notification)` is always synchronous on the calling thread**, regardless of the flag. If you want a slow SMTP server off your request thread, call `sendAsync` — switching `async` does not do it for you.
+`adhar.notification.async` (default `true`) chooses the `Executor` used by `sendAsync` only:
 
-The virtual-thread executor means a blocked send parks a virtual thread rather than pinning a platform thread, so fan-out is cheap. It is also **unbounded**: nothing limits how many in-flight sends you can have, and the executor is never shut down, so in-flight sends are not drained on context close.
+- `true` → `Executors.newVirtualThreadPerTaskExecutor()`
+- `false` → `Runnable::run`
+
+**`send(notification)` is always synchronous on the calling thread**, whatever the flag says. To keep a slow SMTP server off your request thread, call `sendAsync`. Switching `async` does not do it for you.
+
+With the virtual-thread executor, a blocked send parks a virtual thread instead of pinning a platform thread, so fan-out is cheap. It is also **unbounded**. Nothing limits how many sends can be in flight. The executor is never shut down, so in-flight sends are not drained on context close.
 
 ## Install
 
@@ -69,16 +80,16 @@ The virtual-thread executor means a blocked send parks a virtual thread rather t
 
 ## Key APIs
 
-- **`NotificationService`** — the SPI and the bean you should inject: `send(notification)`, `sendAsync(notification)` returning `CompletableFuture<Void>`, `sendBatch(list)`. Provide your own bean to replace `DefaultNotificationService` entirely.
+- **`NotificationService`** — the SPI, and the bean you should inject: `send(notification)`, `sendAsync(notification)` (returns `CompletableFuture<Void>`), `sendBatch(list)`. Provide your own bean to replace `DefaultNotificationService` entirely.
 - **`TemplateNotificationService`** — `registerTemplate(template)`, `sendFromTemplate(templateId, recipient, variables[, locale])`, `getTemplate`, `removeTemplate`, `templateCount`. Templates live in a `ConcurrentHashMap` on this bean instance.
-- **`Notification`** — the record above; `metadata` defaults to an empty map and `createdAt` to now.
-- **`NotificationTemplate`** — record of `id`, `name`, `type`, `subjectTemplate`, `bodyTemplate`, `defaultMetadata`, plus `render(variables)` returning a `RenderedTemplate(subject, body)`. Placeholders are `${name}`. The record's own `render` does plain substitution with **no HTML escaping**; only `TemplateNotificationService` escapes.
+- **`Notification`** — the record above. `metadata` defaults to an empty map and `createdAt` to now.
+- **`NotificationTemplate`** — a record of `id`, `name`, `type`, `subjectTemplate`, `bodyTemplate`, `defaultMetadata`. Its `render(variables)` returns a `RenderedTemplate(subject, body)`. Placeholders are `${name}`. The record's own `render` does plain substitution with **no HTML escaping**. Only `TemplateNotificationService` escapes.
 - **`NotificationType`** — `EMAIL`, `WEBHOOK`, `IN_APP`, `SMS`.
-- **`NotificationHistory`** — `record(...)`, `getHistory(limit)`, `getFailedNotifications()`, `size()`, `clear()`. A bounded `ConcurrentLinkedDeque` holding the most recent `history.max-size` entries.
-- **`NotificationEvent`** — record emitted per attempt, with `NotificationEvent.success(...)` / `.failure(...)`, wrapped as CloudEvents of type `com.adhar.notification.sent` and `com.adhar.notification.failed`. See the caveat below.
+- **`NotificationHistory`** — `record(...)`, `getHistory(limit)`, `getFailedNotifications()`, `size()`, `clear()`. It is a bounded `ConcurrentLinkedDeque` that holds the most recent `history.max-size` entries.
+- **`NotificationEvent`** — a record emitted per attempt, built with `NotificationEvent.success(...)` / `.failure(...)`. It is wrapped as CloudEvents of type `com.adhar.notification.sent` and `com.adhar.notification.failed`. See the caveat below.
 - **Supporting beans** — `NotificationRetryHandler`, `NotificationPreferenceStore`, `NotificationRateLimiter`, `NotificationIdempotencyStore`, `NotificationDigestService`.
 
-> **`NotificationFacade` is not auto-configured.** The module registers no `NotificationFacade` bean, and nothing populates the `NotificationFacade.getInstance()` singleton. That singleton is constructed with all-null collaborators, so `adhar.getNotification().send(...)` throws `IllegalStateException: NotificationService is not configured`. Inject `NotificationService` and `TemplateNotificationService` directly — or construct a `NotificationFacade` bean yourself and hand it to `AdharFacade.setNotification(...)`.
+> **`NotificationFacade` is not auto-configured.** The module registers no `NotificationFacade` bean, and nothing populates the `NotificationFacade.getInstance()` singleton. That singleton is built with all-null collaborators. So `adhar.getNotification().send(...)` throws `IllegalStateException: NotificationService is not configured`. Inject `NotificationService` and `TemplateNotificationService` directly. Or build a `NotificationFacade` bean yourself and pass it to `AdharFacade.setNotification(...)`.
 
 A second default catches people out in the same way.
 
@@ -178,7 +189,7 @@ public class OrderNotifications {
 }
 ```
 
-The idempotency key is derived from the business event, not generated per call — that is the whole point. A retried HTTP request, a redelivered Kafka message and a duplicated job run all produce `order-confirmation:1234` and only the first one sends.
+The idempotency key comes from the business event; it is not generated per call. That is the whole point. A retried HTTP request, a redelivered Kafka message and a duplicated job run all produce `order-confirmation:1234`, and only the first one sends.
 
 ```yaml
 adhar:
@@ -205,18 +216,37 @@ adhar:
 
 ## How it behaves
 
-- **Thread-safety.** `DefaultNotificationService` is a stateless singleton over its collaborators. `NotificationHistory` uses a `ConcurrentLinkedDeque`, `TemplateNotificationService` a `ConcurrentHashMap`, the idempotency store a `ConcurrentHashMap` with an atomic `compute`, and the rate limiter a `ConcurrentHashMap` of per-key deques each guarded by its own monitor. All are safe to share; none serialise across unrelated recipients.
-- **Retry blocks the caller.** `NotificationRetryHandler.retry(...)` is `retryAsync(...).join()`, and `DefaultNotificationService.send` calls it on the failure path. Backoff is exponential — `backoff-ms × 2^attempt`, capped at `max-backoff-ms` — served by a **single-threaded daemon scheduler** named `notification-retry-scheduler`, and the retried attempts themselves run on that one thread. With the defaults (3 retries, 1 s base) a terminal failure blocks the caller for the sum of 1 s + 2 s + 4 s before throwing. Concurrent failing sends queue behind one another on that single thread. This is the strongest argument for using `sendAsync`.
-- **Failure propagation.** With a retry handler present and all attempts exhausted, `send` records a failure entry and throws `RuntimeException("Failed to send notification [id=…] after retries", cause)`. With no retry handler it records the failure and rethrows the original exception. `sendAsync` surfaces that as a failed future — **which is silently discarded if you never call `exceptionally` or `join`**. `sendBatch` catches per notification, logs at ERROR and continues, so one bad address does not stop the batch.
-- **Lifecycle.** `NotificationRetryHandler` implements `AutoCloseable`, so Spring's inferred destroy method shuts its scheduler down with `shutdownNow()` — scheduled retries pending at shutdown are dropped. The virtual-thread executor behind `sendAsync` is not registered for shutdown at all; in-flight async sends are not drained.
-- **Resource bounds.** `NotificationHistory` is bounded by `history.max-size` (default 1000) and trims the oldest on write. The idempotency store purges expired keys lazily on every `register`, so it is bounded by the number of distinct keys within the TTL — a 24-hour default TTL with high-cardinality keys is a real memory cost. **`NotificationRateLimiter` never evicts its per-`recipient|type` deques**, so its map grows with the number of distinct recipients for the process lifetime; it is sized for a bounded recipient set, not for arbitrary public input.
-- **Everything in-memory is per-pod.** History, preferences, idempotency keys and rate-limit windows all live in the JVM. Across replicas the same idempotency key can send once per pod, and a restart forgets everything. Replace `NotificationIdempotencyStore`, `NotificationPreferenceStore` or `NotificationHistory` with your own bean (all are `@ConditionalOnMissingBean`) for shared, durable state.
+- **Thread-safety.** `DefaultNotificationService` is a stateless singleton over its collaborators. All of these are safe to share, and none serialise across unrelated recipients:
+  - `NotificationHistory` uses a `ConcurrentLinkedDeque`.
+  - `TemplateNotificationService` uses a `ConcurrentHashMap`.
+  - The idempotency store uses a `ConcurrentHashMap` with an atomic `compute`.
+  - The rate limiter uses a `ConcurrentHashMap` of per-key deques, each guarded by its own monitor.
+- **Retry blocks the caller.** `NotificationRetryHandler.retry(...)` is `retryAsync(...).join()`, and `DefaultNotificationService.send` calls it on the failure path. Backoff is exponential: `backoff-ms × 2^attempt`, capped at `max-backoff-ms`. A **single-threaded daemon scheduler** named `notification-retry-scheduler` runs the backoff, and the retried attempts also run on that one thread.
+
+  With the defaults (3 retries, 1 s base), a final failure blocks the caller for 1 s + 2 s + 4 s before throwing. Concurrent failing sends queue behind one another on that single thread. This is the strongest argument for using `sendAsync`.
+- **Failure propagation.**
+  - With a retry handler present and all attempts used up, `send` records a failure entry and throws `RuntimeException("Failed to send notification [id=…] after retries", cause)`.
+  - With no retry handler, it records the failure and rethrows the original exception.
+  - `sendAsync` reports that as a failed future, **which is silently discarded if you never call `exceptionally` or `join`**.
+  - `sendBatch` catches errors per notification, logs at ERROR and continues. So one bad address does not stop the batch.
+- **Lifecycle.** `NotificationRetryHandler` implements `AutoCloseable`. So Spring's inferred destroy method shuts its scheduler down with `shutdownNow()`, and retries still scheduled at shutdown are dropped. The virtual-thread executor behind `sendAsync` is not registered for shutdown at all, so in-flight async sends are not drained.
+- **Resource bounds.**
+  - `NotificationHistory` is bounded by `history.max-size` (default 1000) and drops the oldest entry on write.
+  - The idempotency store purges expired keys lazily on every `register`. So its size is the number of distinct keys within the TTL. A 24-hour default TTL with high-cardinality keys is a real memory cost.
+  - **`NotificationRateLimiter` never evicts its per-`recipient|type` deques.** Its map grows with the number of distinct recipients for the life of the process. It is sized for a bounded set of recipients, not for arbitrary public input.
+- **Everything in-memory is per-pod.** History, preferences, idempotency keys and rate-limit windows all live in the JVM. Across replicas, the same idempotency key can send once per pod, and a restart forgets everything. For shared, durable state, replace `NotificationIdempotencyStore`, `NotificationPreferenceStore` or `NotificationHistory` with your own bean (all are `@ConditionalOnMissingBean`).
 
 ### Template rendering
 
-`${name}` placeholders are substituted by literal string replacement over the variable map — keys are exact and case-sensitive, an absent key leaves the placeholder text in the output, and a null value substitutes an empty string. When the template's `defaultMetadata` contains `contentType: text/html` or `html: true`, **substituted values are HTML-escaped** (`&`, `<`, `>`, `"`), which is what stops a customer name from becoming an injection vector. The template text itself is never escaped.
+`${name}` placeholders are filled by literal string replacement from the variable map:
 
-With a `MessageSource` bean present and a `Locale` passed to the four-argument `sendFromTemplate`, the subject and body are looked up as `<templateId>.subject` and `<templateId>.body` first, falling back to the template's own text when the code is missing. An unknown `templateId` throws `IllegalArgumentException`.
+- Keys are exact and case-sensitive.
+- An absent key leaves the placeholder text in the output.
+- A null value is replaced with an empty string.
+
+When the template's `defaultMetadata` contains `contentType: text/html` or `html: true`, **substituted values are HTML-escaped** (`&`, `<`, `>`, `"`). That is what stops a customer name from becoming an injection vector. The template text itself is never escaped.
+
+Localised text works when a `MessageSource` bean is present and you pass a `Locale` to the four-argument `sendFromTemplate`. The subject and body are then looked up as `<templateId>.subject` and `<templateId>.body` first. If the code is missing, it falls back to the template's own text. An unknown `templateId` throws `IllegalArgumentException`.
 
 ## Configuration
 
@@ -254,20 +284,22 @@ With a `MessageSource` bean present and a `Locale` passed to the four-argument `
 
 ## Testing
 
-`adhar-kit-test-commons` has no notification helper, but `WireMockIntegrationTest` is the right base for webhook and SMS channels, and `MockRestServer` for simpler stubs.
+`adhar-kit-test-commons` has no notification helper. But `WireMockIntegrationTest` is the right base for webhook and SMS channels, and `MockRestServer` suits simpler stubs.
 
-1. **Routing and guards** — construct `DefaultNotificationService` directly with a fake channel that records what it received and `Runnable::run` as the executor. This gives you a fully synchronous service with no Spring context, and lets you assert the guard order: a type with no supporting channel must throw even with an opted-out recipient.
-2. **Idempotency** — send the same notification twice with the same `idempotencyKey` metadata and assert the fake channel saw exactly one send. `InMemoryNotificationIdempotencyStore` has a constructor taking a `LongSupplier` clock, so you can advance past the TTL without sleeping.
-3. **Rate limiting** — `NotificationRateLimiter` takes the same injectable clock. Use it rather than `Thread.sleep` to test window rollover.
-4. **Retry** — pass your own `ScheduledExecutorService` to the `NotificationRetryHandler(properties, scheduler)` constructor. The handler will not shut down a scheduler it does not own, so you can use a deterministic one and assert attempt counts without waiting out real backoff.
-5. **Templates** — `TemplateNotificationService.registerTemplate` then `sendFromTemplate` against a fake `NotificationService`, asserting the rendered subject and body. Cover the HTML path with a variable containing `<script>` and assert it was escaped.
-6. **Suppressing side effects in a unit test** — set `adhar.notification.enabled: false` to back the whole auto-configuration off, or `adhar.notification.in-app.enabled: false` with every other channel already off so a stray send fails loudly with `UnsupportedOperationException` instead of silently logging.
+1. **Routing and guards** — build `DefaultNotificationService` directly. Give it a fake channel that records what it received, and `Runnable::run` as the executor. You get a fully synchronous service with no Spring context. You can then assert the guard order: a type with no supporting channel must throw even with an opted-out recipient.
+2. **Idempotency** — send the same notification twice with the same `idempotencyKey` metadata. Assert the fake channel saw exactly one send. `InMemoryNotificationIdempotencyStore` has a constructor that takes a `LongSupplier` clock, so you can move past the TTL without sleeping.
+3. **Rate limiting** — `NotificationRateLimiter` takes the same injectable clock. Use it instead of `Thread.sleep` to test window rollover.
+4. **Retry** — pass your own `ScheduledExecutorService` to the `NotificationRetryHandler(properties, scheduler)` constructor. The handler does not shut down a scheduler it does not own. So you can use a deterministic one and assert attempt counts without waiting out real backoff.
+5. **Templates** — call `TemplateNotificationService.registerTemplate`, then `sendFromTemplate` against a fake `NotificationService`. Assert the rendered subject and body. Cover the HTML path with a variable containing `<script>`, and assert it was escaped.
+6. **Suppressing side effects in a unit test** — either:
+   - set `adhar.notification.enabled: false` to turn off the whole auto-configuration, or
+   - set `adhar.notification.in-app.enabled: false` with every other channel already off. A stray send then fails loudly with `UnsupportedOperationException` instead of silently logging.
 
 ## Common pitfalls
 
 | Symptom | Cause | Fix |
 | --- | --- | --- |
-| `adhar.getNotification().send(…)` throws `IllegalStateException` | `getNotification()` itself succeeds — it lazily builds `NotificationFacade.getInstance()`, which is constructed with all-null collaborators. The guard fires on the call, not on the lookup | Inject `NotificationService` / `TemplateNotificationService` instead, or build a `NotificationFacade` yourself and pass it to `AdharFacade.setNotification(…)` |
+| `adhar.getNotification().send(…)` throws `IllegalStateException` | `getNotification()` itself succeeds: it lazily builds `NotificationFacade.getInstance()`, which has all-null collaborators. The guard fires on the call, not the lookup | Inject `NotificationService` / `TemplateNotificationService` instead, or build a `NotificationFacade` yourself and pass it to `AdharFacade.setNotification(…)` |
 | `UnsupportedOperationException: No notification channel found for type` | No enabled channel `supports(type)` | Enable the channel for that `NotificationType`; there is no fallback |
 | In-app notifications "work" but nobody sees them | The default in-app channel only writes a log line | Replace `InAppNotificationChannel` with your own bean of that type |
 | Email silently not sent | `email.enabled` defaults to `false`, or no `JavaMailSender` bean exists | Set the flag and configure `spring.mail.*` |

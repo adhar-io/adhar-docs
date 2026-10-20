@@ -40,12 +40,12 @@ const ControlPlane = () => {
           
           {/* Description */}
           <p className="text-orange-700 dark:text-orange-300 text-base max-w-2xl mx-auto leading-relaxed">
-            Centralized orchestration and management layer providing unified API access, resource coordination, and policy enforcement across the entire platform ecosystem.
+            One Kubernetes API for infrastructure, delivery and policy. Crossplane provisions, ArgoCD reconciles from Git, and Kyverno enforces the rules.
           </p>
           
           {/* Feature badges */}
           <div className="flex flex-wrap justify-center gap-3 mt-8">
-            {['API Gateway', 'Resource Management', 'Policy Engine', 'Service Mesh'].map((feature, index) => (
+            {['Kubernetes API', 'Crossplane', 'ArgoCD', 'Kyverno'].map((feature, index) => (
               <div 
                 key={feature}
                 className="px-4 py-2 bg-orange-200/50 dark:bg-orange-800/30 text-orange-800 dark:text-orange-200 rounded-full text-sm font-medium backdrop-blur-sm animate-fadeInUp"

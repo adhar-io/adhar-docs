@@ -7,9 +7,9 @@ path: "/docs/guides/backup-and-restore"
 
 # Backup and Restore
 
-This guide is for the platform engineer who owns recovery. It explains what Adhar backs up out of the box, which component does each part and where the data lands. It then walks through two restore drills: a whole namespace with Velero, and a PostgreSQL database with CloudNativePG point-in-time recovery. By the end you will have a backup you have proved, not one you assume works.
+This guide is for the platform engineer who owns recovery. It explains what Adhar backs up out of the box, which component backs up each part, and where the data lands. It then walks through two restore drills: a whole namespace with Velero, and a PostgreSQL database with CloudNativePG point-in-time recovery (PITR). By the end you will have a backup you have proved works, not one you assume works.
 
-> A backup that has never been restored is a hope, not a backup. The platform's own history says so: Velero once reported Healthy in ArgoCD for weeks while every scheduled backup failed validation, because the credential Secret it referenced did not exist. Nothing surfaced it except the Backup objects themselves.
+> A backup that has never been restored is a hope, not a backup. The platform's own history shows this. Velero once reported Healthy in ArgoCD for weeks while every scheduled backup failed validation, because the credential Secret it referenced did not exist. Only the Backup objects themselves showed the failure.
 
 ## What you will build
 
@@ -31,18 +31,18 @@ On a laptop, enable Velero first with `adhar stack enable velero` and then `adha
 
 ## What is backed up, and by what
 
-Two tools do two different jobs, and nothing else needs to be backed up.
+Two tools do two different jobs. Nothing else needs to be backed up.
 
-**Velero backs up cluster state.** It records Kubernetes objects: namespaced resources, custom resources and cluster-scoped objects. These are the things no other system holds. The platform ships two Velero `Schedule`s, enabled by default:
+**Velero backs up cluster state.** It records Kubernetes objects: namespaced resources, custom resources and cluster-scoped objects. No other system holds these. The platform ships two Velero `Schedule`s, enabled by default:
 
 | Schedule | When (UTC) | Scope | Kept |
 |---|---|---|---|
 | `adhar-platform-daily` | 02:00 daily | `adhar-system` plus cluster-scoped resources | 30 days (`720h`) |
 | `adhar-cluster-weekly` | Sunday 03:00 | every namespace plus cluster-scoped resources | 90 days (`2160h`) |
 
-Both write to the `default` BackupStorageLocation with `snapshotVolumes: false`. The Velero node agent is deployed, but **file backup of volume data is opt-in per pod volume** through the `backup.velero.io/backup-volumes` annotation. Gitea's `data` volume ships opted in, because it holds the GitOps repositories and every user repository. The default is opt-in, not opt-out, for a reason. The opt-out setting once made Velero copy the object store's own 100 GiB volume into the object store. One run wrote 62.8 GB, filled the disk and took WAL archiving, Loki and Mimir down with it.
+Both write to the `default` BackupStorageLocation with `snapshotVolumes: false`. The Velero node agent is deployed, but **file backup of volume data is opt-in per pod volume** through the `backup.velero.io/backup-volumes` annotation. Gitea's `data` volume ships opted in, because it holds the GitOps repositories and every user repository. The default is opt-in, not opt-out, for a reason: the opt-out setting once made Velero copy the object store's own 100 GiB volume into the object store. One run wrote 62.8 GB, filled the disk and took WAL archiving, Loki and Mimir down with it.
 
-**CloudNativePG backs up database data.** Every PostgreSQL the platform runs, its own and yours, is a CNPG cluster with two backup paths. WAL is archived continuously and a base backup is taken daily at 01:30 UTC through a `ScheduledBackup`. A `Database` you request gets the same pair by default. The local composition adds a 7-day `retentionPolicy`, gzip-compressed WAL and a `<name>-daily` ScheduledBackup.
+**CloudNativePG backs up database data.** Every PostgreSQL the platform runs, its own and yours, is a CNPG cluster with two backup paths. WAL (the database's write-ahead log) is archived continuously. A base backup is taken daily at 01:30 UTC through a `ScheduledBackup`. A `Database` you request gets the same pair by default. The local composition adds a 7-day `retentionPolicy`, gzip-compressed WAL and a `<name>-daily` ScheduledBackup.
 
 **Some state is deliberately not backed up.** Git content is the source of truth, so it is recovered, not restored. Crossplane state is not backed up either: managed resources reconverge from the XRs declared in Git. Caches such as scanner databases, registry layers and Prometheus TSDB can all be rebuilt.
 
@@ -50,7 +50,7 @@ Both write to the `default` BackupStorageLocation with `snapshotVolumes: false`.
 hb-backup-coverage
 ```
 
-Both tools share one bucket, `adhar-backups`, with separate prefixes. Velero owns only `velero/`, and CNPG writes `cnpg/<cluster>/`. The prefix matters: Velero refuses a store whose root holds directories it did not create (`Backup store contains invalid top-level directories: [cnpg]`). By default the bucket lives on the in-cluster object store, RustFS, which also publishes the `root-creds` Secret that both tools authenticate with.
+Both tools share one bucket, `adhar-backups`, with separate prefixes. Velero owns only `velero/`, and CNPG writes to `cnpg/<cluster>/`. The prefix matters because Velero refuses a store whose root holds directories it did not create (`Backup store contains invalid top-level directories: [cnpg]`). By default the bucket lives on the in-cluster object store, RustFS, which also publishes the `root-creds` Secret that both tools authenticate with.
 
 > **In production, repoint both tools at off-cluster object storage.** A backup stored inside the cluster it protects does not survive losing that cluster. A full in-cluster store also stops WAL archiving for **every** database at once, which then fills the Postgres volumes and takes SSO down. See [Production](/docs/operations/production).
 
@@ -67,7 +67,7 @@ These are the platform's documented recovery objectives. Treat them as goals to 
 
 ## Step 1 — Confirm the backup store is reachable
 
-Every Velero backup is validated against its BackupStorageLocation first. An `Unavailable` store means every backup lands in `FailedValidation`, even while the Velero Deployment looks healthy.
+Velero first validates every backup against its BackupStorageLocation (BSL). If the store is `Unavailable`, every backup lands in `FailedValidation`, even while the Velero Deployment looks healthy. Check the store before anything else.
 
 ```bash
 adhar restore config                                     # BSLs: provider, phase, bucket, default
@@ -77,11 +77,11 @@ kubectl -n adhar-system get schedules.velero.io
 
 **Expected:** `default` reports phase `Available` against bucket `adhar-backups`, and both `adhar-platform-daily` and `adhar-cluster-weekly` are listed. If the store is `Unavailable`, check that the `velero-s3-credentials` ExternalSecret has produced its Secret: `kubectl -n adhar-system get externalsecret velero-s3-credentials`.
 
-The `adhar backup` and `adhar restore` commands find Velero by looking for its Deployment in `adhar-system`, falling back to the upstream `velero` namespace. Set `ADHAR_VELERO_NAMESPACE` to override the lookup.
+The `adhar backup` and `adhar restore` commands find Velero by looking for its Deployment in `adhar-system`. If it is not there, they fall back to the upstream `velero` namespace. Set `ADHAR_VELERO_NAMESPACE` to override the lookup.
 
 ## Step 2 — Opt in the volumes whose files matter
 
-Velero restores objects. It restores a volume's **files** only if that pod volume was opted in when the backup ran. If your namespace holds data that is not in a CNPG database, for example uploads on a PVC, annotate the pod template in Git:
+Velero restores objects. It restores a volume's **files** only if that pod volume was opted in when the backup ran. If your namespace holds data outside a CNPG database, such as uploads on a PVC, annotate the pod template in Git:
 
 ```yaml
 # deploy/deployment.yaml (in your application repo)
@@ -93,7 +93,7 @@ spec:
         backup.velero.io/backup-volumes: uploads
 ```
 
-Leave database volumes out: CNPG covers them, with point-in-time recovery Velero cannot give you. The platform's default StorageClass can also be node-local, and no volume snapshotter can snapshot that. File backup is the only Velero path for such data.
+Leave database volumes out. CNPG covers them, with point-in-time recovery that Velero cannot give you. The platform's default StorageClass can also be node-local, and no volume snapshotter can snapshot node-local storage. For such data, file backup is the only Velero path.
 
 **Verify:** `kubectl -n orders get pod -l app=orders-api -o jsonpath='{.items[0].metadata.annotations}'` shows the annotation once ArgoCD has synced the change.
 
@@ -106,9 +106,9 @@ adhar backup status orders-drill        # repeat until the phase settles
 adhar backup verify orders-drill        # exits non-zero unless the phase is Completed
 ```
 
-`adhar backup create` writes a `velero.io/v1 Backup` into Velero's namespace with `ttl` set from `--ttl` (default 30 days). Give drill backups a short TTL so Velero's garbage collection removes them. `adhar backup verify` prints warnings and errors and fails on anything other than `Completed`, which makes it safe to call from CI.
+`adhar backup create` writes a `velero.io/v1 Backup` into Velero's namespace, with `ttl` set from `--ttl` (default 30 days). Give drill backups a short TTL so that Velero's garbage collection removes them. `adhar backup verify` prints warnings and errors, and fails on any phase other than `Completed`. That makes it safe to call from CI.
 
-**Expected:** `Phase: ● Completed` with `Errors: 0`. A `PartiallyFailed` phase means some items failed; read them with `kubectl -n adhar-system describe backup.velero.io orders-drill`.
+**Expected:** `Phase: ● Completed` with `Errors: 0`. A `PartiallyFailed` phase means some items failed. Read them with `kubectl -n adhar-system describe backup.velero.io orders-drill`.
 
 ## Step 4 — Restore into a scratch namespace
 
@@ -116,7 +116,9 @@ adhar backup verify orders-drill        # exits non-zero unless the phase is Com
 hb-restore-drill
 ```
 
-Do not restore over the live namespace to test a backup. Velero skips objects that already exist, so an in-place restore of a healthy namespace proves almost nothing. ArgoCD also reconciles that namespace from Git regardless. Map the backup into a scratch namespace instead. The `adhar restore` subcommands do not expose namespace mapping, so write the Velero `Restore` directly. This is the same shape the platform's live drill used.
+**Do not restore over the live namespace to test a backup.** Velero skips objects that already exist, so an in-place restore of a healthy namespace proves almost nothing. ArgoCD also reconciles that namespace from Git regardless. Map the backup into a scratch namespace instead.
+
+The `adhar restore` subcommands do not expose namespace mapping, so write the Velero `Restore` yourself. The platform's live drill used this same shape.
 
 ```yaml
 # orders-drill-restore.yaml
@@ -150,7 +152,7 @@ kubectl -n orders-drill rollout status deploy/orders-api --timeout=5m
 kubectl -n orders-drill exec deploy/orders-api -- ls /data/uploads | head   # opted-in volume files
 ```
 
-**Expected:** the same Deployments, Services, ConfigMaps, Secrets and PVCs as in `orders`. Pods become Ready, and opted-in volumes contain their files. The platform's recorded drill restored the `adhar-environments` namespace into `adhar-restore-drill` the same way and recreated the Kargo project intact.
+**Expected:** the same Deployments, Services, ConfigMaps, Secrets and PVCs as in `orders`. Pods become Ready, and opted-in volumes contain their files. The platform's recorded drill used the same method: it restored the `adhar-environments` namespace into `adhar-restore-drill` and recreated the Kargo project intact.
 
 ## Step 5 — Clean up the drill
 
@@ -159,11 +161,11 @@ kubectl delete namespace orders-drill
 kubectl -n adhar-system delete restore.velero.io orders-drill-restore
 ```
 
-Leave the `orders-drill` Backup alone. Its 24-hour TTL expires it, and Velero deletes the data in the object store along with the object.
+Leave the `orders-drill` Backup alone. It expires after its 24-hour TTL, and Velero then deletes both the object and its data in the object store.
 
 ## Step 6 — Recover a database to a point in time
 
-Velero can restore a CNPG `Cluster` object and its PVCs: `adhar restore database <backup> --namespace team-payments` does exactly that. It can only restore volume data that was file-backed, though, and it cannot pick a moment in time. To restore **data**, use CNPG's own recovery, which replays the base backup and WAL from the bucket.
+Velero can restore a CNPG `Cluster` object and its PVCs, and `adhar restore database <backup> --namespace team-payments` does exactly that. But Velero can only restore volume data that was file-backed, and it cannot pick a moment in time. To restore **data**, use CNPG's own recovery. It replays the base backup and WAL from the bucket.
 
 ```diagram
 hb-cnpg-recovery
@@ -179,7 +181,7 @@ kubectl -n team-payments get cluster payments-db \
 kubectl -n team-payments get scheduledbackup,backups.postgresql.cnpg.io
 ```
 
-**Expected:** a recent `lastSuccessfulBackup`, no `lastFailedBackup`, and `ContinuousArchiving` set to `True`. If no base backup exists yet, take one now. PITR needs a base backup older than the target time.
+**Expected:** a recent `lastSuccessfulBackup`, no `lastFailedBackup`, and `ContinuousArchiving` set to `True`. If no base backup exists yet, take one now, because PITR needs a base backup older than the target time:
 
 ```yaml
 apiVersion: postgresql.cnpg.io/v1
@@ -201,7 +203,7 @@ kubectl -n team-payments exec payments-db-1 -c postgres -- \
 kubectl -n team-payments exec payments-db-1 -c postgres -- psql -d payments -c "delete from drill;"
 ```
 
-**6c. Recover into a new cluster.** Recover beside the original, under a new name, with **no** `backup` section. CNPG refuses to archive into a path that already holds another cluster's WAL. The connection details below are exactly what the platform's composition writes, so the recovery reads from the same place.
+**6c. Recover into a new cluster.** Create it beside the original, under a new name, with **no** `backup` section. CNPG refuses to archive into a path that already holds another cluster's WAL. The connection details below match exactly what the platform's composition writes, so the recovery reads from the same place.
 
 ```yaml
 # payments-db-restore.yaml
@@ -242,11 +244,11 @@ kubectl -n team-payments exec payments-db-restore-1 -c postgres -- \
 
 **Expected:** the cluster reports a healthy state and the marker row is back, even though it was deleted on the original. Delete `payments-db-restore` when the drill is done.
 
-Pointing a live application at a recovered cluster means changing its connection Secret and Service name (`payments-db-restore-rw`). Rehearse that switch in staging; the platform does not automate it.
+To point a live application at a recovered cluster, you must change its connection Secret and Service name (`payments-db-restore-rw`). The platform does not automate this switch, so rehearse it in staging.
 
 ## Prove it keeps working
 
-A one-off drill ages quickly. Build these into routine:
+A one-off drill goes stale quickly. Make these checks routine:
 
 | Cadence | Action | Command or signal |
 |---|---|---|
@@ -285,9 +287,11 @@ spec:
     ttl: 336h0m0s                   # 14 days
 ```
 
-`adhar backup schedule create orders-daily --interval daily --time 02:30` also creates a Schedule, with an empty template, which means every namespace. Prefer the manifest when you want a scoped one. Velero cron has five fields. A CNPG `ScheduledBackup` has **six**, and the first is seconds. A five-field string there is accepted and runs at a different time than it reads.
+`adhar backup schedule create orders-daily --interval daily --time 02:30` also creates a Schedule. Its template is empty, which means every namespace. Use the manifest when you want a scoped schedule.
 
-The `BackupPolicy` XR (`examples/backup-policy.yaml`) is not yet a reliable alternative. Its composition currently writes its Schedule and BackupStorageLocation into a `velero` namespace, while this platform runs Velero in `adhar-system`. Its `verification` and `notifications` fields are accepted by the schema but not rendered into anything. Use plain Velero Schedules until that changes.
+Watch the cron format. Velero cron has five fields. A CNPG `ScheduledBackup` has **six**, and the first is seconds. CNPG accepts a five-field string, but it then runs at a different time than it reads.
+
+The `BackupPolicy` XR (`examples/backup-policy.yaml`) is not yet a reliable alternative. Its composition currently writes its Schedule and BackupStorageLocation into a `velero` namespace, but this platform runs Velero in `adhar-system`. The schema accepts its `verification` and `notifications` fields, but nothing renders them. Use plain Velero Schedules until that changes.
 
 ## Moving backups off-cluster
 

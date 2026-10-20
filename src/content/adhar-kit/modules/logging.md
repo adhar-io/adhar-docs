@@ -7,7 +7,15 @@ path: "/adhar-kit/modules/logging"
 
 # Logging
 
-`adhar-kit-logging` is an enterprise logging framework: a universal `AdharLogger` facade, structured JSON output, MDC/correlation, sensitive-data masking, distributed-trace correlation, and eleven AOP annotations for zero-boilerplate logging of methods, audits, and business events. It exists because **logs are only useful when they join up** — with each other across services, with traces, and with an audit trail — and because the fastest way to leak a credential is an unfiltered `log.info` on a request body.
+`adhar-kit-logging` is an enterprise logging framework. It gives you:
+
+- a universal `AdharLogger` facade
+- structured JSON output
+- MDC/correlation and distributed-trace correlation
+- sensitive-data masking
+- eleven AOP annotations that log methods, audits and business events with no boilerplate
+
+It exists because **logs are only useful when they join up**: with each other across services, with traces, and with an audit trail. It also exists because the fastest way to leak a credential is an unfiltered `log.info` on a request body.
 
 ## At a glance
 
@@ -22,28 +30,33 @@ path: "/adhar-kit/modules/logging"
 
 ## How it works
 
-There are two output paths, and keeping them apart is the key to the module. Ordinary log statements go through `AdharLogger` to SLF4J and out via `MaskingJsonEncoder`. Structured *events* — business, audit, performance, batch, API — go through `AppLogEventPublisher` to any number of `AppLogEventSink`s, of which `Slf4jAppLogEventSink` is the default.
+There are two output paths. Keeping them apart is the key to understanding the module.
+
+- Ordinary log statements go through `AdharLogger` to SLF4J and out via `MaskingJsonEncoder`.
+- Structured *events* (business, audit, performance, batch, API) go through `AppLogEventPublisher` to any number of `AppLogEventSink`s. `Slf4jAppLogEventSink` is the default sink.
 
 ```diagram
 kit-logging-paths
 ```
 
-`MdcLoggingFilter` seeds the MDC for each request; `LoggerInjectionBeanPostProcessor` satisfies `@InjectLogger` fields.
+`MdcLoggingFilter` seeds the MDC for each request. `LoggerInjectionBeanPostProcessor` fills `@InjectLogger` fields.
 
-**The two paths mask with two different implementations**, and that is the single most important thing to internalise:
+**The two paths mask with two different implementations.** This is the most important thing to understand:
 
 | | SLF4J path | Event path |
 |---|---|---|
 | Masker | `MaskingJsonEncoder` (a logback encoder) | `LogDataMasker` (a Spring bean) |
 | Where it runs | Inside logback, at encode time | Inside `AppLogEventPublisher`, before any sink |
-| Scans | `key=value` / `key: value` pairs in the formatted message, sensitive MDC keys, throwable messages (including causes) | The event message, error message and metadata map — recursively through nested maps and collections |
+| Scans | `key=value` / `key: value` pairs in the formatted message; sensitive MDC keys; throwable messages (including causes) | The event message, error message and metadata map, recursing through nested maps and collections |
 | Honours `strategy`, `mask-credit-cards`, `mask-ssn`, `mask-emails`, `custom-patterns` | No | Yes |
 | Honours `additional-keys` | Only on the Spring `MaskingJsonEncoder` bean, which logback does not use | Yes |
 | Replacement | always `********` | `FULL` / `PARTIAL` / `HASH` per `strategy` |
 
-On the event path, masking happens in the publisher before dispatch, so a custom sink cannot bypass it. On the SLF4J path, masking happens in whichever encoder your logback configuration instantiates.
+On the event path, the publisher masks before dispatch, so a custom sink cannot bypass it. On the SLF4J path, masking happens in whichever encoder your logback configuration creates.
 
-The module ships a `logback-spring.xml` that declares `MaskingJsonEncoder` inline in each JSON appender (console, rolling file, Logstash), wired to `adhar.logging.*` through `springProperty` placeholders. Only one `logback-spring.xml` is used — if your application supplies its own, the module's is not applied and you must copy the encoder blocks across, or nothing on the SLF4J path is masked.
+The module ships a `logback-spring.xml`. It declares `MaskingJsonEncoder` inline in each JSON appender (console, rolling file, Logstash), wired to `adhar.logging.*` through `springProperty` placeholders.
+
+Only one `logback-spring.xml` is used. If your application supplies its own, the module's is not applied. You must then copy the encoder blocks across, or nothing on the SLF4J path is masked.
 
 ## Install
 
@@ -57,7 +70,10 @@ The module ships a `logback-spring.xml` that declares `MaskingJsonEncoder` inlin
 
 ## Key APIs
 
-- **`AdharLogger`** — the facade. Level methods take the source class: `info(Class, msg, args)`, `debug`, `warn`, `error(Class, msg, Throwable)`, `trace`, plus `infoJson` / `errorJson` variants that serialize an object as a field. Context: `put`, `get`, `putAll`, `remove`, `clear`, `withContext(Map, Runnable)`, `withContextSupplier(Map, Supplier)`. Correlation and trace: `ensureCorrelationId`, `setCorrelationId`, `getCorrelationId`, `setUserId`, `setTracingInfo`, `getTraceId`, `getSpanId`.
+- **`AdharLogger`** — the facade.
+  - Level methods take the source class: `info(Class, msg, args)`, `debug`, `warn`, `error(Class, msg, Throwable)`, `trace`. The `infoJson` / `errorJson` variants serialize an object as a field.
+  - Context: `put`, `get`, `putAll`, `remove`, `clear`, `withContext(Map, Runnable)`, `withContextSupplier(Map, Supplier)`.
+  - Correlation and trace: `ensureCorrelationId`, `setCorrelationId`, `getCorrelationId`, `setUserId`, `setTracingInfo`, `getTraceId`, `getSpanId`.
 - **Annotations (11)** — `@Loggable`, `@LogExecutionTime`, `@LogExceptions`, `@LogMetrics`, `@Audit`, `@Sensitive`, `@LogOperation`, `@BusinessEvent`, `@TrackPerformance`, `@LogBatchJob`, `@InjectLogger`.
 - **Event pipeline** — `AppLogEvent`, `AppLogEventType` (`BUSINESS`, `OPERATION`, `API`, `BATCH`, `PERFORMANCE`, `AUDIT`, `SECURITY`, `SYSTEM`), `AppLogEventOutcome`, `AppLogEventPublisher`, `AppLogEventSink`, and the typed producers `BusinessEventLogger`, `AuditEventLogger`, `BatchJobLogger`, `PerformanceLogger`.
 - **Masking** — `LogDataMasker` (`maskText`, `maskValue`, `maskMap`, `isSensitiveKey`, `applyStrategy`) and `MaskingStrategy` (`FULL`, `PARTIAL`, `HASH`).
@@ -65,7 +81,7 @@ The module ships a `logback-spring.xml` that declares `MaskingJsonEncoder` inlin
 
 ## A realistic service
 
-Declarative entry/exit logging, a masked argument, a business event, an audit record, and a scoped MDC addition:
+This example shows declarative entry/exit logging, a masked argument, a business event, an audit record, and a scoped MDC addition:
 
 ```java
 import com.adhar.adharkit.logging.annotation.Audit;
@@ -103,35 +119,61 @@ public class PaymentService {
 }
 ```
 
-`@BusinessEvent` publishes on both paths of control flow: `SUCCESS` when the method returns, `FAILURE` with severity `ERROR` and the throwable attached when it throws — and the exception is rethrown unchanged. The event always carries `durationMs`. `withContextSupplier` adds `paymentId` to the MDC for the duration of the lambda and removes it afterwards, so the key does not leak onto the pooled request thread.
+`@BusinessEvent` publishes whether the method returns or throws:
+
+- When the method returns, it publishes `SUCCESS`.
+- When it throws, it publishes `FAILURE` with severity `ERROR` and the throwable attached. The exception is rethrown unchanged.
+
+The event always carries `durationMs`. `withContextSupplier` adds `paymentId` to the MDC while the lambda runs and removes it afterwards. So the key does not leak onto the pooled request thread.
 
 ## How it behaves
 
-**Thread-safety and scope.** `AdharLogger`, `LogDataMasker`, `AppLogEventPublisher`, `Slf4jAppLogEventSink`, every aspect and every typed event logger is a singleton shared across request threads. `LogDataMasker` is immutable after construction — the key set and compiled patterns are built once in the constructor and stored in immutable collections. The only per-thread state anywhere is the SLF4J MDC.
+**Thread-safety and scope.** `AdharLogger`, `LogDataMasker`, `AppLogEventPublisher`, `Slf4jAppLogEventSink`, every aspect and every typed event logger is a singleton shared across request threads. `LogDataMasker` is immutable after construction. Its key set and compiled patterns are built once in the constructor and stored in immutable collections. The only per-thread state anywhere is the SLF4J MDC.
 
-**Event publishing is synchronous and in-line.** `publish(event)` enriches the event from the MDC, masks it, then calls every sink on the *calling* thread, in registration order. There is no queue and no worker pool: a slow sink slows down your business method. A sink that throws is caught, logged at WARN, and the remaining sinks still run — business code never fails because of a logging sink.
+**Event publishing is synchronous and in-line.** `publish(event)` enriches the event from the MDC and masks it. Then it calls every sink on the *calling* thread, in registration order. There is no queue and no worker pool, so a slow sink slows down your business method. If a sink throws, the error is caught and logged at WARN, and the remaining sinks still run. Business code never fails because of a logging sink.
 
-**Log writes are partly asynchronous.** In the bundled logback configuration the console appender is synchronous, while the file appender is wrapped in a logback `AsyncAppender` with `queueSize = adhar.logging.async.queue-size` (1024) and `discardingThreshold = 0`. A discarding threshold of zero means nothing is dropped — when the queue fills, the appending thread **blocks** until space is available. That is backpressure, not loss, and it means a stalled disk can stall request threads.
+**Log writes are partly asynchronous.** In the bundled logback configuration, the console appender is synchronous. The file appender is wrapped in a logback `AsyncAppender` with `queueSize = adhar.logging.async.queue-size` (1024) and `discardingThreshold = 0`.
 
-**Failure behaviour.** Nothing in the module throws into business code. `AppLogEventPublisher` swallows sink failures; `Slf4jAppLogEventSink` falls back to `event.toString()` if JSON serialization fails; `LogDataMasker` returns its input unchanged when masking is disabled. The one silent no-op worth knowing is the opposite risk: when `adhar.logging.events.enabled=false`, `publish` returns immediately and every `@BusinessEvent` / `@Audit` / `@LogOperation` record disappears with no warning.
+A discarding threshold of zero means nothing is dropped. When the queue fills, the appending thread **blocks** until there is space. That is backpressure, not loss. It also means a stalled disk can stall request threads.
 
-**Masking cost on a hot path.** `LogDataMasker` compiles one `key=value` regex per sensitive key — eleven by default, plus every entry in `additional-keys` — and `maskText` runs `replaceAll` for *each* of them over the whole string, then once more for every enabled value pattern (credit card, SSN, email, custom). That is a linear scan of the text per pattern, with a fresh `Matcher` and a new `String` per pass, and `maskMap` recurses into nested maps and collections. It is not free. On a hot path, prefer `@Loggable(sampleRate = 0.05)`, keep `additional-keys` and `custom-patterns` tight, and do not put large payloads into event metadata. Masking is skipped entirely when `adhar.logging.masking.enabled=false`.
+**Failure behaviour.** Nothing in the module throws into business code:
 
-**Masking fidelity.** `PARTIAL` keeps the last four characters only when the value is longer than eight, otherwise it falls back to a full mask. `HASH` emits `sha256:` plus the first eight bytes of the digest in hex, which is stable — equal values stay correlatable across log lines without revealing the value.
+- `AppLogEventPublisher` swallows sink failures.
+- `Slf4jAppLogEventSink` falls back to `event.toString()` if JSON serialization fails.
+- `LogDataMasker` returns its input unchanged when masking is disabled.
 
-**Lifecycle.** `AdharLogger` is created with a `Tracer` when one is on the classpath and without it otherwise, so `getTraceId()` returns null rather than failing in a service with no tracing. The MDC filter only registers in a servlet web application. Everything is gated on `adhar.logging.enabled`.
+The one silent no-op worth knowing is the opposite risk. When `adhar.logging.events.enabled=false`, `publish` returns immediately. Every `@BusinessEvent` / `@Audit` / `@LogOperation` record then disappears with no warning.
 
-**Logger lookup.** `AdharLogger.info(Class, ...)` calls `LoggerFactory.getLogger(source)` on every call rather than caching a `Logger`. SLF4J's own logger map makes that a hash lookup, but if you are logging in a tight loop, hold a `Logger` from `log.logger(MyClass.class)` and call it directly.
+**Masking cost on a hot path.** `LogDataMasker` compiles one `key=value` regex per sensitive key: eleven by default, plus every entry in `additional-keys`. `maskText` runs `replaceAll` for *each* of them over the whole string. Then it runs once more for every enabled value pattern (credit card, SSN, email, custom).
+
+That is a linear scan of the text per pattern, with a fresh `Matcher` and a new `String` per pass. `maskMap` also recurses into nested maps and collections. It is not free. On a hot path:
+
+- prefer `@Loggable(sampleRate = 0.05)`
+- keep `additional-keys` and `custom-patterns` tight
+- do not put large payloads into event metadata
+
+Masking is skipped entirely when `adhar.logging.masking.enabled=false`.
+
+**Masking fidelity.** `PARTIAL` keeps the last four characters only when the value is longer than eight. Otherwise it falls back to a full mask. `HASH` emits `sha256:` plus the first eight bytes of the digest in hex. This is stable, so equal values can still be matched across log lines without revealing the value.
+
+**Lifecycle.** `AdharLogger` is created with a `Tracer` when one is on the classpath, and without it otherwise. So in a service with no tracing, `getTraceId()` returns null instead of failing. The MDC filter only registers in a servlet web application. Everything is gated on `adhar.logging.enabled`.
+
+**Logger lookup.** `AdharLogger.info(Class, ...)` calls `LoggerFactory.getLogger(source)` on every call instead of caching a `Logger`. SLF4J's own logger map makes that a hash lookup. But if you log in a tight loop, hold a `Logger` from `log.logger(MyClass.class)` and call it directly.
 
 ## Aspect mechanics
 
-Every annotation except `@InjectLogger` and `@Sensitive` is implemented by a proxy-based Spring AOP aspect. The aspects are registered only when `adhar.logging.aspects.enabled` is true (the default) and `aspectjweaver` is on the classpath; `AdharLoggingAutoConfiguration` carries `@EnableAspectJAutoProxy`, so you do not add it yourself.
+Every annotation except `@InjectLogger` and `@Sensitive` is implemented by a proxy-based Spring AOP aspect. The aspects are registered only when both of these hold:
 
-> **Self-invocation bypasses the proxy.** A `this.capture(request)` call from another method of `PaymentService` reaches the target object directly: no entry/exit log, no business event, no audit record, no exception — just missing telemetry you will not notice until an audit. Call through an injected reference to the bean, or move the annotated method to a collaborator.
+- `adhar.logging.aspects.enabled` is true (the default)
+- `aspectjweaver` is on the classpath
 
-`@Loggable` is the one annotation that also works at class level (`@within`), applying to every method of the bean. It samples with `ThreadLocalRandom` against `sampleRate` (default `1.0`); the check runs before anything else, so a sampled-out call costs one random draw. `maskFields` and `@Sensitive` on parameters are handled by `LoggableAspect` itself, independently of `LogDataMasker`.
+`AdharLoggingAutoConfiguration` carries `@EnableAspectJAutoProxy`, so you do not add it yourself.
 
-When the aspects are disabled the annotations remain on your code and do nothing — there is no startup warning.
+> **Self-invocation bypasses the proxy.** A `this.capture(request)` call from another method of `PaymentService` reaches the target object directly. You get no entry/exit log, no business event, no audit record and no exception. The telemetry is just missing, and you will not notice until an audit. Call through an injected reference to the bean, or move the annotated method to a collaborator.
+
+`@Loggable` is the one annotation that also works at class level (`@within`), where it applies to every method of the bean. It samples with `ThreadLocalRandom` against `sampleRate` (default `1.0`). The check runs before anything else, so a sampled-out call costs one random draw. `LoggableAspect` itself handles `maskFields` and `@Sensitive` on parameters, separately from `LogDataMasker`.
+
+When the aspects are disabled, the annotations stay on your code and do nothing. There is no startup warning.
 
 ## Masking configuration
 
@@ -151,11 +193,11 @@ adhar:
         - "ACC-\\d{6}"
 ```
 
-The eleven always-masked keys are `password`, `secret`, `token`, `authorization`, `credential`, `creditCard`, `ssn`, `socialSecurity`, `accountNumber`, `apiKey`, `privateKey` — matched case-insensitively.
+The eleven keys that are always masked are `password`, `secret`, `token`, `authorization`, `credential`, `creditCard`, `ssn`, `socialSecurity`, `accountNumber`, `apiKey`, `privateKey`. They are matched case-insensitively.
 
 ## Structured JSON and trace correlation
 
-Every line is emitted as JSON with the MDC attached; when tracing is on, `traceId` and `spanId` are attached so logs and traces line up in Grafana:
+Every line is emitted as JSON with the MDC attached. When tracing is on, `traceId` and `spanId` are attached too, so logs and traces line up in Grafana:
 
 ```yaml
 adhar:
@@ -176,7 +218,7 @@ adhar:
       enabled: true
 ```
 
-Typed events land on dedicated SLF4J loggers named `<logger-prefix>.<TYPE>` — `ADHAR_EVENT.BUSINESS`, `ADHAR_EVENT.AUDIT`, `ADHAR_EVENT.PERFORMANCE`, `ADHAR_EVENT.BATCH` — at the event's own severity, so you can route or retain them independently of application logs with ordinary logback configuration.
+Typed events land on dedicated SLF4J loggers named `<logger-prefix>.<TYPE>`: `ADHAR_EVENT.BUSINESS`, `ADHAR_EVENT.AUDIT`, `ADHAR_EVENT.PERFORMANCE`, `ADHAR_EVENT.BATCH`. Each is logged at the event's own severity. So you can route or retain them separately from application logs with ordinary logback configuration.
 
 ## Configuration
 
@@ -203,16 +245,25 @@ Typed events land on dedicated SLF4J loggers named `<logger-prefix>.<TYPE>` — 
 
 ## Testing
 
-- **Capture events, not strings.** Define your own `AppLogEventSink` bean that collects into a list and assert on `AppLogEvent` fields (`type`, `name`, `outcome`, `durationMs`, `metadata`). Note the condition: the default `Slf4jAppLogEventSink` is `@ConditionalOnMissingBean(AppLogEventSink.class)`, so your test sink **replaces** it rather than adding to it. Declare both if you want the JSON line as well.
-- **Masking in isolation.** `new LogDataMasker(new AdharLoggingProperties.MaskingProperties())` needs no Spring: set `strategy`, `additionalKeys` and `customPatterns` on the properties object and assert `maskText` / `maskMap` directly. This is much faster than asserting against captured log output.
-- **Disable the side effects.** `adhar.logging.aspects.enabled=false` removes every aspect from a unit test; `adhar.logging.events.enabled=false` silences the event pipeline; `adhar.logging.enabled=false` removes the whole auto-configuration.
-- **Aspect coverage needs a context.** `@Loggable` and `@BusinessEvent` only fire on a proxied bean, so assert them from a `@SpringBootTest`, never from a hand-constructed service.
-- **Sampling.** Pin `sampleRate = 1.0` in anything you assert on; a sampled annotation is non-deterministic by design.
+- **Capture events, not strings.** Define your own `AppLogEventSink` bean that collects into a list. Assert on `AppLogEvent` fields (`type`, `name`, `outcome`, `durationMs`, `metadata`). Note the condition: the default `Slf4jAppLogEventSink` is `@ConditionalOnMissingBean(AppLogEventSink.class)`. So your test sink **replaces** it instead of adding to it. Declare both if you want the JSON line as well.
+- **Masking in isolation.** `new LogDataMasker(new AdharLoggingProperties.MaskingProperties())` needs no Spring. Set `strategy`, `additionalKeys` and `customPatterns` on the properties object, and assert `maskText` / `maskMap` directly. This is much faster than asserting against captured log output.
+- **Disable the side effects.**
+  - `adhar.logging.aspects.enabled=false` removes every aspect from a unit test.
+  - `adhar.logging.events.enabled=false` silences the event pipeline.
+  - `adhar.logging.enabled=false` removes the whole auto-configuration.
+- **Aspect coverage needs a context.** `@Loggable` and `@BusinessEvent` only fire on a proxied bean. Assert them from a `@SpringBootTest`, never from a service you built by hand.
+- **Sampling.** Pin `sampleRate = 1.0` in anything you assert on. A sampled annotation is non-deterministic by design.
 - **MDC hygiene.** Clear the MDC in `@AfterEach`. JUnit reuses threads, and an MDC key left behind by one test shows up in the next one's captured output.
 
 ## Interaction with sibling modules
 
-`AppLogEventPublisher` enriches every event from the MDC using the configured field names, so the `correlationId`, `requestId` and `tenantId` written by [Commons](/adhar-kit/modules/commons)' filters land on business and audit events automatically — and `userId` too, once something sets it. `traceId` and `spanId` come from [Tracing](/adhar-kit/modules/tracing): `AdharLogger` picks up a `Tracer` bean when the module is present, and `TraceContextMdcFilter` mirrors the ids into the MDC for the SLF4J path. Across a thread hop, [Core](/adhar-kit/modules/core)'s `ContextPropagatingExecutor` carries the MDC map, so log correlation survives `@Async` work even though plain thread-locals do not. `@LogMetrics` is the bridge towards [Metrics](/adhar-kit/modules/metrics) when you want a counter as well as a log line.
+`AppLogEventPublisher` enriches every event from the MDC, using the configured field names. So the `correlationId`, `requestId` and `tenantId` written by [Commons](/adhar-kit/modules/commons)' filters land on business and audit events automatically. So does `userId`, once something sets it.
+
+`traceId` and `spanId` come from [Tracing](/adhar-kit/modules/tracing). `AdharLogger` picks up a `Tracer` bean when the module is present. `TraceContextMdcFilter` copies the ids into the MDC for the SLF4J path.
+
+Across a thread hop, [Core](/adhar-kit/modules/core)'s `ContextPropagatingExecutor` carries the MDC map. So log correlation survives `@Async` work, even though plain thread-locals do not.
+
+`@LogMetrics` is the bridge to [Metrics](/adhar-kit/modules/metrics) when you want a counter as well as a log line.
 
 ## Common pitfalls
 

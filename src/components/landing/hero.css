@@ -1,0 +1,54 @@
+/*
+ * Hero: one soft glow, a faint fading grid and gradient text for the key
+ * phrases. Deliberately static — the terminal is the only thing that moves.
+ */
+
+.hero-glow {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(60% 45% at 50% 0%, hsl(var(--primary) / 0.14), transparent 70%),
+    radial-gradient(35% 30% at 78% 8%, hsl(var(--accent) / 0.08), transparent 70%);
+}
+.dark .hero-glow {
+  background:
+    radial-gradient(60% 45% at 50% 0%, hsl(var(--primary) / 0.26), transparent 70%),
+    radial-gradient(35% 30% at 78% 8%, hsl(var(--accent) / 0.16), transparent 70%);
+}
+
+.hero-grid {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background-image:
+    linear-gradient(to right, hsl(var(--foreground) / 0.05) 1px, transparent 1px),
+    linear-gradient(to bottom, hsl(var(--foreground) / 0.05) 1px, transparent 1px);
+  background-size: 56px 56px;
+  mask-image: radial-gradient(ellipse 70% 55% at 50% 0%, black 30%, transparent 75%);
+  -webkit-mask-image: radial-gradient(ellipse 70% 55% at 50% 0%, black 30%, transparent 75%);
+}
+
+.hero-gradient-text {
+  background-image: linear-gradient(90deg, hsl(var(--primary)), hsl(var(--accent)));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+/* Soft halo behind the terminal window. */
+.hero-halo {
+  position: absolute;
+  inset: 8% 10% -6% 10%;
+  z-index: -1;
+  border-radius: 2rem;
+  background: linear-gradient(90deg, hsl(var(--primary) / 0.28), hsl(var(--accent) / 0.28));
+  filter: blur(56px);
+  opacity: 0.45;
+  pointer-events: none;
+}
+.dark .hero-halo { opacity: 0.6; }
+
+.hero-cta {
+  box-shadow: 0 1px 0 0 hsl(0 0% 100% / 0.15) inset, 0 8px 24px -10px hsl(var(--primary) / 0.7);
+}

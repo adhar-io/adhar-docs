@@ -7,7 +7,9 @@ path: "/docs/guides/upgrade-the-platform"
 
 # Upgrade the Platform
 
-This guide is for whoever is on the hook when an Adhar release lands. An upgrade is several independent changes: the CLI on your machine, the foundation components inside the cluster, the package stack ArgoCD syncs, individual chart versions, and Kubernetes itself. Each moves differently and rolls back differently. The guide explains what `adhar upgrade` actually does, in order, and why ArgoCD looks alarming for ten minutes afterwards. You will move a staging platform to a new release, bump one package's chart, and know how to back either change out.
+This guide is for whoever is on the hook when an Adhar release lands. An upgrade is several independent changes: the CLI on your machine, the foundation components inside the cluster, the package stack ArgoCD syncs, individual chart versions, and Kubernetes itself. Each one moves differently and rolls back differently.
+
+The guide explains what `adhar upgrade` actually does, in order, and why ArgoCD looks alarming for ten minutes afterwards. You will move a staging platform to a new release, bump one package's chart, and learn how to back out either change.
 
 ## What you will build
 
@@ -37,7 +39,7 @@ This guide is for whoever is on the hook when an Adhar release lands. An upgrade
 | **Kubernetes** | Control plane and nodes of one cluster | `adhar cluster upgrade` | Per provider; plan forward, not back |
 | **Fleet Kubernetes** | Every registered data plane, in waves | `adhar fleet upgrade` | `--rollback-on-failure` |
 
-Keep them apart. Upgrading the platform and Kubernetes in one window doubles the number of things that can explain a failure.
+Keep them apart. If you upgrade the platform and Kubernetes in one window, you double the number of things that could explain a failure.
 
 ## How `adhar upgrade` works
 
@@ -53,9 +55,9 @@ Keep them apart. Upgrading the platform and Kubernetes in one window doubles the
 6. `gitea`
 7. `crossplane`
 
-Before the list runs, it updates the platform's CRDs. It also clears the gate that normally stops the control-plane configuration (XRDs, Compositions, Functions, provider packages and Operations) from being re-applied more than once in a platform's lifetime, because rolling out a newer configuration is the point of an upgrade. Last, it converges the in-cluster `adhar-controller-manager` Deployment. Unchanged manifests are no-ops.
+Before the list runs, it updates the platform's CRDs. It also clears a gate. That gate normally lets the control-plane configuration (XRDs, Compositions, Functions, provider packages and Operations) be applied only once in a platform's lifetime. An upgrade clears it because rolling out a newer configuration is the point of an upgrade. Last, the CLI converges the in-cluster `adhar-controller-manager` Deployment. Unchanged manifests are no-ops.
 
-**Phase 2: diff and push the stack.** The CLI clones the `packages` and `environments` repositories from the in-cluster Gitea. It stages your local `platform/stack` exactly as it would be seeded, with templates rendered and the host rewritten, and prints the files that differ per repository. After you confirm, it **force-pushes** the stack, re-applies the platform ApplicationSet and asks ArgoCD to refresh.
+**Phase 2: diff and push the stack.** The CLI clones the `packages` and `environments` repositories from the in-cluster Gitea. It stages your local `platform/stack` exactly as it would be seeded, with templates rendered and the host rewritten. It then prints the files that differ, per repository. After you confirm, it **force-pushes** the stack, re-applies the platform ApplicationSet and asks ArgoCD to refresh.
 
 The diff is the whole safety model. The packages are pre-rendered manifests, so the Git diff *is* the cluster diff.
 
@@ -63,7 +65,9 @@ The diff is the whole safety model. The packages are pre-rendered manifests, so 
 hb-upgrade-phases
 ```
 
-**Why ArgoCD storms afterwards.** Every platform Application tracks the whole `packages` monorepo at `HEAD`. Any push to it, even a one-file change, gives every Application a new target revision, and every one flips `OutOfSync` at once. Applications with PostSync hooks stay `Progressing` until their Jobs finish. Expect roughly 5–15 minutes, about 10 typically on a cloud cluster, before the fleet settles. That churn is normal, not a fault. The CLI states it up front and counts your Applications. It warns only when the `packages` repository actually changed. A push of identical content creates no commit, and a change to `environments` alone re-compares nothing but the Kargo projects and AppProjects built from it.
+**Why ArgoCD storms afterwards.** Every platform Application tracks the whole `packages` monorepo at `HEAD`. Any push to it, even a one-file change, gives every Application a new target revision, so every one flips to `OutOfSync` at once. Applications with PostSync hooks stay `Progressing` until their Jobs finish. Expect roughly 5–15 minutes before the fleet settles, typically about 10 on a cloud cluster. That churn is normal, not a fault.
+
+The CLI warns you about the storm up front and counts your Applications. It warns only when the `packages` repository actually changed. A push of identical content creates no commit. A change to `environments` alone re-compares only the Kargo projects and AppProjects built from it.
 
 ## Step 1 — Pre-flight
 
@@ -79,9 +83,13 @@ adhar backup create pre-upgrade-$(date +%Y%m%d) --ttl 720h
 adhar backup verify pre-upgrade-$(date +%Y%m%d)
 ```
 
-**Expected:** `adhar get status` is green. The `grep -v` shows only the header line, which means no Application is anything other than `Synced`/`Healthy`. The backup verifies as `Completed`.
+**Expected:**
 
-Do not start an upgrade on an unhealthy platform. A broken app before the push becomes indistinguishable from one the push broke. Pre-flight checklist:
+- `adhar get status` is green.
+- The `grep -v` shows only the header line, so every Application is `Synced`/`Healthy`.
+- The backup verifies as `Completed`.
+
+**Do not start an upgrade on an unhealthy platform.** If an app is broken before the push, you cannot tell it apart from one the push broke. Work through this checklist:
 
 - [ ] Release notes read; breaking changes noted
 - [ ] The same release already upgraded and soaked on staging
@@ -103,7 +111,7 @@ git -C adhar fetch --tags && git -C adhar checkout <target-tag>   # the release 
 
 **Expected:** `adhar version` reports the target release. `adhar upgrade` reads the stack from `platform/stack` relative to where you run it, so run it from the repository root or pass `--stack-dir`.
 
-If your customizations live on a branch, rebase that branch onto the release tag instead of checking out the tag directly. Anything missing from your local stack shows up in the next step as a difference, and the push would overwrite it.
+If your customizations live on a branch, rebase that branch onto the release tag instead of checking out the tag directly. Anything missing from your local stack shows up in the next step as a difference. **The push would overwrite it.**
 
 ## Step 3 — Preview with `--diff-only`
 
@@ -112,7 +120,7 @@ cd adhar
 adhar upgrade --diff-only
 ```
 
-`--diff-only` skips the foundation phase entirely, clones both repositories, prints the per-repository summary and exits. It changes nothing.
+`--diff-only` skips the foundation phase entirely. It clones both repositories, prints the per-repository summary and exits. It changes nothing.
 
 ```text
 ▸ Comparing local stack against in-cluster GitOps repositories…
@@ -126,8 +134,8 @@ adhar upgrade --diff-only
 Read every line:
 
 - **`M` in `packages`**: a release change, or one of yours. Open the file in the release diff if you do not recognise it.
-- **`D` (deleted)**: something present in Gitea that is not in your local stack. That is usually a customization committed straight to Gitea that your checkout lacks. Copy it into your stack before going further, or the push removes it.
-- **Anything in `environments`**: this repository carries team environment and promotion configuration. A difference here is either intended or a change you would be overwriting. Treat it as the latter until proven otherwise.
+- **`D` (deleted)**: something present in Gitea that is not in your local stack. This is usually a customization committed straight to Gitea that your checkout lacks. Copy it into your stack before going further, **or the push removes it**.
+- **Anything in `environments`**: this repository holds team environment and promotion configuration. A difference here is either intended or a change you would be overwriting. Assume you would be overwriting it until proven otherwise.
 
 **Expected:** a list you can explain line by line.
 
@@ -138,9 +146,12 @@ adhar upgrade             # interactive: shows the diff, asks "Push these change
 # adhar upgrade --yes     # non-interactive, for CI
 ```
 
-The foundation phase prints a checklist, one line per component, marked done or failed with its own duration. A failure names the component it belongs to. Re-running `adhar upgrade` after fixing the cause is safe, because every apply is idempotent.
+The foundation phase prints a checklist with one line per component, each marked done or failed with its own duration. A failure names the component it belongs to. After you fix the cause, you can safely re-run `adhar upgrade`, because every apply is idempotent.
 
-**Expected:** every foundation component marked done, then the stack summary, then the push. The closing line depends on what was pushed: `Upgrade applied — ArgoCD is re-comparing all N applications.` when the packages repository changed, or a note that nothing is re-comparing when it did not.
+**Expected:** every foundation component marked done, then the stack summary, then the push. The closing line depends on what was pushed:
+
+- If the packages repository changed: `Upgrade applied — ArgoCD is re-comparing all N applications.`
+- If it did not: a note that nothing is re-comparing.
 
 **The controller image is deliberately preserved.** Phase 1 keeps whatever image the live `adhar-controller-manager` runs, because an operator who pinned a tag did so on purpose. The exception is an image that can no longer be pulled. To move the in-cluster controller to the release you just installed, set the image explicitly:
 
@@ -159,15 +170,17 @@ adhar get status
 
 **Expected:** the count of not-yet-healthy Applications jumps to roughly the whole fleet right after the push, then falls to `1` (the header line) within about 10 minutes. Judge health only after that. Investigate an Application that is still `Degraded` once the rest have settled.
 
-One case does not drain on its own. An Application whose sync operation was already waiting on a resource keeps re-applying the **old** revision until that operation is terminated. Pushing fixes changes nothing, and manual patches are reverted within a minute. Terminate it through the ArgoCD API, then hard-refresh. [Troubleshooting](/docs/reference/troubleshooting) has the exact commands, including the mandatory `content-type` header.
+One case does not drain on its own. Suppose an Application's sync operation was already waiting on a resource. That Application keeps re-applying the **old** revision until the operation is terminated. Pushing fixes changes nothing, and manual patches are reverted within a minute. Terminate the operation through the ArgoCD API, then hard-refresh. [Troubleshooting](/docs/reference/troubleshooting) has the exact commands, including the mandatory `content-type` header.
 
 ## Step 6 — Promote to production
 
-Repeat Steps 1–5 against production with the same binary and the same stack checkout. If you run workload clusters, upgrade the management cluster **last** for Kubernetes version changes, after the workload clusters have proven the version. Platform releases, though, go to the management cluster, because that is where the platform runs.
+Repeat Steps 1–5 against production with the same binary and the same stack checkout.
+
+If you run workload clusters, upgrade the management cluster **last** for Kubernetes version changes, after the workload clusters have proven the version. Platform releases, though, go to the management cluster, because that is where the platform runs.
 
 ## Bump one package
 
-Packages are pre-rendered Helm charts. Each directory holds `values.yaml`, a `generate-manifests.sh` that pins `CHART_VERSION`, and the generated `manifests/install.yaml` that ArgoCD syncs. Never hand-edit the generated file.
+Packages are pre-rendered Helm charts. Each directory holds three things: `values.yaml`, a `generate-manifests.sh` that pins `CHART_VERSION`, and the generated `manifests/install.yaml` that ArgoCD syncs. **Never hand-edit the generated file.**
 
 ```bash
 cd platform/stack/packages/core/velero
@@ -178,16 +191,18 @@ git diff --stat manifests/install.yaml       # the size of the change
 git diff manifests/install.yaml | less       # the change itself — this is what the cluster will get
 ```
 
-Two checks before you commit, both from incidents that cost real time:
+Run two checks before you commit. Both come from incidents that cost real time:
 
 ```bash
 grep -c 'kind: CustomResourceDefinition' manifests/install.yaml   # chart ships crds/? keep --include-crds in the script
 grep -n '^  namespace:' manifests/install.yaml | grep -v adhar-system   # every package installs into adhar-system
 ```
 
-**Expected:** the CRD count matches what the chart ships, and the namespace grep prints nothing, except for `buildpack`, which keeps `kpack-system`. Then commit and run Steps 3–5: `adhar upgrade --diff-only` shows exactly this package's files, and `adhar upgrade` pushes them. A CI job that re-renders and opens a pull request per bump turns this into routine review.
+**Expected:** the CRD count matches what the chart ships, and the namespace grep prints nothing. The one exception is `buildpack`, which keeps `kpack-system`.
 
-Enabling or disabling a package follows the same path: `adhar stack enable <package>` edits the stack, and you review and push with `adhar upgrade`. See [Customization](/docs/operations/customization).
+Then commit and run Steps 3–5. `adhar upgrade --diff-only` shows exactly this package's files, and `adhar upgrade` pushes them. A CI job that re-renders and opens a pull request per bump turns this into routine review.
+
+Enabling or disabling a package follows the same path. `adhar stack enable <package>` edits the stack, and you review and push with `adhar upgrade`. See [Customization](/docs/operations/customization).
 
 ## Upgrade Kubernetes
 
@@ -197,13 +212,15 @@ Kubernetes upgrades in place, control plane first, then workers:
 adhar cluster upgrade prod --version 1.37.2 -p digitalocean -f config.yaml
 ```
 
-The cluster name is the **environment name** from your config, not `clusterConfig.name`. On managed clusters (`clusterMode: managed`), use the provider's managed-upgrade process instead. Nodes added later by `adhar cluster scale` or the autoscaler join on the minor version the running control plane reports, so a scale-out during the window cannot skew the cluster. For many workload clusters at once, use `adhar fleet upgrade` in canary waves; see [Run a Multi-Cluster Fleet](/docs/guides/run-a-fleet).
+The cluster name is the **environment name** from your config, not `clusterConfig.name`. On managed clusters (`clusterMode: managed`), use the provider's managed-upgrade process instead.
+
+Nodes added later by `adhar cluster scale` or the autoscaler join on the minor version that the running control plane reports. So a scale-out during the window cannot skew the cluster. For many workload clusters at once, use `adhar fleet upgrade` in canary waves; see [Run a Multi-Cluster Fleet](/docs/guides/run-a-fleet).
 
 ## Roll back
 
-Decide the trigger before you start, for example "any platform Application `Degraded` 30 minutes after the storm drains", and who pulls it.
+Before you start, decide what triggers a rollback and who pulls it. A trigger might be "any platform Application `Degraded` 30 minutes after the storm drains".
 
-**A package change:** revert the commit in your stack checkout and run `adhar upgrade`. ArgoCD syncs the previous manifests. The storm happens again; that is expected.
+**A package change:** revert the commit in your stack checkout and run `adhar upgrade`. ArgoCD syncs the previous manifests. The storm happens again, and that is expected.
 
 **A platform release:**
 
@@ -215,7 +232,9 @@ adhar upgrade --diff-only                  # the reverse diff — review it like
 adhar upgrade
 ```
 
-That is the documented rollback: the previous binary's `adhar upgrade` plus a Git revert. Its foundation phase server-side-applies the older embedded manifests. The repository does not document how individual foundation components behave when moved back a version, especially CRD changes. Treat a platform rollback as something to rehearse on staging, and keep the pre-upgrade backup from Step 1 until production has soaked.
+That is the documented rollback: the previous binary's `adhar upgrade` plus a Git revert. Its foundation phase server-side-applies the older embedded manifests.
+
+The repository does not document how individual foundation components behave when moved back a version, especially CRD changes. Rehearse a platform rollback on staging. Keep the pre-upgrade backup from Step 1 until production has soaked.
 
 ## Troubleshooting
 

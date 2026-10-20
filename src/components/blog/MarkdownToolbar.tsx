@@ -49,15 +49,9 @@ const actions: Action[] = [
 
 const MarkdownToolbar = ({ value, onChange, placeholder, minHeight = 600 }: Props) => {
   const ref = useRef<HTMLTextAreaElement>(null);
-  const [stats, setStats] = useState({ words: 0, chars: 0, read: "1 min read" });
-
-  useEffect(() => {
+  const stats = useMemo(() => {
     const words = value.trim() ? value.trim().split(/\s+/).length : 0;
-    setStats({
-      words,
-      chars: value.length,
-      read: `${Math.max(1, Math.ceil(words / 200))} min read`,
-    });
+    return { words, chars: value.length, read: `${Math.max(1, Math.ceil(words / 200))} min read` };
   }, [value]);
 
   const apply = (a: Action) => {

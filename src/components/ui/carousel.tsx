@@ -110,11 +110,14 @@ const Carousel = React.forwardRef<
         return
       }
 
+      // Sync once with the carousel's current state, then follow its events.
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- reading an external widget's state
       onSelect(api)
       api.on("reInit", onSelect)
       api.on("select", onSelect)
 
       return () => {
+        api?.off("reInit", onSelect)
         api?.off("select", onSelect)
       }
     }, [api, onSelect])

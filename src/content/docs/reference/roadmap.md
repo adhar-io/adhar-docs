@@ -7,15 +7,17 @@ path: "/docs/reference/roadmap"
 
 # Roadmap
 
-Adhar is in active development (v0.1.x) and evolves in phases. This page tells you what is proven, what is built but still being verified, and what is only designed — so you can plan against the platform as it is, not as it will be. It is for anyone deciding whether a capability is ready for them; by the end you should know which phase a feature belongs to, what its status really means, and how to try the in-progress pieces yourself.
+Adhar is in active development (v0.1.x) and grows in phases. This page shows what is proven, what is built but still being verified, and what is only designed. Use it to plan against the platform as it is, not as it will be.
 
-**This page is a summary of direction, not a commitment** — sequencing follows community needs, and nothing here is a dated promise.
+It is for anyone deciding whether a capability is ready for them. By the end you should know which phase a feature belongs to, what its status really means, and how to try the in-progress pieces yourself.
 
-> The authoritative, continuously updated roadmap lives in the repository at [`docs/ROADMAP.md`](https://github.com/adhar-io/adhar/blob/main/docs/ROADMAP.md). Work in flight, and what each open item is blocked on, is tracked in `docs/OPEN-ITEMS.md`. When this page and the repository disagree, the repository is correct.
+**This page is a summary of direction, not a commitment.** The order of work follows community needs, and nothing here is a dated promise.
+
+> The authoritative roadmap lives in the repository at [`docs/ROADMAP.md`](https://github.com/adhar-io/adhar/blob/main/docs/ROADMAP.md) and is updated continuously. `docs/OPEN-ITEMS.md` tracks work in flight and what each open item is blocked on. When this page and the repository disagree, the repository is correct.
 
 ## How to read a status
 
-Adhar uses a deliberately strict definition of "done", because a green ArgoCD Application is not a working feature. The project's own record is blunt: repeatedly, something was reported `Healthy` or `Synced` while the capability behind it was dead. So a status here means what was *exercised*, not what was written. The repository uses four:
+Adhar uses a deliberately strict definition of "done", because a green ArgoCD Application is not a working feature. The project's own record is blunt. Again and again, something was reported `Healthy` or `Synced` while the capability behind it was dead. So a status here means what was *exercised*, not what was written. The repository uses four:
 
 | Status | What it means |
 |---|---|
@@ -24,14 +26,20 @@ Adhar uses a deliberately strict definition of "done", because a green ArgoCD Ap
 | **Built but blocked** | Waiting on a decision or an external dependency |
 | **Designed, not yet built** | No code yet, and no date attached |
 
-Two rules govern promotion between them:
+Two rules decide when an item moves up a status:
 
-- **A status only advances after a live run.** Phase items graduate once a real cloud provisioning or multi-cluster exercise has happened — not when the code merges.
+- **A status only advances after a live run.** Phase items graduate once a real cloud provisioning or multi-cluster exercise has happened, not when the code merges.
 - **Verification means exercising the capability.** Reading a status field does not count.
 
 ## Phases
 
-Each phase builds on the topology the one before it established: Phase 0 is the laptop (T1), Phase 1 a single production cluster (T2), Phase 2 a management cluster with workload clusters (T3). Everything after that runs on the T3 substrate. Local–production parity means each capability lands scaled-down on a laptop before it scales up.
+Each phase builds on the topology set up by the one before it:
+
+- Phase 0 is the laptop (T1).
+- Phase 1 is a single production cluster (T2).
+- Phase 2 is a management cluster with workload clusters (T3).
+
+Everything after that runs on the T3 substrate. Because of local–production parity, each capability lands scaled-down on a laptop before it scales up.
 
 ```diagram
 do-roadmap-phases
@@ -46,15 +54,18 @@ do-roadmap-phases
 | **4 — Data & intelligence** | Lakehouse on RustFS S3 Tables (an Iceberg REST catalog inside the object store), Trino and PyIceberg on the same tables, nightly table maintenance, MLflow model registry, OpenMetadata governance | 5 of 5 verified on DigitalOcean (2026-09-15) |
 | **5 — Enterprise readiness & scale** | Fleet upgrades, hierarchical quotas + vcluster self-service, cost governance, compliance export, IdP federation; Kamaji isolation and air-gapped install | Built, verifying — Kamaji isolation and air-gapped install remain designed |
 
-Two deliberate absences are worth knowing before you plan: **SPIFFE/SPIRE workload identity is not delivered** in Phase 2 — it starved the Cilium operator and is deprecated upstream — and **HA control planes** (multi-master) are the next step after Phase 1, not part of it. See [Production](/docs/operations/production) for what HA mode does cover.
+Two things are deliberately missing, and you should know about them before you plan:
+
+- **SPIFFE/SPIRE workload identity is not delivered** in Phase 2. It starved the Cilium operator and is deprecated upstream.
+- **HA control planes** (multi-master) are the next step after Phase 1, not part of it. See [Production](/docs/operations/production) for what HA mode does cover.
 
 ## Themes
 
-The phases are chronology; the themes are what you are actually waiting for.
+The phases show the order of work. The themes show what you are actually waiting for.
 
 ### Infrastructure and providers
 
-The shared kubeadm lifecycle (node prep, join, drain, scale plan, cloud-controller-manager, CSI) is one implementation that every raw-compute provider uses. Provider parity is therefore *measured*, not assumed: a row turns green only after a real bring-up on that cloud.
+Every raw-compute provider uses one shared kubeadm lifecycle implementation (node prep, join, drain, scale plan, cloud-controller-manager, CSI). Provider parity is therefore *measured*, not assumed. A row turns green only after a real bring-up on that cloud.
 
 | Provider | Status |
 |---|---|
@@ -66,7 +77,7 @@ The shared kubeadm lifecycle (node prep, join, drain, scale plan, cloud-controll
 | Civo | Built, render-verified only — no live run yet |
 | Custom / on-prem | Render-verified — the same kubeadm flow over SSH against machines you own |
 
-"Render-verified" means provider registration, config-schema validation and `--dry-run` pass, and the code path is shared with DigitalOcean — but treat a first run on that cloud as a bring-up exercise. You can check the render side yourself without spending anything:
+"Render-verified" means provider registration, config-schema validation and `--dry-run` pass, and the code path is shared with DigitalOcean. Still, treat a first run on that cloud as a bring-up exercise. You can check the render side yourself without spending anything:
 
 ```bash
 adhar config create --provider aws --region us-east-1 --name aws.yaml
@@ -78,19 +89,34 @@ See [Providers Overview](/docs/providers/overview) for what each status means in
 
 ### Developer experience
 
-Paved-road CI, per-PR preview environments, the golden-path skeletons, production-readiness scorecards and the package marketplace contract are all verified. The follow-ups recorded in the repository are not platform gaps: the Console registering the CI webhook so the *signed* tag lands, a containerd restart on nodes provisioned before a node-prep change, and the next tagged release exercising the Cosign/SBOM path. Self-hosted inference is verified through the in-cluster `llm-d` → vLLM path; what remains for the `vllm-gpu` profile is a run on real GPU nodes.
+Paved-road CI, per-PR preview environments, the golden-path skeletons, production-readiness scorecards and the package marketplace contract are all verified.
+
+The follow-ups recorded in the repository are not platform gaps:
+
+- the Console registering the CI webhook, so the *signed* tag lands
+- a containerd restart on nodes provisioned before a node-prep change
+- the next tagged release exercising the Cosign/SBOM path
+
+Self-hosted inference is verified through the in-cluster `llm-d` → vLLM path. For the `vllm-gpu` profile, what remains is a run on real GPU nodes.
 
 ### Security and supply chain
 
-Signature verification, no-`:latest` and the registry allowlist ship as two identical policy packs — audit everywhere, enforce as a one-line flip — so audit findings predict exactly what enforcement would block. The enforce pack is live in the production profile. See [Security Best Practices](/docs/security/security-best-practices).
+Signature verification, no-`:latest` and the registry allowlist ship as two identical policy packs. Audit runs everywhere, and enforce is a one-line flip. So audit findings predict exactly what enforcement would block. The enforce pack is live in the production profile. See [Security Best Practices](/docs/security/security-best-practices).
 
 ### Data and intelligence
 
-Object storage was re-founded first, because everything else sits on it: RustFS is the platform's primary S3 store, MinIO is disabled in every profile, and lakeFS is removed. On that base, Trino and PyIceberg read and write the **same** Iceberg tables through the RustFS REST catalog, nightly maintenance runs on every table, MLflow registers models, and OpenMetadata ingests the lakehouse through Trino.
+Object storage was rebuilt first, because everything else sits on it. RustFS is the platform's primary S3 store, MinIO is disabled in every profile, and lakeFS is removed.
+
+On that base:
+
+- Trino and PyIceberg read and write the **same** Iceberg tables through the RustFS REST catalog.
+- Nightly maintenance runs on every table.
+- MLflow registers models.
+- OpenMetadata ingests the lakehouse through Trino.
 
 ### Enterprise scale — the current frontier
 
-This is where most of the unfinished work sits, and it is worth being specific about what "unfinished" means for each item.
+Most of the unfinished work is here. The table spells out what "unfinished" means for each item.
 
 | Item | Status | What is still missing |
 |---|---|---|
@@ -104,7 +130,7 @@ This is where most of the unfinished work sits, and it is worth being specific a
 | Hostile-tenant isolation (Kamaji hosted control planes) | Designed, not yet built | — |
 | Air-gapped installation | Designed, not yet built | — |
 
-Most of the in-progress items are usable today; "needs live verification" means *you* may be the first to exercise them at scale. Each has a safe first step:
+Most of the in-progress items are usable today. "Needs live verification" means *you* may be the first to exercise them at scale. Each has a safe first step:
 
 ```bash
 # Fleet upgrades: plan the canary waves without touching anything
@@ -121,23 +147,23 @@ adhar cost
 adhar cost breakdown
 ```
 
-Identity federation is driven by a labelled ConfigMap: the Keycloak config Job reconciles any ConfigMap labelled `adhar.io/keycloak-idp=true` into a realm identity provider. The shipped examples (Okta, Entra, SAML) are disabled.
+Identity federation is driven by a labelled ConfigMap. The Keycloak config Job turns any ConfigMap labelled `adhar.io/keycloak-idp=true` into a realm identity provider. The shipped examples (Okta, Entra, SAML) are disabled.
 
 ## Commitments that constrain the roadmap
 
-These are the invariants the project holds itself to, and they explain why some things take longer than they might.
+The project holds itself to these rules. They explain why some things take longer than they might.
 
 - **No breaking changes without an ADR** and a documented migration path.
 - **Local–production parity is sacred.** Nothing lands in a larger topology that cannot be exercised, scaled down, on a laptop.
 - **Every feature ships with docs.** The docs set is part of the definition of done.
-- **APIs graduate deliberately.** `v1alpha1` to `v1beta1` only once the controllers run in-cluster and are covered by end-to-end tests.
+- **APIs graduate deliberately.** An API moves from `v1alpha1` to `v1beta1` only once the controllers run in-cluster and are covered by end-to-end tests.
 - **Provider parity is measured, not assumed.** A provider row only turns green after a bring-up on that cloud.
-- **Local engines are a CI matrix.** The e2e bootstrap runs on Docker *and* Podman on every push; a change that breaks one engine fails the build.
-- **A green Application is not a working feature.** Verification is done at the reader — a query that must return the data — not by reading a status field.
+- **Local engines are a CI matrix.** The e2e bootstrap runs on Docker *and* Podman on every push. A change that breaks one engine fails the build.
+- **A green Application is not a working feature.** Verification happens at the reader, with a query that must return the data. Reading a status field does not count.
 
 ## Check what your build has
 
-The roadmap describes the project; your platform is one specific build of it. These tell you what is actually installed and healthy on yours:
+The roadmap describes the project. Your platform is one specific build of it. These commands show what is actually installed and healthy on yours:
 
 ```bash
 adhar version                       # the release you are running
@@ -159,7 +185,7 @@ adhar ai status                     # Phase 3: what of the AI layer is installed
 
 ## Get involved
 
-Adhar is open source (Apache 2.0) and shaped in the open. The roadmap responds to real adoption stories faster than to feature requests, so the most effective thing you can bring is a use case.
+Adhar is open source (Apache 2.0) and shaped in the open. The roadmap responds to real adoption stories faster than to feature requests. So the most useful thing you can bring is a use case.
 
 - **[GitHub Issues](https://github.com/adhar-io/adhar/issues)** — bugs and feature requests. Thumbs-up an existing issue, or open one with the `roadmap` label
 - **[GitHub Discussions](https://github.com/adhar-io/adhar/discussions)** — ideas and design conversations

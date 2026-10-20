@@ -7,9 +7,17 @@ path: "/docs/getting-started/first-service"
 
 # Your First Service
 
-You have a platform. This page puts an application on it and follows the change the whole way — from a golden-path template, through a Git repository, through ArgoCD reconciliation, to a URL you can open. **Nothing you are about to do writes to the cluster directly**, and understanding why is the point of the exercise: on Adhar, the cluster is a projection of Git, so the way to change what is running is to change what is committed.
+You have a platform. This page puts an application on it and follows the change the whole way. It starts at a golden-path template (a ready-made starting point for a service). It goes through a Git repository and ArgoCD reconciliation, and ends at a URL you can open.
 
-Everything below assumes a local platform from [Quick Start](/docs/getting-started/quick-start). The commands are identical on a cloud platform; only the host name changes. By the end you will have scaffolded and deployed a service, watched the GitOps loop converge it, verified it at every layer, given it a database, and bound that database's credentials into it.
+**Nothing you are about to do writes to the cluster directly.** Understanding why is the point of this exercise. On Adhar, the cluster is a copy of what is in Git. To change what is running, you change what is committed.
+
+Everything below assumes a local platform from [Quick Start](/docs/getting-started/quick-start). The commands are identical on a cloud platform. Only the host name changes. By the end of this page, you will have:
+
+- scaffolded and deployed a service
+- watched the GitOps loop converge it
+- verified it at every layer
+- given it a database
+- bound that database's credentials into it
 
 ## At a glance
 
@@ -23,17 +31,19 @@ Everything below assumes a local platform from [Quick Start](/docs/getting-start
 
 ## The model: who creates what
 
-Whichever route you take, your application becomes an **`Application`** in `platform.adhar.io/v1alpha1` — the platform's own application API, a namespaced Crossplane composite resource. (It was called `CompositeApplication` until 2026-10-07; the old kind is rejected, not aliased.) Crossplane expands it into an ArgoCD Application, and ArgoCD keeps the workload matching Git:
+Whichever route you take, your application becomes an **`Application`** in `platform.adhar.io/v1alpha1`. This is the platform's own application API, a namespaced Crossplane composite resource. (It was called `CompositeApplication` until 2026-10-07. The old kind is rejected, not aliased.) Crossplane expands it into an ArgoCD Application, and ArgoCD keeps the workload matching Git:
 
 ```diagram
 gd-composite-application
 ```
 
-The value of the indirection is that you declare *intent* — a repo, a path, a destination — and the platform owns the machinery. The same `Application` behaves identically on Kind and on a cloud, because a provider-specific composition is selected for you. Note that Argo CD also has a kind called `Application`; on the command line, qualify the platform's as `applications.platform.adhar.io`.
+This extra layer means you only declare *intent*: a repo, a path, a destination. The platform owns the machinery. The same `Application` behaves identically on Kind and on a cloud, because the platform picks a provider-specific composition for you.
+
+Argo CD also has a kind called `Application`. On the command line, refer to the platform's one by its full name, `applications.platform.adhar.io`.
 
 ## Step 1 — Pick a template
 
-Templates are the platform's golden paths. They live in the `adhar/adhar-templates` repository in the in-cluster Gitea, mirrored from upstream, and they are the same collection the Adhar Console's create wizard offers — so a service scaffolded from the CLI and one scaffolded from the portal are the same service.
+Templates are the platform's golden paths. They live in the `adhar/adhar-templates` repository in the in-cluster Gitea, mirrored from upstream. The Adhar Console's create wizard offers the same collection. So a service scaffolded from the CLI and one scaffolded from the portal are the same service. List them:
 
 ```bash
 adhar application templates
@@ -41,7 +51,7 @@ adhar application templates
 
 | Template | What it scaffolds |
 |---|---|
-| `basic` | A plain Deployment — the smallest thing that works |
+| `basic` | A plain Deployment: the smallest thing that works |
 | `microservice` | Go microservice on the full supply chain |
 | `frontend` | Static / SPA frontend |
 | `data-pipeline` | A data-processing workflow |
@@ -49,7 +59,7 @@ adhar application templates
 | `argo-workflows` | An Argo Workflow running a Spark job |
 | `app-with-bucket` | A Go app plus the cloud resources it needs |
 
-Name one to see the parameters it accepts — these are what `--param key=value` takes, and a required parameter you have not supplied looks like an arbitrary failure otherwise:
+Name a template to see the parameters it accepts. These are the values `--param key=value` takes. Check them first: if you miss a required parameter, the failure looks random:
 
 ```bash
 adhar application templates microservice
@@ -57,22 +67,24 @@ adhar application templates microservice
 
 ## Step 2 — Deploy it
 
-The `Application` is namespaced, and neither the CLI nor the control plane creates its namespace for you. Create it first, then deploy into it. On `adhar application`, `-n` means `--namespace`. On `adhar database` it means `--name`, so spell `--namespace` out there:
+The `Application` is namespaced, and neither the CLI nor the control plane creates its namespace for you. Create the namespace first, then deploy into it.
+
+Watch the `-n` flag. On `adhar application`, `-n` means `--namespace`. On `adhar database`, it means `--name`, so spell out `--namespace` there:
 
 ```bash
 kubectl create namespace hello
 adhar application deploy hello --template microservice -n hello
 ```
 
-Three things happen, in order, and the CLI narrates each:
+Three things happen, in order, and the CLI reports each one:
 
-1. **Scaffold.** The template's skeleton is rendered with your values and committed to a **new Gitea repository, `adhar/hello`**, as a single commit named `scaffold hello from microservice` on `main`. The template's hostname parameter is filled in for you from the platform host, giving `hello.adhar.localtest.me`.
-2. **Declare.** An `Application` named `hello` is created in namespace `hello`, pointing at that repository and at the manifest path the template declares.
-3. **Reconcile.** Crossplane selects a composition, produces an ArgoCD Application, and ArgoCD syncs the manifests.
+1. **Scaffold.** The CLI fills in the template's skeleton with your values. It commits the result to a **new Gitea repository, `adhar/hello`**, as a single commit named `scaffold hello from microservice` on `main`. It fills in the template's hostname parameter for you from the platform host, giving `hello.adhar.localtest.me`.
+2. **Declare.** The CLI creates an `Application` named `hello` in namespace `hello`. It points at that repository and at the manifest path the template declares.
+3. **Reconcile.** Crossplane selects a composition and produces an ArgoCD Application. ArgoCD then syncs the manifests.
 
-> **The repository must be new or empty.** Scaffolding refuses to overwrite an existing non-empty repo — your code is never clobbered by a re-run. Delete the repo, or choose another name.
+> **The repository must be new or empty.** Scaffolding will not overwrite an existing non-empty repo, so a re-run never overwrites your code. Delete the repo, or choose another name.
 
-The resource that results looks like this, which is also exactly what you would write by hand:
+The resulting resource looks like this. It is also exactly what you would write by hand:
 
 ```yaml
 apiVersion: platform.adhar.io/v1alpha1
@@ -107,29 +119,29 @@ spec:
 | Source code, no image, no Dockerfile | `adhar push my-app --git-url https://github.com/org/repo --wait` |
 | An `Application` manifest you wrote yourself | `adhar application deploy my-app --file my-app.yaml` |
 
-`--wait` blocks until the application reports healthy, with a `--timeout` that defaults to 10 minutes. Without it the command returns as soon as the resource is accepted, which is the right default for scripts that do their own polling.
+`--wait` makes the command wait until the application reports healthy. Its `--timeout` defaults to 10 minutes. Without `--wait`, the command returns as soon as the resource is accepted. That is the right default for scripts that do their own polling.
 
 ## Step 3 — Watch the GitOps loop
 
-This is the part worth watching once, carefully.
+Watch this part carefully at least once.
 
 ```bash
 adhar application status hello --detailed
 ```
 
-You get the sync status, health, the Git revision currently deployed, the last sync time, per-environment status and the resource's conditions. Add `-o json` for machine-readable output.
+This shows the sync status, health, the Git revision currently deployed, the last sync time, per-environment status and the resource's conditions. Add `-o json` for machine-readable output.
 
 ```diagram
 gd-sync-states
 ```
 
-Three states to recognise:
+Learn to recognise three states:
 
-- **`OutOfSync`** — Git and the cluster differ. Expected immediately after any commit.
-- **`Progressing`** — applied, waiting on pods, images or a database to be ready.
-- **`Healthy` + `Synced`** — done. Your URL works.
+- **`OutOfSync`**: Git and the cluster differ. This is expected right after any commit.
+- **`Progressing`**: applied, and waiting for pods, images or a database to be ready.
+- **`Healthy` + `Synced`**: done. Your URL works.
 
-Verify at each layer when you want certainty rather than a summary:
+When you want certainty instead of a summary, check each layer:
 
 ```bash
 kubectl get applications.platform.adhar.io -n hello    # the intent you declared
@@ -139,48 +151,51 @@ kubectl get httproute -A | grep hello                   # the route that makes i
 curl -sk -o /dev/null -w 'HTTP %{http_code}\n' https://hello.adhar.localtest.me:8443
 ```
 
-> **Do not fix a running app with `kubectl edit`.** ArgoCD reconciles with self-heal enabled, so a hand edit to a managed object is reverted, typically within a minute. It looks like the cluster is ignoring you. Commit to the repository instead — that is the only durable change.
+> **Do not fix a running app with `kubectl edit`.** ArgoCD reconciles with self-heal enabled, so a hand edit to a managed object is reverted, typically within a minute. It looks like the cluster is ignoring you. Commit to the repository instead. That is the only change that lasts.
 
 ## Step 4 — Debug when it does not come up
 
-Work down the chain: intent → ArgoCD → workload → route. The first layer that is wrong is the one to fix.
+Work down the chain: intent → ArgoCD → workload → route. Fix the first layer that is wrong.
 
 | Symptom | Likely cause | What to do |
 |---|---|---|
 | `namespaces "hello" not found` on deploy | The namespace was never created | `kubectl create namespace hello`, then deploy again |
-| `application not found: hello/hello` | Wrong namespace — `-n` defaults to `default` | `adhar application list -A` |
-| Stuck `OutOfSync`, never applies | Manifest path wrong, or the repo has no manifests at that path | Re-deploy with an explicit `--path`; check the repo in Gitea |
-| `Progressing` forever, pods `Pending` | Node out of memory or CPU | `kubectl describe pod -n hello`; `kubectl top nodes`; give the engine more RAM |
-| `ImagePullBackOff` | Image missing, or not yet built | `kubectl describe pod -n hello`; check the build pipeline finished |
-| Pod rejected at admission | Unsigned image — Kyverno blocks it | Build through the supply chain so the image gets signed (below) |
+| `application not found: hello/hello` | Wrong namespace. `-n` defaults to `default` | `adhar application list -A` |
+| Stuck `OutOfSync`, never applies | Manifest path wrong, or the repo has no manifests at that path | Re-deploy with an explicit `--path`. Check the repo in Gitea |
+| `Progressing` forever, pods `Pending` | Node out of memory or CPU | Run `kubectl describe pod -n hello` and `kubectl top nodes`. Give the engine more RAM |
+| `ImagePullBackOff` | Image missing, or not yet built | Run `kubectl describe pod -n hello`. Check the build pipeline finished |
+| Pod rejected at admission | Unsigned image. Kyverno blocks it | Build through the supply chain so the image gets signed (below) |
 | `Healthy` but the URL returns nothing | No `HTTPRoute`, or a hostname mismatch | `kubectl get httproute -A -o custom-columns=NAME:.metadata.name,HOST:.spec.hostnames[*]` |
-| Everything green, browser warns on TLS | The local certificate is self-signed | Expected; accept it, or trust the platform CA |
+| Everything green, browser warns on TLS | The local certificate is self-signed | Expected. Accept it, or trust the platform CA |
 
 ## The paved road: build from source
 
-`adhar push` and the Console both trigger the platform's Tekton supply chain, so a developer and an operator take the same path:
+`adhar push` and the Console both trigger the platform's Tekton supply chain. So a developer and an operator take the same path:
 
 ```bash
 adhar push api --git-url https://github.com/paketo-buildpacks/samples --subpath go/mod --wait
 ```
 
-The full CI pipeline that a repo runs on every push looks like this:
+This is the full CI pipeline a repo runs on every push:
 
 ```diagram
 gd-ci-pipeline
 ```
 
-Two properties make this more than a build script. **Scanning happens before signing**, so only a clean image ever gets a signature. And the Kyverno cluster policy `verify-supply-chain-images` runs in enforce mode: a Pod referencing a Harbor `library/*` image without a valid Cosign signature is rejected at admission. Unsigned code cannot run, regardless of how it was applied.
+Two properties make this more than a build script:
 
-The write-back step is what closes the loop — CI does not deploy, it *commits*, and ArgoCD deploys the commit. Your deployment history is your Git history.
+- **Scanning happens before signing**, so only a clean image ever gets a signature.
+- The Kyverno cluster policy `verify-supply-chain-images` runs in enforce mode. A Pod that references a Harbor `library/*` image without a valid Cosign signature is rejected at admission. Unsigned code cannot run, no matter how it was applied.
+
+The write-back step closes the loop. CI does not deploy. It *commits*, and ArgoCD deploys the commit. Your deployment history is your Git history.
 
 ### Adopting an existing repo
 
-A repository in the platform's Gitea that contains a **`.adhar/app.yaml`** is picked up automatically by the `adhar-services` ApplicationSet, which scans the `adhar` organisation. From then on the repo has an Application named `<repo>-bootstrap`, synced from its `.adhar` directory with prune and self-heal on. No registration step, no ticket.
+The `adhar-services` ApplicationSet scans the `adhar` organisation in the platform's Gitea. It automatically picks up any repository that contains a **`.adhar/app.yaml`**. From then on, the repo has an Application named `<repo>-bootstrap`. It is synced from the repo's `.adhar` directory with prune and self-heal on. There is no registration step and no ticket.
 
 ## Give your app a backing service
 
-Infrastructure is requested as ordinary Kubernetes resources, governed by normal RBAC and quotas:
+You request infrastructure as ordinary Kubernetes resources, governed by normal RBAC and quotas:
 
 ```bash
 adhar database create --name orders-db --engine postgresql --version 16 --size 20Gi --namespace hello
@@ -190,13 +205,18 @@ adhar bucket create uploads --size 100Gi
 adhar application bind hello orders-db --namespace hello   # mounts the connection Secret
 ```
 
-Two flags trip people up here. On `adhar database`, `-n` is short for `--name`, not namespace — use `--namespace hello` to put the database beside the app. And `--version` is required.
+Two flags trip people up here:
+
+- On `adhar database`, `-n` is short for `--name`, not namespace. Use `--namespace hello` to put the database next to the app.
+- `--version` is required.
 
 ```diagram
 ds-bind-flow
 ```
 
-`bind` finds the generated connection Secret — `<service>-app` by convention, overridable with `--secret` — and adds it as `envFrom` on the application's first container, then lets the Deployment roll. It is idempotent: binding twice prints that the app is already bound and changes nothing. Verify the wiring, and that the new pods carry it:
+`bind` finds the generated connection Secret. By convention it is `<service>-app`, and you can override it with `--secret`. `bind` adds the Secret as `envFrom` on the application's first container, then lets the Deployment roll out.
+
+It is safe to run twice. A second bind prints that the app is already bound and changes nothing. Verify the wiring, and check that the new pods carry it:
 
 ```bash
 kubectl get databases.platform.adhar.io orders-db -n hello            # READY True
@@ -206,9 +226,9 @@ kubectl get deploy hello -n hello \
 kubectl rollout status deploy/hello -n hello                           # the roll completed
 ```
 
-On a cloud platform the database Compositions write `<name>-db` rather than `<name>-app`, so bind with `--secret orders-db-db` there.
+On a cloud platform, the database Compositions write `<name>-db` instead of `<name>-app`. So bind with `--secret orders-db-db` there.
 
-The declarative equivalent, which is what you would commit:
+Here is the declarative equivalent, which is what you would commit:
 
 ```yaml
 apiVersion: platform.adhar.io/v1alpha1
@@ -228,11 +248,11 @@ spec:
     storageSize: 20Gi
 ```
 
-The same manifest resolves to a managed cloud database or an in-cluster CloudNativePG instance depending on the `provider` label. Your application never changes. See [Control Plane](/docs/core-concepts/control-plane) for every API you can request this way, and where each one puts its credentials.
+Depending on the `provider` label, the same manifest becomes a managed cloud database or an in-cluster CloudNativePG instance. Your application never changes. See [Control Plane](/docs/core-concepts/control-plane) for every API you can request this way, and where each one puts its credentials.
 
 ## Secrets, observability and previews
 
-**Secrets** never go in Git. Commit an `ExternalSecret` — a pointer — and External Secrets fetches the value from the platform's secrets backend at runtime and materialises an ordinary Kubernetes Secret:
+**Secrets** never go in Git. Instead, commit an `ExternalSecret`, which is a pointer. At runtime, External Secrets fetches the value from the platform's secrets backend and creates an ordinary Kubernetes Secret:
 
 ```yaml
 apiVersion: external-secrets.io/v1
@@ -253,11 +273,16 @@ spec:
         property: password
 ```
 
-The `SecretStore` named `openbao` is one you create once in your namespace, with a ServiceAccount named `adhar-secrets`; it can read only `secret/tenants/<your namespace>/`. The platform's `vault` `ClusterSecretStore` serves `adhar-system` only. OpenBao ships with the production profile — enable it before using this pattern on a laptop. [Manage Secrets End to End](/docs/guides/manage-secrets) has the full setup.
+You create the `SecretStore` named `openbao` once in your namespace, with a ServiceAccount named `adhar-secrets`. It can read only `secret/tenants/<your namespace>/`. The platform's `vault` `ClusterSecretStore` serves `adhar-system` only. OpenBao ships with the production profile, so enable it before you use this pattern on a laptop. [Manage Secrets End to End](/docs/guides/manage-secrets) has the full setup.
 
-**Observability** needs no wiring: metrics from your pods reach Prometheus and Grafana as soon as they run. The log, trace and network-flow stacks (Loki, Tempo, Hubble) belong to the production profile and are off by default locally — enable them with `adhar stack enable` if you want them on a laptop. See [Observability](/docs/operations/observability).
+**Observability** needs no wiring. Metrics from your pods reach Prometheus and Grafana as soon as they run. The log, trace and network-flow stacks (Loki, Tempo, Hubble) belong to the production profile and are off by default locally. To use them on a laptop, enable them with `adhar stack enable`. See [Observability](/docs/operations/observability).
 
-**Preview environments** give every pull request its own deployment. Add a `preview/kustomization.yaml` overlay to your default branch once, then label a PR `preview`: ArgoCD's pull-request generator re-checks every 60 seconds and deploys to `https://<repo>-pr-<number>.<host>` in namespace `preview-<repo>-<number>`. Closing or merging the PR, or removing the label, deletes the Application and prunes the namespace. Previews are unauthenticated — use synthetic data only. The package ships with the production profile.
+**Preview environments** give every pull request its own deployment. To set them up:
+
+1. Add a `preview/kustomization.yaml` overlay to your default branch, once.
+2. Label a PR `preview`.
+
+ArgoCD's pull-request generator re-checks every 60 seconds. It deploys to `https://<repo>-pr-<number>.<host>` in namespace `preview-<repo>-<number>`. Closing or merging the PR, or removing the label, deletes the Application and prunes the namespace. Previews are unauthenticated, so use synthetic data only. The package ships with the production profile.
 
 ## Manage a running application
 

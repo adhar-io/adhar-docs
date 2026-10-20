@@ -7,9 +7,9 @@ path: "/docs/operations/customization"
 
 # Customization
 
-The golden rule: **customizations are declarative changes to the platform stack, applied with `adhar upgrade`** — never `kubectl apply` against a managed object, because ArgoCD reverts it within a minute. If a routine customization seems to need a Go change, that is an architecture gap worth reporting, not a workflow.
+The golden rule: **customizations are declarative changes to the platform stack, applied with `adhar upgrade`**. Never `kubectl apply` against a managed object, because ArgoCD reverts it within a minute. If a routine customization seems to need a Go change, that is an architecture gap worth reporting, not a workflow.
 
-This page is for platform engineers who want the platform to fit their organisation: switching packages on and off, retuning one, adding their own, and extending the self-service APIs. It explains why hand-edits do not stick, then walks through each kind of change with the commands to make it and the commands to prove it landed.
+This page is for platform engineers who want the platform to fit their organisation. That means switching packages on and off, retuning one, adding their own, and extending the self-service APIs. The page explains why hand-edits do not stick. Then it walks through each kind of change, with the commands to make it and the commands to prove it landed.
 
 ## At a glance
 
@@ -26,7 +26,9 @@ This page is for platform engineers who want the platform to fit their organisat
 
 ## Why ArgoCD reverts your hand-edits
 
-ArgoCD is a reconciliation loop, not a deployment tool. Every platform package is an `Application` whose desired state is a path inside the in-cluster Gitea `adhar/packages` repository. The loop compares live state against that path continuously; with self-heal on, anything that differs is overwritten. An in-place `kubectl edit` is a difference, so it loses — reliably, within about a minute, and without an error message anywhere.
+ArgoCD is a reconciliation loop, not a deployment tool. Every platform package is an `Application` whose desired state is a path inside the in-cluster Gitea `adhar/packages` repository. The loop compares live state against that path continuously. With self-heal on, anything that differs is overwritten.
+
+An in-place `kubectl edit` is a difference, so it loses. It loses reliably, within about a minute, and without an error message anywhere.
 
 That makes the source of truth unambiguous:
 
@@ -34,11 +36,11 @@ That makes the source of truth unambiguous:
 gd-source-of-truth
 ```
 
-One more asymmetry catches people: the **ApplicationSet itself is not read from Gitea.** The controller applies it from the platform stack, so editing it inside Gitea has no effect at all. Edit it in your checkout.
+One more exception catches people: the **ApplicationSet itself is not read from Gitea.** The controller applies it from the platform stack, so editing it inside Gitea has no effect at all. Edit it in your checkout.
 
 ## Enable or disable a package
 
-Each entry in the stack carries an `enabled` gate:
+Each entry in the stack has an `enabled` gate:
 
 ```yaml
 - name: "harbor"
@@ -48,7 +50,7 @@ Each entry in the stack carries an `enabled` gate:
   manifestPath: "application/harbor/manifests"
 ```
 
-Let the CLI make the edit — it touches both files, checks the invariants, and leaves the diff for you to review. Nothing is committed or pushed.
+Let the CLI make the edit. It touches both files, checks the invariants, and leaves the diff for you to review. Nothing is committed or pushed.
 
 ```bash
 adhar stack list                     # the catalogue: declared vs live state
@@ -66,14 +68,19 @@ adhar upgrade --diff-only     # exactly what will change
 adhar upgrade                 # converge, re-apply the ApplicationSet, re-push the stack
 ```
 
-Editing by hand is fine too — keep the ApplicationSet and its mirrored environment config in step, because a parity test enforces the match:
+Editing by hand is fine too. Keep the ApplicationSet and its mirrored environment config in step, because a parity test enforces the match:
 
 | Profile | ApplicationSet | Mirrored environment config |
 |---|---|---|
 | Local (Kind) | `platform/stack/adhar-appset-local.yaml` | `platform/stack/environments/local/config.yaml` |
 | Production | `platform/stack/adhar-appset-production.yaml` | `platform/stack/environments/prod/config.yaml` |
 
-Two more ApplicationSets sit beside them: `adhar-appset-gitops.yaml`, and `adhar-appset-workload.yaml`, the thin agent profile deployed onto registered workload clusters. The catalogue holds 100+ entries; the local profile enables a curated core and production enables most of them. `adhar stack list` is always the live answer.
+Two more ApplicationSets sit beside them:
+
+- `adhar-appset-gitops.yaml`
+- `adhar-appset-workload.yaml`, the thin agent profile deployed onto registered workload clusters
+
+The catalogue holds 100+ entries. The local profile enables a curated core, and production enables most of them. `adhar stack list` is always the live answer.
 
 *Verify* an enable or disable before you upgrade:
 
@@ -88,7 +95,9 @@ And after:
 ```bash
 adhar stack status harbor                 # declared on, live Synced + Healthy
 adhar get apps | grep harbor
-``` Disabling is destructive in the ordinary GitOps sense: with prune on, ArgoCD **uninstalls** the workload.
+```
+
+Disabling is destructive in the ordinary GitOps sense: with prune on, ArgoCD **uninstalls** the workload.
 
 ## Conflicts, advisories and dependencies
 
@@ -105,11 +114,13 @@ Every package installs into the shared `adhar-system` namespace, so some pairs c
 adhar stack conflicts     # the rules, plus whether the current profile violates any
 ```
 
-The authoritative list, including the object-level detail and the service-link collisions, is `platform/stack/packages/CONFLICTS.md`. A second rule is capacity, not correctness: **a single Kind node cannot run the whole catalogue.** Check `kubectl top nodes` before enabling anything heavy; the usual cause of a local cluster that never converges is an over-enabled profile.
+The authoritative list is `platform/stack/packages/CONFLICTS.md`. It includes the object-level detail and the service-link collisions.
+
+A second rule is about capacity, not correctness: **a single Kind node cannot run the whole catalogue.** Check `kubectl top nodes` before you enable anything heavy. The usual cause of a local cluster that never converges is an over-enabled profile.
 
 ## Anatomy of a package directory
 
-Packages are **pre-rendered Helm charts**, so the Git diff is the cluster diff — there are no in-cluster Helm surprises.
+Packages are **pre-rendered Helm charts**, so the Git diff is the cluster diff. There are no in-cluster Helm surprises.
 
 ```text
 platform/stack/packages/security/cert-manager/
@@ -123,11 +134,15 @@ platform/stack/packages/security/cert-manager/
     └── servicemonitor.yaml   # hand-written additions live here too
 ```
 
-Three things to know about that layout. `install.yaml` is **generated**; hand-edits are lost on the next render. Files ending `.yaml.tmpl` are rendered at seed time against the `AdharPlatform` spec, which is how host and email reach the stack without being hardcoded. And `adhar-package.yaml` is the marketplace contract — CI fails a package that lacks one (`hack/validate-packages.sh` validates it against `marketplace.schema.json`).
+Three things to know about that layout:
+
+- `install.yaml` is **generated**. Hand-edits are lost on the next render.
+- Files ending `.yaml.tmpl` are rendered at seed time against the `AdharPlatform` spec. That is how host and email reach the stack without being hardcoded.
+- `adhar-package.yaml` is the marketplace contract. CI fails a package that lacks one (`hack/validate-packages.sh` validates it against `marketplace.schema.json`).
 
 ## Worked example: retune one package
 
-Every package change follows the same six stages. Everything before `adhar upgrade` happens in your checkout and can be thrown away; the cluster only changes at the last two.
+Every package change follows the same six stages. Everything before `adhar upgrade` happens in your checkout and can be thrown away. The cluster only changes at the last two.
 
 ```diagram
 do-package-change
@@ -146,7 +161,7 @@ extraArgs:
   - --dns01-recursive-nameservers-only
 ```
 
-Re-render. `CHART_VERSION` inside the script is also how you pin or bump the chart:
+Re-render. You also pin or bump the chart with `CHART_VERSION` inside the script:
 
 ```bash
 ./generate-manifests.sh
@@ -170,7 +185,10 @@ adhar upgrade                 # converge foundation, push the stack, refresh Arg
 adhar get apps                # cert-manager back to Synced + Healthy
 ```
 
-> Two generator traps that cost real time. Pass `--include-crds` when the chart ships CRDs — without it the render has none and the controller crash-loops on an unknown kind. And render with `--namespace adhar-system`, or a chart bakes a different namespace into CA-injection annotations and APIService SANs.
+> Two generator traps cost real time:
+>
+> - Pass `--include-crds` when the chart ships CRDs. Without it, the render has none and the controller crash-loops on an unknown kind.
+> - Render with `--namespace adhar-system`. Otherwise a chart bakes a different namespace into CA-injection annotations and APIService SANs.
 
 ## Worked example: add your own package
 
@@ -223,7 +241,7 @@ spec:
           port: 80
 ```
 
-Write the literal local domain; the controller rewrites it to your host at seed time, so one manifest serves every platform. Then validate and apply:
+Write the literal local domain. The controller rewrites it to your host at seed time, so one manifest serves every platform. Then validate and apply:
 
 ```bash
 hack/validate-packages.sh
@@ -231,11 +249,15 @@ adhar stack list | grep my-tool
 adhar upgrade
 ```
 
-Conventions that keep you upgrade-safe: keep custom packages in their **own directories**, never inside a shipped one; target `adhar-system`; and set `enableServiceLinks: false` on any pod that decodes environment variables strictly, because the shared namespace means Kubernetes injects a `<NAME>_PORT` variable per Service.
+These conventions keep you upgrade-safe:
+
+- Keep custom packages in their **own directories**, never inside a shipped one.
+- Target `adhar-system`.
+- Set `enableServiceLinks: false` on any pod that decodes environment variables strictly. In the shared namespace, Kubernetes injects a `<NAME>_PORT` variable per Service.
 
 ## Deploy team applications
 
-Platform packages are for platform capabilities. **Team workloads** use the `CustomPackage` CRD, which delivers an ArgoCD Application through the platform's own Gitea, so the cluster never depends on your laptop or an external forge:
+Platform packages are for platform capabilities. **Team workloads** use the `CustomPackage` CRD. It delivers an ArgoCD Application through the platform's own Gitea, so the cluster never depends on your laptop or an external forge:
 
 ```yaml
 apiVersion: platform.adhar.io/v1alpha1
@@ -251,7 +273,9 @@ spec:
 
 ## Add a golden path
 
-Golden paths are Backstage scaffolder templates, and the CLI and the Console read the **same** collection: the `adhar/adhar-templates` repository in the platform's Gitea, a pull mirror of `github.com/adhar-io/adhar-templates`. Each template is a directory under `templates/` holding a `template.yaml` and the `skeleton/` it renders. Because the repository is a mirror, the templates a platform offers stay current without a platform release — and a new template is contributed upstream (or to a fork you point the mirror at), not edited in Gitea.
+Golden paths are Backstage scaffolder templates. The CLI and the Console read the **same** collection: the `adhar/adhar-templates` repository in the platform's Gitea. That repository is a pull mirror of `github.com/adhar-io/adhar-templates`.
+
+Each template is a directory under `templates/` holding a `template.yaml` and the `skeleton/` it renders. Because the repository is a mirror, the templates a platform offers stay current without a platform release. Contribute a new template upstream (or to a fork you point the mirror at). Do not edit it in Gitea.
 
 ```bash
 adhar application templates                 # what this platform offers
@@ -259,21 +283,28 @@ adhar application templates <template>      # one template's parameters
 adhar application deploy my-app --template <template> --param key=value --wait
 ```
 
-The stack also ships Backstage catalog templates in `platform/stack/packages/application/adhar-templates/`, registered through the `targets` list in its `catalog-info.yaml` (`basic`, `argo-workflows`, `app-with-bucket`, `microservice`, `frontend`, `data-pipeline`, `ml`). Whichever you write, omit the `adhar:create-argocd-app` step if your skeleton ships `.adhar/app.yaml` — the `adhar-services` ApplicationSet already adopts such repos, and two Applications managing one set of resources is exactly the drift the platform forbids.
+The stack also ships Backstage catalog templates in `platform/stack/packages/application/adhar-templates/`. They are registered through the `targets` list in its `catalog-info.yaml` (`basic`, `argo-workflows`, `app-with-bucket`, `microservice`, `frontend`, `data-pipeline`, `ml`).
+
+Whichever kind you write, omit the `adhar:create-argocd-app` step if your skeleton ships `.adhar/app.yaml`. The `adhar-services` ApplicationSet already adopts such repos. Two Applications managing one set of resources is exactly the drift the platform forbids.
 
 ## Environments and config layers
 
-Environments live in `platform/stack/environments/` (`local`, `dev`, `test`, `prod`), each with a `config.yaml` declaring that environment's package set. Promotion is Git promotion, with Kargo orchestrating it — see [Promote Across Environments](/docs/guides/promote-across-environments).
+Environments live in `platform/stack/environments/` (`local`, `dev`, `test`, `prod`). Each has a `config.yaml` that declares that environment's package set. Promotion is Git promotion, with Kargo orchestrating it. See [Promote Across Environments](/docs/guides/promote-across-environments).
 
-The root `config.yaml` has four layers, each overriding the previous — `globalSettings → providers → environmentTemplates → environments`. Keep each environment block to the minimal delta, and never put secrets in it. See [Configuration](/docs/getting-started/configuration).
+The root `config.yaml` has four layers, each overriding the previous: `globalSettings → providers → environmentTemplates → environments`. Keep each environment block to the minimal delta, and never put secrets in it. See [Configuration](/docs/getting-started/configuration).
 
 ## Extend the infrastructure APIs
 
-The control plane (`platform/controlplane/`) ships composite APIs (XRDs) plus compositions on Crossplane v2. Add a new implementation of an existing API by writing a Composition that selects on your label; add a whole new API with an XRD (`apiextensions.crossplane.io/v2`, `scope: Namespaced`, no claims) plus one Composition per implementation. Namespaced managed resources have **no `spec.deletionPolicy`** — express retention with `managementPolicies`. See [Control Plane](/docs/core-concepts/control-plane).
+The control plane (`platform/controlplane/`) ships composite APIs (XRDs) plus compositions on Crossplane v2.
+
+- To add a new implementation of an existing API, write a Composition that selects on your label.
+- To add a whole new API, write an XRD (`apiextensions.crossplane.io/v2`, `scope: Namespaced`, no claims) plus one Composition per implementation.
+
+Namespaced managed resources have **no `spec.deletionPolicy`**. Express retention with `managementPolicies` instead. See [Control Plane](/docs/core-concepts/control-plane).
 
 ## Add a provider
 
-Implement the `Provider` interface (`platform/providers/interface.go`) and register it in `platform/providers/factory.go`; `platform/providers/civo/` is a compact reference. The **`custom` provider** already points Adhar at any conformant cluster with no provisioning at all.
+Implement the `Provider` interface (`platform/providers/interface.go`) and register it in `platform/providers/factory.go`. `platform/providers/civo/` is a compact reference. The **`custom` provider** already points Adhar at any conformant cluster, with no provisioning at all.
 
 ## Common pitfalls
 

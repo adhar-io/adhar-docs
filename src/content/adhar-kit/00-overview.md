@@ -7,7 +7,7 @@ path: "/adhar-kit"
 
 # Overview
 
-**Adhar Kit** is a **framework-agnostic enterprise microservices toolkit** for Java — a Maven multi-module library that collapses 22 cross-cutting infrastructure concerns behind a single, consistent API called `AdharFacade`. You write `adhar.safe(...)` once and it means the same thing on Spring Boot, Quarkus, Micronaut, Helidon, and Vert.x.
+**Adhar Kit** is a **framework-agnostic enterprise microservices toolkit** for Java. It is a Maven multi-module library that puts 22 cross-cutting infrastructure concerns behind one consistent API, called `AdharFacade`. You write `adhar.safe(...)` once, and it means the same thing on Spring Boot, Quarkus, Micronaut, Helidon, and Vert.x.
 
 > *A comprehensive, framework-agnostic enterprise microservices toolkit for Spring Boot, Quarkus, Micronaut, Helidon, and Vert.x.*
 
@@ -27,31 +27,37 @@ path: "/adhar-kit"
 
 ## The problem it solves
 
-Look at a typical microservice constructor. It takes a `MeterRegistry`, a `Tracer`, a `CircuitBreakerRegistry`, a cache template, a Kafka template, a JPA repository, a security context accessor — six or seven infrastructure collaborators before a single line of domain logic exists. Then the next service in the estate does the same thing again, slightly differently. Then someone moves a service to Quarkus and all of it is rewritten against different types.
+Look at a typical microservice constructor. It takes a `MeterRegistry`, a `Tracer`, a `CircuitBreakerRegistry`, a cache template, a Kafka template, a JPA repository and a security context accessor. That is six or seven infrastructure collaborators before you write a single line of domain logic.
 
-That is the cost Adhar Kit targets: **the same cross-cutting concerns, re-implemented per service and re-implemented per framework.** Three things follow from it.
+Then the next service does the same thing again, slightly differently. Then someone moves a service to Quarkus, and all of it is rewritten against different types.
 
-- **Inconsistency.** Retry policy, metric naming, log structure and audit coverage drift between teams because each service wires them by hand.
-- **Framework lock-in.** "Framework-agnostic" libraries usually still leak framework types into your business code, so a migration is a rewrite.
-- **Boilerplate density.** The interesting logic in `createOrder` is four lines; the plumbing around it is forty.
+Adhar Kit targets that cost: **the same cross-cutting concerns, re-implemented for every service and again for every framework.** This causes three problems.
+
+- **Inconsistency.** Retry policy, metric naming, log structure and audit coverage drift between teams, because each service wires them by hand.
+- **Framework lock-in.** "Framework-agnostic" libraries usually still leak framework types into your business code. A migration becomes a rewrite.
+- **Boilerplate density.** The interesting logic in `createOrder` is four lines. The plumbing around it is forty.
 
 ## The AdharFacade idea
 
-Adhar Kit answers all three with one object. `AdharFacade` is a framework-neutral class — no DI annotations, no compile-time coupling to any framework — that exposes every module through a sub-facade accessor, plus a set of one-call shortcuts for the combinations you reach for constantly.
+Adhar Kit solves all three with one object. `AdharFacade` is a framework-neutral class, with no DI annotations and no compile-time coupling to any framework. It gives you every module through a sub-facade accessor. It also offers one-call shortcuts for the combinations you use all the time.
 
-There are 23 accessors: 22 for gated modules (`getMetrics()`, `getSecurity()`, `getAi()`, …) and `getUtils()`, which is never gated. Each sub-facade is constructed lazily on first access, and only if its module is enabled, so a service that never touches AI never pays for the AI module.
+There are 23 accessors: 22 for gated modules (`getMetrics()`, `getSecurity()`, `getAi()`, …) and `getUtils()`, which is never gated. A gated module is one you can switch on or off. Each sub-facade is built lazily the first time you access it, and only if its module is enabled. So a service that never touches AI never pays for the AI module.
 
-Above those accessors sit the shortcuts. `adhar.safe(name, work, fallback)` is tracing plus a circuit breaker plus a fallback in one call. `adhar.cached(cache, key, type, loader)` is the whole cache-aside pattern. `adhar.transactional(...)`, `adhar.publish(...)`, `adhar.hasPermission(...)`, `adhar.chat(...)` collapse a collaborator plus its ceremony into a method call.
+The shortcuts sit above those accessors:
+
+- `adhar.safe(name, work, fallback)` gives you tracing, a circuit breaker and a fallback in one call.
+- `adhar.cached(cache, key, type, loader)` is the whole cache-aside pattern.
+- `adhar.transactional(...)`, `adhar.publish(...)`, `adhar.hasPermission(...)` and `adhar.chat(...)` each turn a collaborator and its setup code into one method call.
 
 ```diagram
 kit-facade-layers
 ```
 
-The important line in that diagram is the adapter layer. Your code sits above it and never names a framework type; only the adapter below it does. That is what makes the portability claim real rather than aspirational.
+The key line in that diagram is the adapter layer. Your code sits above it and never names a framework type. Only the adapter below it does. That is what makes the code truly portable.
 
 ## What is in the box
 
-Twenty-nine Maven modules ship from the root `pom.xml`: 27 production modules, plus `adhar-kit-bom` for version management and `adhar-kit-parent` for build configuration.
+Twenty-nine Maven modules ship from the root `pom.xml`. There are 27 production modules, plus `adhar-kit-bom` for version management and `adhar-kit-parent` for build configuration.
 
 | Group | Modules |
 |---|---|
@@ -60,15 +66,27 @@ Twenty-nine Maven modules ship from the root `pom.xml`: 27 production modules, p
 | Enterprise | security, event-sourcing, analytics, batch, ai, dapr, kubernetes, perf-profiler |
 | Tooling | starter, maven-plugin, test-commons, rewrite, bom, parent |
 
-Concretely, that means Resilience4j circuit breakers, retries, rate limiters and bulkheads; OAuth2/OIDC, JWT, RBAC and audit logging; OpenTelemetry tracing and Micrometer metrics with Prometheus export; JPA with multi-tenancy, auditing, soft delete and a transactional outbox; Kafka and RabbitMQ messaging where every event is a CloudEvents 1.0 envelope; an event store with CQRS and projections; and multi-provider LLM access. The [Modules overview](/adhar-kit/modules/overview) is the full catalogue.
+In practice, that gives you:
+
+- Resilience4j circuit breakers, retries, rate limiters and bulkheads
+- OAuth2/OIDC, JWT, RBAC and audit logging
+- OpenTelemetry tracing, and Micrometer metrics with Prometheus export
+- JPA with multi-tenancy, auditing, soft delete and a transactional outbox
+- Kafka and RabbitMQ messaging, where every event is a CloudEvents 1.0 envelope
+- an event store with CQRS and projections
+- multi-provider LLM access
+
+The [Modules overview](/adhar-kit/modules/overview) is the full catalogue.
 
 ## Relationship to the Adhar Platform
 
-Adhar Kit is the **application-side library**. The [Adhar Platform](/docs) is the **infrastructure it can run on** — Kubernetes, Dapr, Prometheus and Grafana, Vault, Kafka, ArgoCD, Crossplane.
+Adhar Kit is the **application-side library**. The [Adhar Platform](/docs) is the **infrastructure it can run on**: Kubernetes, Dapr, Prometheus and Grafana, Vault, Kafka, ArgoCD, Crossplane.
 
-They are designed together but are not coupled. The kit runs fine on a laptop, on plain Docker, or on somebody else's Kubernetes cluster; the platform runs fine under services that have never heard of the kit. What you get from pairing them is that the kit already knows the platform's conventions, so `adhar.secret(...)`, `adhar.isInKubernetes()` and the Dapr building blocks resolve to real platform services rather than needing bespoke wiring.
+They are designed together, but they are not coupled. The kit runs fine on a laptop, on plain Docker, or on somebody else's Kubernetes cluster. The platform runs fine under services that have never heard of the kit.
 
-Framework detection is genuinely automatic: `FrameworkDetector` probes the classpath at first use and caches the result, which you can read back with `adhar.currentFramework()`.
+When you pair them, the kit already knows the platform's conventions. So `adhar.secret(...)`, `adhar.isInKubernetes()` and the Dapr building blocks connect to real platform services, with no custom wiring.
+
+Framework detection is automatic. `FrameworkDetector` checks the classpath on first use and caches the result. You can read it back with `adhar.currentFramework()`.
 
 ## A taste
 
@@ -98,7 +116,7 @@ public class OrderService {
 }
 ```
 
-Nine lines of behaviour that would otherwise need six injected collaborators — and the identical nine lines compile and run on all five frameworks.
+That is nine lines of behaviour that would otherwise need six injected collaborators. The same nine lines compile and run on all five frameworks.
 
 ## Where to go next
 
@@ -111,4 +129,4 @@ Nine lines of behaviour that would otherwise need six injected collaborators —
 | Build from source or contribute a change | [Building & Contributing](/adhar-kit/build) |
 | Check a specific question | [FAQ](/adhar-kit/faq) |
 
-If you are new, read [Concepts](/adhar-kit/concepts) after [Quick Start](/adhar-kit/quickstart) — the module pages assume the facade model it describes.
+If you are new, read [Concepts](/adhar-kit/concepts) after [Quick Start](/adhar-kit/quickstart). The module pages assume you know the facade model it describes.

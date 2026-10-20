@@ -7,7 +7,9 @@ path: "/adhar-kit/modules/batch"
 
 # Batch
 
-`adhar-kit-batch` provides enterprise batch processing on Spring Batch: runtime cron scheduling, CSV/JDBC/JPA/JSON reader and writer builders, range partitioning, retryable steps, and Micrometer metrics. It exists because **Spring Batch gives you the engine but not the operations layer** — a raw Spring Batch app has no distributed cron safety, no per-job statistics, and no failure event you can alert on. This module supplies those, and then gets out of the way.
+`adhar-kit-batch` adds enterprise batch processing on top of Spring Batch. It gives you runtime cron scheduling, CSV/JDBC/JPA/JSON reader and writer builders, range partitioning, retryable steps, and Micrometer metrics.
+
+It exists because **Spring Batch gives you the engine but not the operations layer**. A raw Spring Batch app has no distributed cron safety, no per-job statistics, and no failure event you can alert on. This module supplies those, and then gets out of the way.
 
 ## At a glance
 
@@ -31,13 +33,13 @@ kit-batch-flow
 
 Three details are worth knowing up front:
 
-1. **The scheduler looks jobs up by Spring bean name.** `scheduleJob("nightlyReportJob", ...)` resolves `applicationContext.getBean("nightlyReportJob", Job.class)` — the string must be the bean name of a `Job`, not a display label. The lookup happens inside the scheduled task, not at schedule time, so a typo fails on the **first cron fire**, is caught and logged at ERROR, and the trigger keeps firing on schedule forever.
-2. **Every scheduled run gets a unique `run.id` job parameter.** Exactly one parameter is added: `addLong("run.id", System.currentTimeMillis())`. Spring Batch identifies a `JobInstance` by its identifying parameters and refuses to re-run a completed instance with identical ones, so this is what makes a nightly job re-runnable at all. The corollary is that **every scheduled run is a new `JobInstance`** — a failed run is never automatically resumed by the scheduler, only by `BatchOperator.restart`.
-3. **Multi-replica safety is automatic if you have a `DataSource`.** The auto-configuration then registers a `JdbcSchedulerLock` and the scheduler acquires a lock named after the job before launching. A replica that cannot take the lock logs at INFO — *"Skipping scheduled job [x] — lock held by another instance"* — and returns. **Without a `DataSource`, no `SchedulerLock` bean is registered at all** (there is no in-memory fallback implementation), the scheduler is constructed with `null`, and every replica fires.
+1. **The scheduler looks jobs up by Spring bean name.** `scheduleJob("nightlyReportJob", ...)` resolves `applicationContext.getBean("nightlyReportJob", Job.class)`. The string must be the bean name of a `Job`, not a display label. The lookup happens inside the scheduled task, not at schedule time. So a typo fails on the **first cron fire**. The error is caught and logged at ERROR, and the trigger keeps firing on schedule forever.
+2. **Every scheduled run gets a unique `run.id` job parameter.** Exactly one parameter is added: `addLong("run.id", System.currentTimeMillis())`. Spring Batch identifies a `JobInstance` by its identifying parameters. It refuses to re-run a completed instance with identical ones. So this parameter is what makes a nightly job re-runnable at all. It also means **every scheduled run is a new `JobInstance`**. The scheduler never resumes a failed run on its own; only `BatchOperator.restart` does.
+3. **Multi-replica safety is automatic if you have a `DataSource`.** The auto-configuration then registers a `JdbcSchedulerLock`. Before launching, the scheduler takes a lock named after the job. A replica that cannot take the lock logs at INFO — *"Skipping scheduled job [x] — lock held by another instance"* — and returns. **Without a `DataSource`, no `SchedulerLock` bean is registered at all.** There is no in-memory fallback implementation. The scheduler is constructed with `null`, and every replica fires.
 
 ## The scheduler lock
 
-`JdbcSchedulerLock` creates its table in its constructor — so the DDL runs at bean-creation time, before any job:
+`JdbcSchedulerLock` creates its table in its constructor. So the DDL runs when the bean is created, before any job:
 
 ```sql
 CREATE TABLE IF NOT EXISTS adhar_scheduler_lock (
@@ -49,12 +51,12 @@ CREATE TABLE IF NOT EXISTS adhar_scheduler_lock (
 
 Acquisition is two-phase, not `ON CONFLICT`:
 
-1. A plain `INSERT`. The primary key on `lock_name` means exactly one racing replica wins; the loser catches `DuplicateKeyException` and falls through.
-2. A conditional `UPDATE ... WHERE lock_name = ? AND locked_until <= ?`. This is the expiry takeover: it only succeeds if the existing lock has aged out.
+1. A plain `INSERT`. The primary key on `lock_name` means exactly one racing replica wins. The loser catches `DuplicateKeyException` and falls through.
+2. A conditional `UPDATE ... WHERE lock_name = ? AND locked_until <= ?`. This is the expiry takeover. It succeeds only if the existing lock has expired.
 
-Release does **not** delete the row — it sets `locked_until` to now, guarded by `AND locked_by = ?`, so history stays visible and a non-owner's `unlock` is a no-op. `BatchScheduler.runScheduled` releases in a `finally`, but only when it actually acquired.
+Release does **not** delete the row. It sets `locked_until` to now, guarded by `AND locked_by = ?`. So history stays visible, and an `unlock` from a non-owner is a no-op. `BatchScheduler.runScheduled` releases in a `finally`, but only if it actually took the lock.
 
-**The TTL is 30 minutes and there is no property for it.** `BatchScheduler.DEFAULT_LOCK_TTL` is `Duration.ofMinutes(30)`, and the auto-configuration passes that value explicitly. A job that runs longer than 30 minutes has its lock expire mid-run, and another replica's next cron fire will take it over and start a second, concurrent execution of the same job. To change it, define your own `BatchScheduler` bean with the five-argument constructor:
+**The TTL is 30 minutes and there is no property for it.** `BatchScheduler.DEFAULT_LOCK_TTL` is `Duration.ofMinutes(30)`, and the auto-configuration passes that value explicitly. If a job runs longer than 30 minutes, its lock expires mid-run. Another replica's next cron fire then takes the lock and starts a second, concurrent run of the same job. To change the TTL, define your own `BatchScheduler` bean with the five-argument constructor:
 
 ```java
 @Bean
@@ -64,7 +66,7 @@ BatchScheduler batchScheduler(TaskScheduler taskScheduler, JobLauncher jobLaunch
 }
 ```
 
-A JVM that dies holding a lock frees it only by TTL expiry — there is no shutdown hook that releases it.
+If a JVM dies while holding a lock, the lock is freed only when the TTL expires. No shutdown hook releases it.
 
 ## Install
 
@@ -76,34 +78,53 @@ A JVM that dies holding a lock frees it only by TTL expiry — there is no shutd
 </dependency>
 ```
 
-Micrometer, Jakarta Persistence, and Jackson are `optional` in the module POM. Add `micrometer-core` (or any Spring Boot Actuator registry) to get `BatchMetrics`; add JPA for `JpaItemReaderBuilder`; add Jackson for the JSON reader and writer builders.
+Micrometer, Jakarta Persistence and Jackson are `optional` in the module POM. Add each one for the feature it unlocks:
+
+- `micrometer-core` (or any Spring Boot Actuator registry) for `BatchMetrics`.
+- JPA for `JpaItemReaderBuilder`.
+- Jackson for the JSON reader and writer builders.
 
 ## Key APIs
 
 `BatchFacade`, reached through `adhar.getBatch()` or `BatchFacade.getInstance()`:
 
-- `scheduleJob(jobName, cronExpression)` — register a cron trigger at runtime. Re-scheduling the same name cancels the old `ScheduledFuture` with `cancel(false)` first, so a run already in progress is **not** interrupted.
-- `cancelJob(jobName)` / `listScheduledJobs()` — manage the live schedule.
-- `getJobStats(jobName)` — a `BatchJobStats` record of `totalExecutions`, `successCount`, `failureCount`, `avgDurationMs`, `lastExecutionTime`.
-- `recordJobExecution(jobName, durationMs, success)` — record an execution yourself when you launch a job outside the scheduler.
-- `getDefaultChunkSize()` / `getDefaultPageSize()` — the configured defaults, so your step builders stay consistent with configuration. Nothing else reads them; the reader builders have their own hardcoded page size of 50.
+- `scheduleJob(jobName, cronExpression)` — Registers a cron trigger at runtime. If you schedule the same name again, it first cancels the old `ScheduledFuture` with `cancel(false)`. So a run already in progress is **not** interrupted.
+- `cancelJob(jobName)` / `listScheduledJobs()` — Manage the live schedule.
+- `getJobStats(jobName)` — Returns a `BatchJobStats` record of `totalExecutions`, `successCount`, `failureCount`, `avgDurationMs`, `lastExecutionTime`.
+- `recordJobExecution(jobName, durationMs, success)` — Records an execution yourself, when you launch a job outside the scheduler.
+- `getDefaultChunkSize()` / `getDefaultPageSize()` — Return the configured defaults, so your step builders stay consistent with configuration. Nothing else reads them. The reader builders have their own hardcoded page size of 50.
 - `health()` — `enabled`, `schedulerAvailable`, `metricsAvailable`, `scheduledJobCount`, `scheduledJobs`.
 
 Supporting components:
 
-- `BatchOperator` — `restart(executionId)`, `stop(executionId)`, `abandon(executionId)`, `getRunningExecutions(jobName)`, `getJobExecution(executionId)`. A thin delegation layer over Spring Batch's `JobOperator`; registered only when a `JobOperator` bean exists.
-- `RetryableStepBuilderFactory.create(stepBuilder)` — wraps a `SimpleStepBuilder` in a `RetryableStepBuilder` already seeded with `adhar.batch.max-retries` and `adhar.batch.retry-on-failure`.
-- `AdharRangePartitioner(start, end)` — splits an **inclusive** numeric range into partitions keyed `partition0`, `partition1`, …, writing the long keys `start` and `end` into each `ExecutionContext`. When `gridSize` exceeds the range you get one partition per value and **fewer than `gridSize` entries**; the last partition absorbs the division remainder. A `gridSize` of zero is not validated and throws `ArithmeticException`.
-- Reader builders: `CsvItemReaderBuilder.csvReader` / `csvReaderWithHeader`, `JdbcItemReaderBuilder.cursorReader` / `pagingReader`, `JpaItemReaderBuilder.jpaPagingReader`, `JsonItemReaderBuilder.jsonReader`. Writer builders: `CsvItemWriterBuilder.csvWriter`, `JdbcItemWriterBuilder.beanMappedWriter` / `columnMappedWriter`, `JsonItemWriterBuilder.jsonWriter`.
-- `BatchJobFailedEvent` — a Spring `ApplicationEvent` carrying `jobName`, `jobExecutionId`, `status`, `exitCode`, `exitDescription`, `durationMs`, and `failureExceptions`.
+- `BatchOperator` — `restart(executionId)`, `stop(executionId)`, `abandon(executionId)`, `getRunningExecutions(jobName)`, `getJobExecution(executionId)`. A thin layer that delegates to Spring Batch's `JobOperator`. It is registered only when a `JobOperator` bean exists.
+- `RetryableStepBuilderFactory.create(stepBuilder)` — Wraps a `SimpleStepBuilder` in a `RetryableStepBuilder`, already seeded with `adhar.batch.max-retries` and `adhar.batch.retry-on-failure`.
+- `AdharRangePartitioner(start, end)` — Splits an **inclusive** numeric range into partitions keyed `partition0`, `partition1`, … It writes the long keys `start` and `end` into each `ExecutionContext`.
+  - If `gridSize` is larger than the range, you get one partition per value, so **fewer than `gridSize` entries**.
+  - The last partition takes the division remainder.
+  - A `gridSize` of zero is not validated and throws `ArithmeticException`.
+- Reader builders: `CsvItemReaderBuilder.csvReader` / `csvReaderWithHeader`, `JdbcItemReaderBuilder.cursorReader` / `pagingReader`, `JpaItemReaderBuilder.jpaPagingReader`, `JsonItemReaderBuilder.jsonReader`.
+- Writer builders: `CsvItemWriterBuilder.csvWriter`, `JdbcItemWriterBuilder.beanMappedWriter` / `columnMappedWriter`, `JsonItemWriterBuilder.jsonWriter`.
+- `BatchJobFailedEvent` — A Spring `ApplicationEvent` carrying `jobName`, `jobExecutionId`, `status`, `exitCode`, `exitDescription`, `durationMs` and `failureExceptions`.
 
 ## Restart and recovery
 
-`BatchOperator.restart(executionId)` delegates straight to Spring Batch and adds nothing of its own, so the semantics are Spring Batch's: a restart reuses the **same `JobInstance`**, skips steps already marked `COMPLETED` unless they were declared `allowStartIfComplete`, and resumes a chunk-oriented step from its saved `ExecutionContext`. The checked exceptions on the signature tell you the preconditions — `JobInstanceAlreadyCompleteException` if the instance finished successfully, `JobRestartException` if the job is not restartable, `NoSuchJobExecutionException` for an unknown id, `NoSuchJobException` if the job is no longer registered.
+`BatchOperator.restart(executionId)` delegates straight to Spring Batch and adds nothing of its own. So Spring Batch's rules apply. A restart:
 
-The interaction with `run.id` is the thing to internalise: the **scheduler never restarts anything**. Each cron fire is a brand-new instance with a new `run.id`, so a failed nightly run is left behind unless an operator calls `restart`. Build that into your runbook, driven by the failure event below.
+- reuses the **same `JobInstance`**;
+- skips steps already marked `COMPLETED`, unless they were declared `allowStartIfComplete`;
+- resumes a chunk-oriented step from its saved `ExecutionContext`.
 
-`stop(executionId)` signals a stop that takes effect at the next chunk boundary; `abandon(executionId)` marks a stopped execution `ABANDONED` so a later restart can proceed.
+The checked exceptions on the signature tell you the preconditions:
+
+- `JobInstanceAlreadyCompleteException` if the instance finished successfully.
+- `JobRestartException` if the job is not restartable.
+- `NoSuchJobExecutionException` for an unknown id.
+- `NoSuchJobException` if the job is no longer registered.
+
+The key point about `run.id`: the **scheduler never restarts anything**. Each cron fire is a brand-new instance with a new `run.id`. So a failed nightly run is left behind unless an operator calls `restart`. Build that into your runbook, triggered by the failure event below.
+
+`stop(executionId)` signals a stop that takes effect at the next chunk boundary. `abandon(executionId)` marks a stopped execution `ABANDONED`, so a later restart can go ahead.
 
 ## Worked example — schedule a job
 
@@ -126,7 +147,7 @@ public class ReportService {
 }
 ```
 
-> `BatchFacade` is **not registered as a bean by the auto-configuration**. It is a singleton whose constructor assigns the static instance, so `adhar.getBatch()` and `BatchFacade.getInstance()` both throw `IllegalStateException("BatchFacade has not been initialised")` until your application constructs one. Declare it yourself:
+> `BatchFacade` is **not registered as a bean by the auto-configuration**. It is a singleton, and its constructor sets the static instance. Until your application constructs one, `adhar.getBatch()` and `BatchFacade.getInstance()` both throw `IllegalStateException("BatchFacade has not been initialised")`. Declare it yourself:
 >
 > ```java
 > @Bean
@@ -182,9 +203,11 @@ public class ImportJobConfig {
 }
 ```
 
-`retryables.create(...)` returns a `RetryableStepBuilder`; its `build()` yields a `FaultTolerantStepBuilder`, whose own `build()` yields the `Step` — hence the two calls. Calling `withRetryLimit(n)` explicitly overrides the configured default **and re-enables retry** even when `retry-on-failure` is `false`. Skip configuration is applied whenever either a positive skip limit or any `skipOn(...)` class is present, so `skipOn(X)` alone registers a skip limit of zero.
+`retryables.create(...)` returns a `RetryableStepBuilder`. Its `build()` returns a `FaultTolerantStepBuilder`, whose own `build()` returns the `Step`. That is why there are two calls.
 
-Readers built this way inherit Spring Batch's default `saveState = true`. The module never sets it, so the standard caveat applies: in a multi-threaded or partitioned step, share a reader between threads and its saved state will be wrong. Give each partition its own reader instance, or disable `saveState` and accept a non-restartable step.
+Calling `withRetryLimit(n)` explicitly overrides the configured default **and re-enables retry**, even when `retry-on-failure` is `false`. Skip configuration is applied whenever there is a positive skip limit or any `skipOn(...)` class. So `skipOn(X)` on its own registers a skip limit of zero.
+
+Readers built this way inherit Spring Batch's default `saveState = true`. The module never sets it, so the standard caveat applies. In a multi-threaded or partitioned step, if threads share a reader, its saved state will be wrong. Give each partition its own reader instance. Or disable `saveState` and accept a step that cannot be restarted.
 
 Alert on failures by listening for the published event:
 
@@ -196,15 +219,15 @@ public void onBatchFailure(BatchJobFailedEvent event) {
 }
 ```
 
-`AdharJobExecutionListener` publishes it from `afterJob`, synchronously, on the job's own `adhar-batch-*` execution thread — **not** the thread that called `jobLauncher.run`. Spring's default event multicaster is synchronous, so your listener blocks that thread; keep it fast or make it `@Async`.
+`AdharJobExecutionListener` publishes it from `afterJob`, synchronously. It runs on the job's own `adhar-batch-*` execution thread — **not** the thread that called `jobLauncher.run`. Spring's default event multicaster is synchronous, so your listener blocks that thread. Keep it fast, or make it `@Async`.
 
 ## How it behaves
 
-- **Threads.** The job launcher is a `TaskExecutorJobLauncher` over a `SimpleAsyncTaskExecutor` with prefix `adhar-batch-`, so `jobLauncher.run` returns immediately and the job runs elsewhere. `max-concurrent-jobs` is applied as `setConcurrencyLimit(...)` — a throttle, not a bounded pool; the executor still spawns a thread per task. The cron triggers run on a separate `ThreadPoolTaskScheduler` of **pool size 2** named `adhar-batch-scheduler-`.
-- **Shutdown drops nothing gracefully.** The module declares no `@PreDestroy`, no `DisposableBean` and no `SmartLifecycle`. `BatchScheduler` does not cancel its tracked futures at context close, and the `SimpleAsyncTaskExecutor` behind the launcher is a **local variable, not a bean**, so the container never closes it. A job in flight at shutdown is neither awaited nor stopped by this module.
-- **Failures never propagate out of the scheduler.** `runScheduled` catches every `Exception` — bean lookup, launch failure, the lot — and logs at ERROR. The cron trigger survives, which is usually what you want for a nightly job and is dangerous if you were expecting the schedule to stop.
-- **Statistics are in-memory and per-JVM.** `getJobStats` does not query the `MeterRegistry`; it reads a parallel `ConcurrentHashMap` of accumulators that `recordJobExecution` populates. Those reset on restart and are not shared across replicas. `recordStepExecution` does not feed them at all.
-- **The lock table name is only settable in code**, through the two-argument `JdbcSchedulerLock` constructor. It is concatenated into the DDL and DML without escaping, so keep it a literal constant.
+- **Threads.** The job launcher is a `TaskExecutorJobLauncher` over a `SimpleAsyncTaskExecutor` with prefix `adhar-batch-`. So `jobLauncher.run` returns at once and the job runs elsewhere. `max-concurrent-jobs` is applied as `setConcurrencyLimit(...)`. That is a throttle, not a bounded pool: the executor still creates a thread per task. The cron triggers run on a separate `ThreadPoolTaskScheduler` of **pool size 2**, named `adhar-batch-scheduler-`.
+- **Shutdown drops nothing gracefully.** The module declares no `@PreDestroy`, no `DisposableBean` and no `SmartLifecycle`. `BatchScheduler` does not cancel its tracked futures when the context closes. The `SimpleAsyncTaskExecutor` behind the launcher is a **local variable, not a bean**, so the container never closes it. This module neither waits for nor stops a job that is running at shutdown.
+- **Failures never propagate out of the scheduler.** `runScheduled` catches every `Exception` — bean lookup, launch failure, everything — and logs at ERROR. The cron trigger survives. That is usually what you want for a nightly job, but it is dangerous if you expected the schedule to stop.
+- **Statistics are in-memory and per-JVM.** `getJobStats` does not query the `MeterRegistry`. It reads a separate `ConcurrentHashMap` of accumulators that `recordJobExecution` fills. They reset on restart and are not shared across replicas. `recordStepExecution` does not feed them at all.
+- **The lock table name can only be set in code**, through the two-argument `JdbcSchedulerLock` constructor. It is concatenated into the DDL and DML without escaping, so keep it a literal constant.
 
 ## Observability
 
@@ -218,7 +241,12 @@ public void onBatchFailure(BatchJobFailedEvent event) {
 | `adhar.batch.step.writes` | counter | `step` |
 | `adhar.batch.step.skips` | counter | `step` |
 
-Those land alongside your other [metrics](/adhar-kit/modules/metrics). Alert on `adhar.batch.job.executions{status="failure"}` and on the absence of a `success` increment within the expected window — a replica that silently loses every lock race produces no failures at all, only silence.
+These land alongside your other [metrics](/adhar-kit/modules/metrics). Set two alerts:
+
+- On `adhar.batch.job.executions{status="failure"}`.
+- On a missing `success` increment within the expected window.
+
+You need the second one because a replica that silently loses every lock race produces no failures at all, only silence.
 
 ## Configuration
 
@@ -242,10 +270,10 @@ adhar:
 
 ## Testing
 
-- **Drive the trigger, do not wait for it.** The module's own tests capture the `Runnable` passed to `TaskScheduler.schedule` with an `ArgumentCaptor` and invoke it directly. That gives you deterministic coverage of the bean lookup, the `run.id` parameter, and the lock acquire-and-release path without any wall-clock delay.
-- **Test the lock against a real database.** `JdbcSchedulerLock` is exercised with an embedded H2 database per test, uniquely named (`"schedlock-" + System.nanoTime()`) and shut down in `@AfterEach`. Pass `Duration.ZERO` as the TTL to produce an immediately expired lock and assert the takeover path; the expiry comparison is `locked_until <= now`, so zero works. For Postgres-specific behaviour, `adhar-kit-test-commons` provides `PostgresTestContainer`.
-- **Reset the facade singleton.** `BatchFacadeTest` clears the private static `instance` field reflectively, because there is no API for it. Do the same, or the facade from one test leaks into the next.
-- **Wire the auto-configuration with `ApplicationContextRunner`** and `AutoConfigurations.of(BatchAutoConfiguration.class)`, supplying mocked `JobRepository` and `JobOperator` beans plus a `SimpleMeterRegistry` and an embedded `DataSource`. That is how you prove the conditional gates — notably that `BatchOperator` is absent without a `JobOperator` and `SchedulerLock` absent without a `DataSource`.
+- **Drive the trigger, do not wait for it.** The module's own tests capture the `Runnable` passed to `TaskScheduler.schedule` with an `ArgumentCaptor`, and invoke it directly. This gives you repeatable coverage of the bean lookup, the `run.id` parameter, and the lock acquire-and-release path, with no wall-clock delay.
+- **Test the lock against a real database.** The tests run `JdbcSchedulerLock` against an embedded H2 database per test. Each database is uniquely named (`"schedlock-" + System.nanoTime()`) and shut down in `@AfterEach`. To test the takeover path, pass `Duration.ZERO` as the TTL; this gives a lock that has already expired. Zero works because the expiry check is `locked_until <= now`. For Postgres-specific behaviour, `adhar-kit-test-commons` provides `PostgresTestContainer`.
+- **Reset the facade singleton.** `BatchFacadeTest` clears the private static `instance` field by reflection, because there is no API for it. Do the same, or the facade from one test leaks into the next.
+- **Wire the auto-configuration with `ApplicationContextRunner`** and `AutoConfigurations.of(BatchAutoConfiguration.class)`. Supply mocked `JobRepository` and `JobOperator` beans, a `SimpleMeterRegistry` and an embedded `DataSource`. This is how you prove the conditional gates. In particular: `BatchOperator` is absent without a `JobOperator`, and `SchedulerLock` is absent without a `DataSource`.
 - There is **no batch-specific support in `adhar-kit-test-commons`** — no job-launcher helper, no batch container.
 
 ## Common pitfalls

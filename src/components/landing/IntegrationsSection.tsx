@@ -1,6 +1,9 @@
 import React from "react";
 import { ArrowRight } from "lucide-react";
 import { Link } from "@tanstack/react-router";
+import { btnSecondary } from "./styles";
+import SectionHeader from "./SectionHeader";
+import "./marquee.css";
 
 const DEV = "https://cdn.jsdelivr.net/gh/devicons/devicon/icons";
 const SI = "https://cdn.jsdelivr.net/gh/simple-icons/simple-icons/icons";
@@ -36,7 +39,7 @@ const marquee = [
   { name: "Tekton", icon: `${SI}/tekton.svg` },
   { name: "Knative", icon: `${SI}/knative.svg` },
   { name: "KEDA", icon: cncf("keda") },
-  { name: "DAPR", icon: `${SI}/dapr.svg` },
+  { name: "Dapr", icon: `${SI}/dapr.svg` },
   { name: "CloudNativePG", icon: cncf("cloudnativepg") },
   { name: "PostgreSQL", icon: `${DEV}/postgresql/postgresql-original.svg` },
   { name: "MinIO", icon: `${SI}/minio.svg` },
@@ -53,10 +56,10 @@ const marquee = [
 ];
 
 const kubeMetrics = [
-  { value: "100+", label: "Integrations" },
-  { value: "7", label: "Categories" },
-  { value: "100%", label: "Open source" },
-  { value: "Multi", label: "Cloud" },
+  { value: "100+", label: "Curated packages" },
+  { value: "1", label: "GitOps repository" },
+  { value: "Apache 2.0", label: "Licence" },
+  { value: "5 clouds", label: "Plus local and on-prem" },
 ];
 
 const hideOnError = (e: React.SyntheticEvent<HTMLImageElement>) => {
@@ -67,38 +70,14 @@ const hideOnError = (e: React.SyntheticEvent<HTMLImageElement>) => {
 
 const IntegrationsSection = () => {
   return (
-    <section id="integrations" className="relative section-padding container-padding bg-background">
+    <section id="integrations" aria-labelledby="integrations-heading" className="relative section-padding container-padding bg-background">
       <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-border to-transparent" />
 
-      <style>{`
-        @keyframes adhar-marquee {
-          from { transform: translateX(0); }
-          to { transform: translateX(-50%); }
-        }
-        .adhar-marquee-track {
-          display: flex;
-          width: max-content;
-          animation: adhar-marquee 46s linear infinite;
-        }
-        .adhar-marquee:hover .adhar-marquee-track { animation-play-state: paused; }
-        @media (prefers-reduced-motion: reduce) {
-          .adhar-marquee-track { animation: none; }
-        }
-      `}</style>
 
       <div className="max-width-content">
-        <div className="text-center mb-14 lg:mb-16">
-          <span className="eyebrow mb-5">Open source</span>
-          <h2 className="section-heading mt-5 text-foreground">
-            Powered by battle-tested
-            <br className="hidden sm:block" />
-            <span className="text-muted-foreground">open source.</span>
-          </h2>
-          <p className="section-subheading mt-6">
-            Built on the shoulders of giants. ADHAR unifies 100+ of the most trusted cloud-native
-            projects — wired together, hardened, and upgraded as one platform.
-          </p>
-        </div>
+        <SectionHeader id="integrations-heading" eyebrow="Open source" title="Powered by battle-tested" titleMuted="open source.">
+          Adhar doesn't reinvent your stack. It picks 100+ proven cloud-native projects, configures them to work together, and upgrades them as one unit.
+        </SectionHeader>
 
         {/* Kubernetes feature card */}
         <div className="mb-12">
@@ -110,7 +89,7 @@ const IntegrationsSection = () => {
                 <div className="inline-flex h-12 w-12 items-center justify-center rounded-2xl border border-border/70 bg-white shadow-[var(--shadow-xs)] shrink-0">
                   <img
                     src={`${DEV}/kubernetes/kubernetes-plain.svg`}
-                    alt="Kubernetes"
+                    alt=""
                     loading="lazy"
                     decoding="async"
                     className="w-7 h-7 object-contain"
@@ -121,15 +100,14 @@ const IntegrationsSection = () => {
                     Kubernetes native
                   </h3>
                   <p className="mt-1 text-muted-foreground">
-                    The foundation of modern cloud infrastructure.
+                    Everything is a Kubernetes resource.
                   </p>
                 </div>
               </div>
 
               <p className="mt-6 max-w-3xl text-base text-muted-foreground leading-relaxed">
-                ADHAR is built from the ground up on Kubernetes — enterprise-grade orchestration,
-                automatic scaling, self-healing, and seamless multi-cloud deployments, with every
-                component reconciled through GitOps.
+                The platform services, the infrastructure developers request and the policies that govern them are all
+                Kubernetes resources. ArgoCD keeps every one of them in step with Git, on a laptop or in the cloud.
               </p>
 
               <div className="mt-8 grid grid-cols-2 md:grid-cols-4 gap-px overflow-hidden rounded-2xl border border-border/60 bg-border/50">
@@ -163,7 +141,7 @@ const IntegrationsSection = () => {
                   src={tool.icon}
                   loading="lazy"
                   decoding="async"
-                  alt={tool.name}
+                  alt=""
                   className="w-6 h-6 object-contain"
                   onError={hideOnError}
                 />
@@ -187,12 +165,12 @@ const IntegrationsSection = () => {
                 <div
                   key={`${tool.name}-${i}`}
                   data-logo-chip
-                  title={tool.name}
-                  className="inline-flex items-center gap-2 rounded-xl border border-border/60 bg-white px-3.5 py-2.5 shadow-[var(--shadow-xs)] shrink-0"
+                  aria-hidden={i >= marquee.length || undefined}
+                  className={`${i >= marquee.length ? "adhar-marquee-dup " : ""}inline-flex items-center gap-2 rounded-xl border border-border/60 bg-white px-3.5 py-2.5 shadow-[var(--shadow-xs)] shrink-0`}
                 >
                   <img
                     src={tool.icon}
-                    alt={tool.name}
+                    alt=""
                     loading="lazy"
                     decoding="async"
                     className="w-5 h-5 object-contain"
@@ -206,14 +184,12 @@ const IntegrationsSection = () => {
         </div>
 
         <div className="text-center mt-10">
-          <Link to="/integrations">
-            <button
-              type="button"
-              className="btn-secondary-modern group inline-flex items-center justify-center gap-2 rounded-full px-6 h-11 text-[15px] font-medium"
-            >
-              <span>Explore all integrations</span>
-              <ArrowRight className="w-4 h-4 transition-transform duration-300 group-hover:translate-x-0.5" />
-            </button>
+          <Link
+            to="/integrations"
+            className={btnSecondary}
+          >
+            <span>Explore all integrations</span>
+            <ArrowRight className="w-4 h-4 transition-transform duration-300 group-hover:translate-x-0.5" aria-hidden />
           </Link>
         </div>
       </div>

@@ -36,7 +36,7 @@ const Navigation = () => {
   };
 
   return (
-    <nav className="fixed top-0 w-full z-50 bg-background/70 backdrop-blur-xl backdrop-saturate-150 border-b border-border/60 supports-[backdrop-filter]:bg-background/60">
+    <header className="fixed top-0 w-full z-50 bg-background/70 backdrop-blur-xl backdrop-saturate-150 border-b border-border/60 supports-[backdrop-filter]:bg-background/60">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between items-center h-16">
           <NavigationLogo />
@@ -52,7 +52,7 @@ const Navigation = () => {
         </div>
         {mobileMenuOpen && (
           <div className="md:hidden -mx-4 sm:-mx-6 px-4 sm:px-6 py-4 border-t border-border/60 bg-background max-h-[calc(100vh-4rem)] overflow-y-auto overscroll-contain">
-            <nav className="flex flex-col">
+            <nav aria-label="Mobile" className="flex flex-col">
               {[
                 { to: "/docs", label: "Documentation" },
                 { to: "/architecture", label: "Architecture" },
@@ -131,7 +131,7 @@ const Navigation = () => {
           </div>
         )}
       </div>
-    </nav>
+    </header>
   );
 };
 

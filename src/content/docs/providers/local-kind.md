@@ -7,9 +7,11 @@ path: "/docs/providers/local-kind"
 
 # Local (Kind)
 
-This page runs the entire platform on your laptop in a single **Kind** node — Kubernetes-in-Docker, where each Kubernetes node is a container on your own machine. It is for anyone learning Adhar, developing against it, demoing it, or running it in CI. This is the default `adhar up` path and the only one exercised continuously by CI (`make e2e` runs a full `adhar up` → verify → `adhar down` cycle). It needs **no credentials, no cloud account, no DNS and no bill**, and on a warm machine one `adhar up` reaches every app Synced and Healthy in about ten minutes.
+This page runs the entire platform on your laptop in a single **Kind** node. Kind is Kubernetes-in-Docker: each Kubernetes node is a container on your own machine. Use it to learn Adhar, develop against it, demo it, or run it in CI.
 
-It is also the honest one. Everything above the cluster — ArgoCD, Gitea, Crossplane, the Gateway, SSO — is the same code that runs on a cloud. What differs is the size of the box it runs in, and that difference is the subject of the last section.
+This is the default `adhar up` path. It is also the only one exercised continuously by CI: `make e2e` runs a full `adhar up` → verify → `adhar down` cycle. It needs **no credentials, no cloud account, no DNS and no bill**. On a warm machine, one `adhar up` gets every app to Synced and Healthy in about ten minutes.
+
+It is also the honest one. Everything above the cluster is the same code that runs on a cloud: ArgoCD, Gitea, Crossplane, the Gateway, SSO. Only the size of the box differs. The last section covers that difference.
 
 ## At a glance
 
@@ -35,11 +37,11 @@ dp-kind-topology
 
 Three things run on your machine, all inside your container engine:
 
-1. **One Kind node container** for cluster `adhar`, acting as control plane and worker. Kind's default CNI (kindnet) **and kube-proxy** are disabled; Cilium replaces both, exactly as on a cloud.
-2. **Nine pull-through registry caches**, one per upstream registry, sitting beside the node on the engine's `kind` network. The node's containerd uses them as `certs.d` mirrors, with the upstream as fallback.
-3. **Host port mappings**: HTTPS 8443 and HTTP 8080 on your machine forward into the node, to the Gateway's node ports 30443 and 30080.
+1. **One Kind node container** for cluster `adhar`. It acts as both control plane and worker. Kind's default CNI (kindnet) **and kube-proxy** are disabled. Cilium replaces both, exactly as on a cloud.
+2. **Nine pull-through registry caches**, one per upstream registry. They sit beside the node on the engine's `kind` network. The node's containerd uses them as `certs.d` mirrors, and falls back to the upstream.
+3. **Host port mappings.** HTTPS 8443 and HTTP 8080 on your machine forward into the node, to the Gateway's node ports 30443 and 30080.
 
-Your browser resolves `console.adhar.localtest.me` through **public DNS** to `127.0.0.1`, lands on port 8443, and reaches the Gateway. Nothing goes in `/etc/hosts`.
+Your browser resolves `console.adhar.localtest.me` through **public DNS** to `127.0.0.1`. It lands on port 8443 and reaches the Gateway. You add nothing to `/etc/hosts`.
 
 ## Step 1 — Prerequisites checklist
 
@@ -54,17 +56,17 @@ Your browser resolves `console.adhar.localtest.me` through **public DNS** to `12
 
 ### Which engine gets used
 
-Adhar follows Kind's own rule, so the engine that **creates** the cluster is always the one that manages it:
+Adhar follows Kind's own rule. The engine that **creates** the cluster is always the one that manages it:
 
-1. `KIND_EXPERIMENTAL_PROVIDER`, if set, wins — even if that engine is not responding. Overriding it is deliberate, and a silent substitution would be worse than a clear error.
-2. Otherwise the first engine installed and answering, in the order `docker`, `podman`, `nerdctl`, `finch`, `nerdctl.lima`.
+1. If `KIND_EXPERIMENTAL_PROVIDER` is set, it wins, even if that engine is not responding. Setting it is a deliberate choice, and a silent substitution would be worse than a clear error.
+2. Otherwise, Adhar uses the first engine that is installed and answering, in this order: `docker`, `podman`, `nerdctl`, `finch`, `nerdctl.lima`.
 
 ```bash
 adhar version                              # reports the engine actually in use
 export KIND_EXPERIMENTAL_PROVIDER=podman   # force one
 ```
 
-The engine is used for the whole lifecycle: creating nodes, running the image cache, removing leftover containers and the `kind` network on teardown. Earlier versions shelled out to `docker` for those last steps, so on a Podman-only machine the cluster came up and then teardown and image preloading silently did nothing.
+That engine is used for the whole lifecycle: creating nodes, running the image cache, and removing leftover containers and the `kind` network on teardown. Earlier versions shelled out to `docker` for those last steps. On a Podman-only machine, the cluster came up, but teardown and image preloading silently did nothing.
 
 ### Podman specifics
 
@@ -75,7 +77,7 @@ podman machine init --cpus 6 --memory 12288
 podman machine start
 ```
 
-Rootless Podman works, and needs the usual prerequisites: `/etc/subuid` and `/etc/subgid` entries for your user, and cgroups v2 with the delegation controllers enabled. A rootless user may not be allowed to bind port 8443 — use `adhar up --port 9443` rather than loosening system limits.
+Rootless Podman works. It needs the usual prerequisites: `/etc/subuid` and `/etc/subgid` entries for your user, and cgroups v2 with the delegation controllers enabled. A rootless user may not be allowed to bind port 8443. If so, use `adhar up --port 9443` rather than loosening system limits.
 
 ## Step 2 — Bring it up
 
@@ -85,7 +87,7 @@ No config file is needed:
 ./adhar up
 ```
 
-`adhar up` renders a live checklist of the nine provisioning stages. Stages 1–3 run in the CLI; stages 4–9 are owned by the in-cluster `AdharPlatform` controller and advance as its status changes:
+`adhar up` shows a live checklist of the nine provisioning stages. Stages 1–3 run in the CLI. Stages 4–9 belong to the in-cluster `AdharPlatform` controller, and they advance as its status changes:
 
 ```terminal
 $ ./adhar up
@@ -103,7 +105,7 @@ Provisioning Adhar platform
   ◌ GitOps sync - platform stack   curated platform apps via ArgoCD
 ```
 
-`◌` means progressing, `✓` ready, `✖` failed. The last stage reports `n/m` apps as ArgoCD drives them to Synced + Healthy; `--apps-timeout` (default 15m) bounds how long the CLI waits, and ArgoCD keeps going afterwards either way.
+`◌` means progressing, `✓` ready, `✖` failed. The last stage reports `n/m` apps as ArgoCD drives them to Synced + Healthy. `--apps-timeout` (default 15m) limits how long the CLI waits. Either way, ArgoCD keeps going afterwards.
 
 Useful variations:
 
@@ -116,16 +118,16 @@ Useful variations:
 
 ### Why the second run is much faster
 
-The curated core pulls roughly 90 images (~10 GB) from public registries, and a fresh Kind node has none of them. So `adhar up` runs one small `registry:3.0.0` container per upstream registry — named `adhar-registry-cache-<host>`, all sharing the engine volume `adhar-registry-cache` — as a **pull-through cache**.
+The curated core pulls roughly 90 images (~10 GB) from public registries. A fresh Kind node has none of them. So `adhar up` runs one small `registry:3.0.0` container per upstream registry as a **pull-through cache**. Each is named `adhar-registry-cache-<host>`, and they all share the engine volume `adhar-registry-cache`.
 
 Mirrored registries: `docker.io`, `quay.io`, `ghcr.io`, `registry.k8s.io`, `xpkg.upbound.io`, `xpkg.crossplane.io`, `reg.kyverno.io`, `docker.gitea.com`, `public.ecr.aws`.
 
 - **First run on a machine**: images come from the internet through the caches, which keep them. Expect normal pull times.
-- **Every later run**: images come from local disk at LAN speed. Tags are re-resolved upstream when reachable, so `:latest` stays current; offline, the cached copy is served.
-- **A cache that is down** is skipped by containerd, which falls back to the upstream. It can never break a pull.
-- `adhar down` **stops** the caches and keeps the volume; the next `adhar up` restarts them.
+- **Every later run**: images come from local disk at LAN speed. When the upstream is reachable, tags are re-resolved there, so `:latest` stays current. Offline, the cached copy is served.
+- **A cache that is down** is skipped. containerd falls back to the upstream, so a cache can never break a pull.
+- `adhar down` **stops** the caches and keeps the volume. The next `adhar up` restarts them.
 
-Measured on one machine (Docker Desktop, 11 CPUs), `adhar up --recreate` before and after, warm cache:
+These numbers were measured on one machine (Docker Desktop, 11 CPUs), running `adhar up --recreate` before and after the cache, with a warm cache:
 
 | Stage | Before | After |
 |---|---|---|
@@ -135,7 +137,7 @@ Measured on one machine (Docker Desktop, 11 CPUs), `adhar up --recreate` before 
 | Total to "GitOps sync" | > 7 min | 3m24s |
 | Every app Synced + Healthy | 18m50s, still only 18 of 31 | **10m13s, all of them** |
 
-That last row is where the ten-minute figure comes from: foundation in under four minutes, the curated core synced in the rest. A first run on a cold cache spends longer pulling.
+The ten-minute figure comes from that last row. The foundation is up in under four minutes, and the curated core syncs in the rest. A first run on a cold cache spends longer pulling.
 
 ## Step 3 — Verify and log in
 
@@ -157,7 +159,7 @@ https://gitea.adhar.localtest.me:8443
 
 ### Trust the local certificate
 
-The local certificate is the platform's own **self-signed** one, by design: `localtest.me` is not yours to delegate, so no ACME challenge is possible. The browser warning on first visit is expected. To make your browser and tools trust it, add the platform CA:
+The local certificate is the platform's own **self-signed** one, by design. `localtest.me` is not yours to delegate, so no ACME challenge is possible. Expect a browser warning on your first visit. To make your browser and tools trust the certificate, add the platform CA:
 
 ```bash
 kubectl -n default get secret adhar-cert -o jsonpath='{.data.ca\.crt}' | base64 -d > adhar-ca.crt
@@ -167,7 +169,7 @@ sudo security add-trusted-cert -d -r trustRoot -k /Library/Keychains/System.keyc
 
 ## Optional: a config file
 
-An explicit config is only useful if you want to name things or keep Kind alongside cloud providers in one file:
+You only need an explicit config if you want to name things, or keep Kind alongside cloud providers in one file:
 
 ```yaml
 environments:
@@ -186,7 +188,7 @@ providers:
       kubectlPath: kubectl    # are not on PATH
 ```
 
-Only those two tool paths are read from the `kind` provider's `config:` block. Environments' `isolation` setting has no effect locally — a Kind cluster is one cluster by definition.
+Adhar reads only those two tool paths from the `kind` provider's `config:` block. The environments' `isolation` setting has no effect locally. A Kind cluster is one cluster by definition.
 
 ## Tear down
 
@@ -198,7 +200,7 @@ Only those two tool paths are read from the `kind` provider's `config:` block. E
 
 **Verify:** `kind get clusters` no longer lists `adhar`, and `docker ps -a --filter name=adhar-registry-cache` shows the caches stopped (or gone with `--purge-image-cache`).
 
-`adhar down` with no `--file` only ever looks at Kind. That is correct here, and it is exactly why a cloud environment must be torn down with `--file config.yaml --env <name>` — otherwise the command inspects your laptop and reports success having deleted nothing in the cloud.
+`adhar down` with no `--file` only ever looks at Kind. That is correct here. It is also why you must tear down a cloud environment with `--file config.yaml --env <name>`. Without it, the command inspects your laptop and reports success, having deleted nothing in the cloud.
 
 ## How a local run differs from a cloud run
 
@@ -213,7 +215,9 @@ Only those two tool paths are read from the `kind` provider's `config:` block. E
 | Image cache | Per-registry pull-through cache on the host | Node-prep pre-pull of the Cilium images during `kubeadm join` |
 | Time to usable | ~10 min (warm cache) | ~13 min on DigitalOcean; unmeasured or longer elsewhere |
 
-The curated core exists because the full catalogue does not fit on one Kind node — it wants far more PersistentVolumes and memory than a laptop has. Production delivery, CI infrastructure and the heavy JVM services (Kafka, Nexus, Dapr, the Loki/Tempo/Mimir pipelines, preview environments) stay wired but disabled. Enabling extra packages locally is possible and is the usual cause of a Kind cluster that never converges; check `kubectl top nodes` before and after, and see [Customization](/docs/operations/customization).
+The curated core exists because the full catalogue does not fit on one Kind node. It wants far more PersistentVolumes and memory than a laptop has. Some packages stay wired but disabled: production delivery, CI infrastructure and the heavy JVM services (Kafka, Nexus, Dapr, the Loki/Tempo/Mimir pipelines, preview environments).
+
+You can enable extra packages locally. It is also the usual cause of a Kind cluster that never converges. Check `kubectl top nodes` before and after, and see [Customization](/docs/operations/customization).
 
 ## Common pitfalls
 

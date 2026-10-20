@@ -7,7 +7,9 @@ path: "/docs/reference/cli"
 
 # CLI Reference
 
-The `adhar` binary is the platform's whole control surface: **one command creates the cluster, one converges it, and the rest inspect or drive what is running**. This page is a map of every command group with a working example of each, followed by the workflows that string them together. It is for anyone who types `adhar` — platform engineers, developers and operators — and `adhar <command> --help` remains authoritative for every flag.
+The `adhar` binary controls the whole platform. **One command creates the cluster, one converges it, and the rest inspect or drive what is running.**
+
+This page maps every command group, with a working example of each. It ends with workflows that combine them. It is for anyone who types `adhar`: platform engineers, developers and operators. For the final word on any flag, run `adhar <command> --help`.
 
 ## At a glance
 
@@ -22,7 +24,7 @@ The `adhar` binary is the platform's whole control surface: **one command create
 
 ## Command map
 
-`adhar --help` groups commands by who reaches for them. The map below follows that grouping exactly; the highlighted commands are where most people start.
+`adhar --help` groups commands by who uses them. The map below follows that grouping exactly. Most people start with the highlighted commands.
 
 ```diagram
 do-cli-map
@@ -38,11 +40,16 @@ do-cli-map
 
 ## How the CLI finds its config and cluster
 
-Every command resolves two things before it does anything: a **config file** (which providers and environments exist) and a **kubeconfig** (which cluster to talk to). Most surprises come from one of them resolving to something you did not expect.
+Before it does anything, every command finds two things:
 
-**Config.** With `-f`/`--file` that exact path is used; without it the CLI looks for `config.yaml` in the working directory, then `~/.adhar/`, then `~`. If nothing is found and no providers are configured, it falls back to a Kind-only default — which is why a cloud command with no `--file` silently sees no clusters. Variables prefixed `ADHAR_` override file values, and the result is validated against `config.schema.json` before anything runs.
+- a **config file**, which says which providers and environments exist
+- a **kubeconfig**, which says which cluster to talk to
 
-**Cluster.** `--kubeconfig`, then `$KUBECONFIG`, then `~/.kube/config`. `adhar up` writes each cluster's kubeconfig to `~/.adhar/clusters/<cluster>/kubeconfig` and merges it into `~/.kube/config` as context `adhar-<cluster>`, so after an `up` the right context is usually already current. Check before you act:
+Most surprises happen when one of these points somewhere you did not expect.
+
+**Config.** If you pass `-f`/`--file`, the CLI uses that exact path. Otherwise it looks for `config.yaml` in the working directory, then `~/.adhar/`, then `~`. If it finds nothing and no providers are configured, it falls back to a Kind-only default. That is why a cloud command with no `--file` silently sees no clusters. Variables prefixed `ADHAR_` override values from the file. The result is checked against `config.schema.json` before anything runs.
+
+**Cluster.** The CLI tries `--kubeconfig`, then `$KUBECONFIG`, then `~/.kube/config`. `adhar up` writes each cluster's kubeconfig to `~/.adhar/clusters/<cluster>/kubeconfig`. It also merges it into `~/.kube/config` as context `adhar-<cluster>`. So after an `up`, the right context is usually already current. Check before you act:
 
 ```bash
 kubectl config current-context      # adhar-<cluster>
@@ -91,7 +98,7 @@ adhar get status                    # proves the CLI can reach the platform
     --kind-config <path> # custom Kind configuration file or URL
 ```
 
-`adhar up` is idempotent and status-gated: re-running it without `--recreate` resumes from the pending phase.
+`adhar up` is idempotent and status-gated. If you re-run it without `--recreate`, it resumes from the pending phase.
 
 **Config, end to end:**
 
@@ -131,7 +138,7 @@ adhar stack describe keycloak              # contract, dependencies, live state
 adhar stack enable harbor --profile production
 ```
 
-`stack` edits the profile it detects from the cluster; `--profile local|production` overrides that, and `--json` makes every subcommand machine-readable.
+`stack` edits the profile it detects from the cluster. To override that, pass `--profile local|production`. Add `--json` to make any subcommand machine-readable.
 
 ## Operate: day-2
 
@@ -216,7 +223,7 @@ adhar events list --since 1h --domain delivery
 adhar events tail --domain platform            # follow new events
 ```
 
-`adhar metrics` and `adhar traces` default to service URLs that do not exist on an Adhar cluster, so port-forward and pass the URL:
+`adhar metrics` and `adhar traces` default to service URLs that do not exist on an Adhar cluster. Port-forward the service and pass its URL:
 
 ```bash
 kubectl -n adhar-system port-forward svc/prometheus-kube-prometheus-prometheus 9090:9090 &
@@ -242,7 +249,7 @@ adhar traces search --service checkout --tags 'http.status_code=500' \
 | `push <name>` | Build and deploy from source, `cf push`-style | `--git-url` (required), `--subpath`, `--wait` |
 | `dev [name]` | Inner loop: sync the working tree to a dev namespace | `--port`, `--local-port`, `--no-forward`, `--keep`, `--debounce` |
 
-Templates come from the `adhar/adhar-templates` repository in the platform's Gitea — a mirror of `github.com/adhar-io/adhar-templates` and the same collection the Console's Create wizard offers. Run `adhar application templates` for the names on your platform rather than relying on a list here. `application` aliases to `apps` and `app`.
+Templates come from the `adhar/adhar-templates` repository in the platform's Gitea. It mirrors `github.com/adhar-io/adhar-templates`, and the Console's Create wizard offers the same collection. To see the names on your platform, run `adhar application templates` instead of relying on a list here. `application` has the aliases `apps` and `app`.
 
 ```bash
 adhar application templates                                # what --template accepts
@@ -269,7 +276,7 @@ adhar routes test --name orders-api
 **Self-service infrastructure:**
 
 ```bash
-adhar database create --name orders --engine postgresql --size 20Gi
+adhar database create --name orders --engine postgresql --version 16 --size 20Gi
 adhar database list && adhar database status orders && adhar database health
 adhar database backup --name orders --method barmanObjectStore
 adhar database restore --name orders --backup <backup> --target orders-restored
@@ -315,7 +322,7 @@ adhar ai key set --provider anthropic # prompted, never echoed
 adhar ai mcp list
 ```
 
-Persistent flags: `-n/--namespace` (default `adhar-system`), `--model`, `--endpoint`, `--timeout` (3m), `--insecure`, `--json`. Agentic commands add `--autonomy`, `--max-steps`, `--quiet`, `--mcp`, `--yes`.
+Persistent flags: `-n/--namespace` (default `adhar-system`), `--model`, `--endpoint`, `--timeout` (3m), `--insecure`, `--json`. Agentic commands also take `--autonomy`, `--max-steps`, `--quiet`, `--mcp`, `--yes`.
 
 ## Administer: identity, policy and governance
 
@@ -382,7 +389,7 @@ adhar get apps -o json | jq -r '.[] | select(.status | contains("Not Ready")) | 
 
 ```bash
 adhar push orders-api --git-url https://github.com/acme/orders --wait
-adhar database create --name orders --engine postgresql
+adhar database create --name orders --engine postgresql --version 16
 adhar application bind orders-api orders
 adhar application status orders-api --detailed
 adhar routes show --name orders-api
@@ -400,7 +407,7 @@ adhar logs --component keycloak --lines 200
 
 ## Scripting and exit codes
 
-Diagnostics go to stderr and the payload to stdout, so `-o json` and `adhar auth token` are pipe-safe: the banner and footer are suppressed automatically.
+Diagnostics go to stderr and the payload goes to stdout. This makes `-o json` and `adhar auth token` safe to pipe, because the banner and footer are suppressed automatically.
 
 ```bash
 adhar get status -o json | jq -r '.OverallStatus'

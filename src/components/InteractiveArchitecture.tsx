@@ -33,12 +33,12 @@ const InteractiveArchitecture = () => {
   ];
 
   const teams: Team[] = [
-    { id: 'design', name: 'Design Team', icon: Users, color: 'text-blue-600', phase: 'define' },
-    { id: 'business', name: 'Business Team', icon: Users, color: 'text-orange-600', phase: 'design' },
-    { id: 'application', name: 'Application Team', icon: Users, color: 'text-green-600', phase: 'develop' },
-    { id: 'platform', name: 'Platform Team', icon: Users, color: 'text-purple-600', phase: 'deliver' },
-    { id: 'management', name: 'Management Team', icon: Users, color: 'text-indigo-600', phase: 'discover' },
-    { id: 'decision', name: 'Operations Team', icon: Users, color: 'text-teal-600', phase: 'decide' }
+    { id: 'design', name: 'Product', icon: Users, color: 'text-blue-600', phase: 'define' },
+    { id: 'business', name: 'Architects', icon: Users, color: 'text-orange-600', phase: 'design' },
+    { id: 'application', name: 'Developers', icon: Users, color: 'text-green-600', phase: 'develop' },
+    { id: 'platform', name: 'Platform engineers', icon: Users, color: 'text-purple-600', phase: 'deliver' },
+    { id: 'management', name: 'SRE & operations', icon: Users, color: 'text-indigo-600', phase: 'discover' },
+    { id: 'decision', name: 'Leadership', icon: Users, color: 'text-teal-600', phase: 'decide' }
   ];
 
   const interfaceItems: InterfaceItem[] = [
@@ -58,7 +58,7 @@ const InteractiveArchitecture = () => {
       name: 'Core Platform',
       color: 'bg-gradient-to-br from-slate-50 to-blue-50',
       tools: [
-        { name: 'Adhar Console', icon: '/favicon.svg', color: TILE, description: 'Unified platform control plane' },
+        { name: 'Adhar Console', icon: '/favicon.svg', color: TILE, description: 'Developer portal and console' },
         { name: 'Crossplane', icon: 'https://cdn.jsdelivr.net/gh/cncf/artwork@main/projects/crossplane/icon/color/crossplane-icon-color.svg', color: TILE, description: 'Self-service infrastructure APIs' },
         { name: 'Cilium', icon: 'https://cdn.jsdelivr.net/gh/simple-icons/simple-icons/icons/cilium.svg', color: TILE, description: 'eBPF networking & Gateway API' },
         { name: 'Terraform', icon: 'https://cdn.jsdelivr.net/gh/devicons/devicon/icons/terraform/terraform-original.svg', color: TILE, description: 'Infrastructure as code' },
@@ -167,7 +167,7 @@ const InteractiveArchitecture = () => {
     { name: 'CIVO', icon: 'https://cdn.jsdelivr.net/gh/simple-icons/simple-icons/icons/civo.svg', color: 'bg-gradient-to-br from-blue-100 to-cyan-100', hideName: true },
     { name: 'DigitalOcean', icon: 'https://cdn.jsdelivr.net/gh/devicons/devicon/icons/digitalocean/digitalocean-original.svg', color: 'bg-gradient-to-br from-blue-100 to-teal-100' },
     { name: 'Azure', icon: 'https://cdn.jsdelivr.net/gh/devicons/devicon/icons/azure/azure-original.svg', color: 'bg-gradient-to-br from-blue-100 to-indigo-100' },
-    { name: 'On-Premise', icon: 'https://cdn.jsdelivr.net/gh/simple-icons/simple-icons/icons/databricks.svg', color: 'bg-gradient-to-br from-gray-100 to-slate-100' }
+    { name: 'On-prem', icon: 'https://cdn.jsdelivr.net/gh/devicons/devicon/icons/linux/linux-original.svg', color: 'bg-gradient-to-br from-gray-100 to-slate-100' }
   ];
 
   const orchestrationTools: Provider[] = [

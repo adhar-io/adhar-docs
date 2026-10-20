@@ -1,7 +1,7 @@
-import { Button } from "@/components/ui/button";
 import { Moon, Sun } from "lucide-react";
 import { Github } from "@/components/brand-icons";
 import { ADHAR_CONSOLE_LOGIN_URL } from "@/lib/config";
+import { focusRing } from "../styles";
 
 interface NavigationActionsProps {
   isDarkMode: boolean;
@@ -10,28 +10,31 @@ interface NavigationActionsProps {
 
 const NavigationActions = ({ isDarkMode, toggleDarkMode }: NavigationActionsProps) => {
   return (
-    <div className="hidden md:flex items-center space-x-4">
-      <Button
-        variant="ghost"
-        size="sm"
+    <div className="hidden md:flex items-center gap-2">
+      <button
+        type="button"
         onClick={toggleDarkMode}
         aria-label={isDarkMode ? 'Switch to light mode' : 'Switch to dark mode'}
-        className="text-muted-foreground hover:text-primary hover:bg-accent/50 p-2 rounded-lg transition-all duration-300"
+        className={`inline-flex h-9 w-9 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground ${focusRing}`}
       >
-        {isDarkMode ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
-      </Button>
+        {isDarkMode ? <Sun className="w-[18px] h-[18px]" aria-hidden /> : <Moon className="w-[18px] h-[18px]" aria-hidden />}
+      </button>
 
-      <a href={ADHAR_CONSOLE_LOGIN_URL}>
-        <Button variant="ghost" className="text-foreground hover:text-primary hover:bg-accent/50 font-medium rounded-lg transition-all duration-300">
-          Sign In
-        </Button>
+      <a
+        href={ADHAR_CONSOLE_LOGIN_URL}
+        className={`inline-flex h-9 items-center justify-center rounded-full px-3.5 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground ${focusRing}`}
+      >
+        Sign in
       </a>
 
-      <a href="https://github.com/adhar-io/adhar" target="_blank" rel="noopener noreferrer">
-        <Button className="bg-gradient-to-r from-primary via-primary/90 to-accent hover:from-primary/90 hover:via-accent hover:to-primary shadow-lg shadow-primary/25 hover:shadow-xl hover:shadow-primary/40 transition-all duration-300 hover:scale-105 rounded-lg font-semibold">
-          <Github className="w-4 h-4 mr-2" />
-          GitHub
-        </Button>
+      <a
+        href="https://github.com/adhar-io/adhar"
+        target="_blank"
+        rel="noopener noreferrer"
+        className={`ml-1 inline-flex h-9 items-center justify-center gap-2 rounded-full px-4 text-sm font-semibold text-white bg-gradient-to-r from-primary to-accent shadow-md shadow-primary/25 transition-all duration-300 hover:shadow-lg hover:shadow-primary/40 hover:brightness-110 ${focusRing}`}
+      >
+        <Github className="w-4 h-4" />
+        GitHub
       </a>
     </div>
   );

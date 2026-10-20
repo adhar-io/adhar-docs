@@ -49,14 +49,13 @@ const BlogEditor = ({ post, onSave, onPublish }: BlogEditorProps) => {
 
   const readTime = useMemo(() => `${Math.max(1, Math.ceil(wordCount / 200))} min read`, [wordCount]);
 
-  useEffect(() => {
-    if (formData.title && !post) {
-      setFormData((prev) => ({ ...prev, slug: slugifyTitle(formData.title) }));
-    }
-  }, [formData.title, post]);
-
   const handleInputChange = (field: keyof typeof formData, value: string | boolean) => {
-    setFormData((prev) => ({ ...prev, [field]: value }));
+    setFormData((prev) => {
+      const next = { ...prev, [field]: value };
+      // New posts get a slug that follows the title.
+      if (field === 'title' && !post && typeof value === 'string' && value) next.slug = slugifyTitle(value);
+      return next;
+    });
   };
 
   const buildPayload = (): Partial<BlogPost> => ({

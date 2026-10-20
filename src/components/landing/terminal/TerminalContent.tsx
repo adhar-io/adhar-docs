@@ -13,7 +13,7 @@ interface TerminalContentProps {
 
 const TerminalContent = ({ commands, currentCommandIndex, typingIndex }: TerminalContentProps) => {
   return (
-    <div className="flex flex-col justify-end p-6 font-mono text-sm bg-gray-950 h-[240px] overflow-hidden text-left [&>*:last-child]:mb-0">
+    <div className="flex flex-col justify-end p-4 sm:p-6 font-mono text-xs sm:text-sm bg-gray-950 h-[260px] overflow-hidden text-left [&>*:last-child]:mb-0 [mask-image:linear-gradient(to_bottom,transparent,black_30%)]">
       {commands.map((cmd, idx) => {
         const shouldShow = idx <= currentCommandIndex;
         const isCurrentCommand = idx === currentCommandIndex;
@@ -23,7 +23,7 @@ const TerminalContent = ({ commands, currentCommandIndex, typingIndex }: Termina
         if (!shouldShow) return null;
         
         return (
-          <div key={idx} className="mb-6">
+          <div key={cmd.command} className="mb-6">
             <div className="mb-2">
               <span className="text-green-400">$ {displayCommand}</span>
               {isCurrentCommand && typingIndex < cmd.command.length && (
@@ -31,9 +31,15 @@ const TerminalContent = ({ commands, currentCommandIndex, typingIndex }: Termina
               )}
             </div>
             
-            {showOutput && cmd.output.map((line, lineIdx) => (
-              <div key={lineIdx} className="text-gray-400 mb-1">
-                {line}
+            {showOutput && cmd.output.map((line) => (
+              <div key={line} className="text-gray-400 mb-1 whitespace-pre-wrap">
+                {line.startsWith('✓') ? (
+                  <><span className="text-emerald-400">✓</span>{line.slice(1)}</>
+                ) : line.startsWith('→') ? (
+                  <span className="text-sky-400">{line}</span>
+                ) : (
+                  line
+                )}
               </div>
             ))}
           </div>

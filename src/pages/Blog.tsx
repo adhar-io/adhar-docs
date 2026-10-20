@@ -32,20 +32,20 @@ function formatPostDate(iso: string): string {
 const Blog = () => {
   const navigate = useNavigate();
   const location = useLocation();
-  const searchParams = new URLSearchParams(
-    typeof (location as { searchStr?: string }).searchStr === "string"
-      ? (location as { searchStr?: string }).searchStr
-      : ""
-  );
-  const cat = searchParams.get("category") || DEFAULT_CAT;
-  const tag = searchParams.get("tag") || "";
-  const q = searchParams.get("q") || "";
+  // The router has already parsed the query string (and un-quoted values such
+  // as "2024" that it JSON-encodes), so read from that rather than re-parsing.
+  const search = (location.search ?? {}) as Record<string, unknown>;
+  const param = (key: string) => (search[key] == null ? "" : String(search[key]));
+  const cat = param("category") || DEFAULT_CAT;
+  const tag = param("tag");
+  const q = param("q");
 
   const updateParam = (key: string, value: string, defaultValue = "") => {
-    const next = new URLSearchParams(searchParams);
-    if (!value || value === defaultValue) next.delete(key);
-    else next.set(key, value);
-    navigate({ to: "/blog", search: Object.fromEntries(next), replace: true });
+    const next: Record<string, string> = {};
+    for (const k of ["category", "tag", "q"]) if (param(k)) next[k] = param(k);
+    if (!value || value === defaultValue) delete next[key];
+    else next[key] = value;
+    navigate({ to: "/blog", search: next, replace: true });
   };
 
   const setCat = (c: string) => updateParam("category", c, DEFAULT_CAT);
@@ -259,7 +259,7 @@ const Blog = () => {
                 {/* Featured */}
                 {featured && (
                   <Link
-                    to={`/blog/${featured.slug}`}
+                    to="/blog/$slug" params={{ slug: featured.slug }}
                     className="group block mb-12 overflow-hidden rounded-3xl border border-border/70 bg-card transition-all hover:border-border hover:shadow-[var(--shadow-md)]"
                   >
                     <div className="grid lg:grid-cols-2 gap-0">
@@ -312,7 +312,7 @@ const Blog = () => {
                     {rest.map((p) => (
                       <Link
                         key={p.id}
-                        to={`/blog/${p.slug}`}
+                        to="/blog/$slug" params={{ slug: p.slug }}
                         className="group flex flex-col overflow-hidden rounded-2xl border border-border/70 bg-card transition-all hover:border-border hover:shadow-[var(--shadow-md)] hover:-translate-y-0.5"
                       >
                         <div className="relative aspect-[16/10] overflow-hidden bg-muted">
@@ -400,7 +400,7 @@ const Blog = () => {
                     {bookmarked.map((p) => (
                       <li key={p.id}>
                         <Link
-                          to={`/blog/${p.slug}`}
+                          to="/blog/$slug" params={{ slug: p.slug }}
                           className="group block"
                         >
                           <p className="text-sm font-medium text-foreground leading-snug line-clamp-2 group-hover:text-primary transition-colors">

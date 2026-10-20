@@ -10,7 +10,7 @@ const CloudProviders = ({ cloudProviders }: CloudProvidersProps) => {
   return (
     <div className="bg-gradient-to-br from-gray-50 via-slate-50 to-zinc-50 dark:bg-gradient-to-br dark:from-gray-800/60 dark:via-slate-800/40 dark:to-zinc-800/60 p-8 rounded-2xl border border-gray-200 dark:border-gray-700 shadow-xl backdrop-blur-sm">
       <h3 className="text-xl font-bold text-center mb-8 text-gray-800 dark:text-gray-200 relative">
-        Cloud Infrastructure
+        Cloud infrastructure
         <div className="absolute -bottom-2 left-1/2 transform -translate-x-1/2 w-20 h-1 bg-gradient-to-r from-gray-500 to-slate-500 rounded-full"></div>
       </h3>
       

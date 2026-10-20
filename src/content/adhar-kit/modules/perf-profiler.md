@@ -7,7 +7,9 @@ path: "/adhar-kit/modules/perf-profiler"
 
 # Perf Profiler
 
-`adhar-kit-perf-profiler` gives you method-level latency data from inside a running service: hotspot detection, percentile statistics, rolling time windows, slow-call events, memory and GC snapshots, thread-contention analytics, continuous JFR recording, and an Actuator endpoint. It exists because **the two usual options are both bad in production** — an external profiler you cannot attach to a live pod, or `System.currentTimeMillis()` scattered through the code. This module is designed to be left on at a low sample rate: sampling and a bounded method registry cap the overhead.
+`adhar-kit-perf-profiler` gives you method-level latency data from inside a running service. It provides hotspot detection, percentile statistics, rolling time windows, slow-call events, memory and GC snapshots, thread-contention analytics, continuous JFR recording, and an Actuator endpoint.
+
+It exists because **the two usual options are both bad in production**. You cannot attach an external profiler to a live pod, and `System.currentTimeMillis()` scattered through the code is messy. This module is designed to stay on at a low sample rate. Sampling and a bounded method registry cap the overhead.
 
 ## At a glance
 
@@ -22,7 +24,7 @@ path: "/adhar-kit/modules/perf-profiler"
 
 ## How it works
 
-There are two recording paths and they feed different consumers.
+There are two recording paths, and they feed different consumers.
 
 ```diagram
 kit-profiler-paths
@@ -30,21 +32,33 @@ kit-profiler-paths
 
 ### The two overhead guards and the sampling gate
 
-Before anything is measured, `ProfilingAspect.doProfile` consults two independent guards. Understanding where each one sits is the difference between "profiling is free" and "profiling is on the hot path".
+Before measuring anything, `ProfilingAspect.doProfile` checks two independent guards. Where each one sits decides whether profiling is free or sits on the hot path.
 
-**`sample-rate` is the first gate, and it short-circuits everything.** `shouldSample()` returns `true` immediately when the rate is `1.0`; otherwise it draws from `ThreadLocalRandom`. An unsampled call does nothing but `joinPoint.proceed()` — no signature reflection, no `System.nanoTime()`, no `Timer` lookup, no registry write. The cost of an unsampled call is one random draw plus the proxy hop. The rate is clamped to `[0.0, 1.0]` both in the setter and again in the aspect constructor, so an out-of-range value is corrected rather than rejected.
+**`sample-rate` is the first gate, and it short-circuits everything.** `shouldSample()` returns `true` at once when the rate is `1.0`. Otherwise it draws from `ThreadLocalRandom`.
 
-**`max-tracked-methods` is the second guard, and it is narrower than it looks.** `isTrackingAllowed(registryKey)` gates only the **registry write** and the p99 check. A sampled call always builds and records its Micrometer timer, even past the cap. Methods already in the tracked set are always allowed; once the set reaches the cap, each newly-seen key is skipped and a single WARN is logged for the whole process (`capWarningLogged` is a one-shot `AtomicBoolean`), naming the first method skipped. So the cap protects the registry from unbounded growth; it does not protect your meter registry from metric-name explosion.
+An unsampled call does nothing but `joinPoint.proceed()`. There is no signature reflection, no `System.nanoTime()`, no `Timer` lookup and no registry write. Its cost is one random draw plus the proxy hop. The rate is clamped to `[0.0, 1.0]` in the setter and again in the aspect constructor. An out-of-range value is corrected, not rejected.
 
-**Debounced p99 breach detection.** When `p99-alert-threshold-ms` is greater than zero, every *recorded* call re-reads the method's aggregate stats from the registry and compares `p99Ms()` to the threshold. The debounce is a `Set<String> breachedMethods`: the event is published only when `breachedMethods.add(key)` returns `true`, so you get one `SlowCallThresholdBreachedEvent` per breach, not one per call. When p99 drops back under the threshold the key is removed and the method rearms. Note the cost: this adds a map lookup and two HdrHistogram percentile computations to every recorded call, so leave the threshold at `0` unless you want the alerts.
+**`max-tracked-methods` is the second guard, and it is narrower than it looks.** `isTrackingAllowed(registryKey)` gates only the **registry write** and the p99 check. A sampled call always builds and records its Micrometer timer, even past the cap.
 
-Separately and independently, if the elapsed time exceeds the annotation's `slowThresholdMs` and `logSlow` is on, the aspect logs a warning *and* publishes a per-call `SlowCallEvent`. This check is not debounced — a method that is uniformly slow produces one log line and one event per call, which is the usual cause of "profiling flooded our logs".
+Methods already in the tracked set are always allowed. Once the set reaches the cap, each newly seen key is skipped. A single WARN is logged for the whole process, naming the first method skipped (`capWarningLogged` is a one-shot `AtomicBoolean`). So the cap protects the registry from unbounded growth. It does not protect your meter registry from an explosion of metric names.
 
-Alongside the aspect, `MemoryProfiler` reads heap, non-heap, GC, and thread counts from the JVM's management beans; `ThreadContentionCollector` reads `ThreadMXBean` contention data; and `JfrRecordingManager` drives a continuous Java Flight Recorder recording that `FlameGraphExporter` can collapse into flame-graph text.
+**Debounced p99 breach detection.** When `p99-alert-threshold-ms` is greater than zero, every *recorded* call re-reads the method's aggregate stats from the registry. It then compares `p99Ms()` to the threshold.
+
+The debounce is a `Set<String> breachedMethods`. The event is published only when `breachedMethods.add(key)` returns `true`. So you get one `SlowCallThresholdBreachedEvent` per breach, not one per call. When p99 drops back under the threshold, the key is removed and the method rearms.
+
+This has a cost. It adds a map lookup and two HdrHistogram percentile computations to every recorded call. Leave the threshold at `0` unless you want the alerts.
+
+There is a separate, independent check. If the elapsed time exceeds the annotation's `slowThresholdMs` and `logSlow` is on, the aspect logs a warning *and* publishes a per-call `SlowCallEvent`. This check is not debounced. A method that is always slow produces one log line and one event per call. This is the usual cause of "profiling flooded our logs".
+
+Other components run alongside the aspect:
+
+- `MemoryProfiler` reads heap, non-heap, GC, and thread counts from the JVM's management beans.
+- `ThreadContentionCollector` reads `ThreadMXBean` contention data.
+- `JfrRecordingManager` drives a continuous Java Flight Recorder recording. `FlameGraphExporter` can collapse it into flame-graph text.
 
 ### What profiling actually costs
 
-No benchmark ships with this repo, so reason about it structurally rather than from a number:
+No benchmark ships with this repo. So reason about the cost from the work each call does, not from a number:
 
 | Per call | Work done |
 |---|---|
@@ -53,9 +67,13 @@ No benchmark ships with this repo, so reason about it structurally rather than f
 | Sampled and tracked | The above, plus a `ConcurrentHashMap.compute` and a synchronized `Histogram.recordValue` |
 | Sampled, tracked, p99 alerting on | The above, plus two `getValueAtPercentile` computations |
 
-The synchronized block in `MutableMethodStats` is per method key, so two hot methods do not contend with each other — but all callers of the *same* hot method serialize briefly on that monitor. On a method called tens of thousands of times a second, that monitor rather than the timing itself is what you will measure.
+The synchronized block in `MutableMethodStats` is per method key. Two hot methods do not contend with each other. But all callers of the *same* hot method briefly queue on that monitor. On a method called tens of thousands of times a second, you will measure that monitor rather than the timing itself.
 
-So: leave `sample-rate` at `1.0` in development and load tests, drop it to `0.01`–`0.1` in production and scale counts accordingly, and leave `p99-alert-threshold-ms` at `0` and `jfr.enabled` at `false` until you are actually investigating.
+So:
+
+- Leave `sample-rate` at `1.0` in development and load tests.
+- Drop it to `0.01`–`0.1` in production, and scale counts to match.
+- Leave `p99-alert-threshold-ms` at `0` and `jfr.enabled` at `false` until you are actually investigating.
 
 ## Install
 
@@ -67,7 +85,7 @@ So: leave `sample-rate` at `1.0` in development and load tests, drop it to `0.01
 </dependency>
 ```
 
-Micrometer `micrometer-core` and HdrHistogram come in with the module; Actuator is needed for the endpoint. Expose it:
+Micrometer `micrometer-core` and HdrHistogram come in with the module. You need Actuator for the endpoint. Expose it:
 
 ```yaml
 management:
@@ -81,13 +99,24 @@ management:
 
 `ProfilerFacade`, via `adhar.getProfiler()` or `ProfilerFacade.getInstance()`:
 
-- `profile(name, Supplier<T>)` and `profile(name, Runnable)` — time a block that has no method to annotate. `AdharFacade` exposes the same as `adhar.profiled(name, () -> work())`.
-- `getReport()`, `getHotspots(topN)` (slowest by average time), `getMethodStats(methodName)` keyed on the full `Class.method` registry key.
+- `profile(name, Supplier<T>)` and `profile(name, Runnable)` time a block that has no method to annotate. `AdharFacade` exposes the same thing as `adhar.profiled(name, () -> work())`.
+- `getReport()`, `getHotspots(topN)` (slowest by average time), and `getMethodStats(methodName)`, keyed on the full `Class.method` registry key.
 - `getMemorySnapshot()`, `getHeapUsageMb()`, `getThreadCount()`, `reset()`, `isEnabled()` / `setEnabled(boolean)`, and `health()` (`profiledMethodCount`, `totalProfiledCalls`, `heapUsedMb`, `heapMaxMb`).
 
-`ProfilingRegistry` is the aggregation engine: `record(result)`, `getReport([topN])`, `getHotspots(topN)`, `getMethodStats(key)` returning `Optional<ProfilingReport.MethodStats>` (avg, min, max, p95, p99), `getWindowHistory()`, `reset()`. Its constants `DEFAULT_WINDOW_DURATION` (5 minutes) and `DEFAULT_HISTORY_WINDOWS` (5) match the configuration defaults. `JfrRecordingManager` offers `isJfrAvailable()`, `start()`, `stop()`, `dump()`, `latestDump()`, `status()`. Two events are published: `SlowCallEvent` (per call) and `SlowCallThresholdBreachedEvent` (aggregate p99, debounced).
+`ProfilingRegistry` is the aggregation engine. It offers `record(result)`, `getReport([topN])`, `getHotspots(topN)`, `getMethodStats(key)` returning `Optional<ProfilingReport.MethodStats>` (avg, min, max, p95, p99), `getWindowHistory()` and `reset()`. Its constants `DEFAULT_WINDOW_DURATION` (5 minutes) and `DEFAULT_HISTORY_WINDOWS` (5) match the configuration defaults.
 
-> **`ProfilerFacade` is not a Spring bean.** `PerfProfilerAutoConfiguration` registers `ProfilingRegistry`, `ProfilingAspect`, `MemoryProfiler`, `JfrRecordingManager`, `FlameGraphExporter`, `ThreadContentionCollector` and the Actuator endpoint — but no `ProfilerFacade`. `adhar.getProfiler()` returns `ProfilerFacade.getInstance()`, a singleton that builds its **own** default `ProfilingRegistry`. Consequences: blocks timed with `adhar.profiled(...)` do not appear in `/actuator/profiling`, `@Profiled` methods do not appear in `adhar.getProfiler().getReport()`, the facade's registry ignores `window-duration` and `history-windows`, and `setEnabled(false)` silences only the programmatic path — never the aspect. Declare your own `ProfilerFacade` bean built from the injected `ProfilingRegistry` if you want one view.
+`JfrRecordingManager` offers `isJfrAvailable()`, `start()`, `stop()`, `dump()`, `latestDump()` and `status()`.
+
+Two events are published: `SlowCallEvent` (per call) and `SlowCallThresholdBreachedEvent` (aggregate p99, debounced).
+
+> **`ProfilerFacade` is not a Spring bean.** `PerfProfilerAutoConfiguration` registers `ProfilingRegistry`, `ProfilingAspect`, `MemoryProfiler`, `JfrRecordingManager`, `FlameGraphExporter`, `ThreadContentionCollector` and the Actuator endpoint, but no `ProfilerFacade`. `adhar.getProfiler()` returns `ProfilerFacade.getInstance()`, a singleton that builds its **own** default `ProfilingRegistry`. As a result:
+>
+> - Blocks timed with `adhar.profiled(...)` do not appear in `/actuator/profiling`.
+> - `@Profiled` methods do not appear in `adhar.getProfiler().getReport()`.
+> - The facade's registry ignores `window-duration` and `history-windows`.
+> - `setEnabled(false)` silences only the programmatic path, never the aspect.
+>
+> If you want one view, declare your own `ProfilerFacade` bean built from the injected `ProfilingRegistry`.
 
 ## Worked example — annotated methods plus a programmatic block
 
@@ -136,18 +165,20 @@ public class ReportService {
 }
 ```
 
-The `renderPdf(spec)` call inside `generateReport` is deliberately left as a self-call to show the trap: it produces no timer and no registry entry, and nothing warns you. Inject a self-reference, split the renderer into its own bean, or wrap it with `profiler.profile(...)` instead.
+The `renderPdf(spec)` call inside `generateReport` is left as a self-call on purpose, to show the trap. It produces no timer and no registry entry, and nothing warns you. Instead, inject a self-reference, move the renderer into its own bean, or wrap it with `profiler.profile(...)`.
 
 ### How the interception works
 
-`ProfilingAspect` is registered as a bean by `PerfProfilerAutoConfiguration` — there is no `@EnableProfiling`; the aspect exists as soon as the module is on the classpath with a `MeterRegistry` present. It advises two pointcuts:
+`PerfProfilerAutoConfiguration` registers `ProfilingAspect` as a bean. There is no `@EnableProfiling`. The aspect exists as soon as the module is on the classpath and a `MeterRegistry` is present. It advises two pointcuts:
 
-- `@Around("@annotation(profiled)")` — one annotated method, whatever its visibility *as seen through the proxy*.
-- `@Around("@within(profiled) && execution(public * *(..))")` — every **public** method of an annotated class.
+- `@Around("@annotation(profiled)")` matches one annotated method, whatever its visibility *as seen through the proxy*.
+- `@Around("@within(profiled) && execution(public * *(..))")` matches every **public** method of an annotated class.
 
-So `@Profiled` on a class profiles all its public methods with the class-level attributes, and a method-level `@Profiled` overrides them for that method. The `execution(public ...)` clause on the class-level pointcut is explicit: package-private and protected methods of a `@Profiled` class are never profiled, even though Spring AOP could in principle advise them on a CGLIB proxy. `@Profiled` is not `@Inherited`, so annotating a base class does not profile a subclass.
+So `@Profiled` on a class profiles all its public methods with the class-level attributes. A method-level `@Profiled` overrides them for that method.
 
-> **Self-invocation.** Both pointcuts work through the Spring proxy. A call from inside the same bean — `this.renderPdf(...)` — bypasses the advice entirely: no timer, no registry entry, no warning, no error. This is by far the most common reason a method "shows no data". Call through the injected bean, inject a self-reference, or use `ProfilerFacade.profile(...)` for in-class work.
+The `execution(public ...)` clause on the class-level pointcut is explicit. Package-private and protected methods of a `@Profiled` class are never profiled, even though Spring AOP could in principle advise them on a CGLIB proxy. `@Profiled` is not `@Inherited`, so annotating a base class does not profile a subclass.
+
+> **Self-invocation.** Both pointcuts work through the Spring proxy. A call from inside the same bean, such as `this.renderPdf(...)`, skips the advice entirely. You get no timer, no registry entry, no warning and no error. This is by far the most common reason a method "shows no data". Call through the injected bean, inject a self-reference, or use `ProfilerFacade.profile(...)` for work inside the class.
 
 ### Timer names and tags
 
@@ -158,25 +189,45 @@ The Micrometer timer name is **always** `adhar.profiler.` plus either `Class.met
 @Profiled(value = "report.pdf-render")     -> adhar.profiler.report.pdf-render
 ```
 
-Every timer carries the tags `class` (the declaring type's simple name), `method`, and `success` (`"true"` / `"false"`). On a failure a fourth tag, `error`, holds the exception's simple name. `histogram = true` adds `publishPercentileHistogram()`, which is what lets your metrics backend compute accurate server-side percentiles — without it the backend only sees count and sum.
+Every timer carries the tags `class` (the declaring type's simple name), `method`, and `success` (`"true"` / `"false"`). On a failure, a fourth tag, `error`, holds the exception's simple name.
 
-The **registry** key is always `Class.method` regardless of `value()`, so the two views use different identifiers for the same method. `ProfilerFacade.profile(name, ...)` records under class name `"manual"`, giving the key `manual.<name>`, and emits no Micrometer timer at all.
+`histogram = true` adds `publishPercentileHistogram()`. This lets your metrics backend compute accurate server-side percentiles. Without it, the backend only sees count and sum.
+
+The **registry** key is always `Class.method`, whatever `value()` is. So the two views use different identifiers for the same method. `ProfilerFacade.profile(name, ...)` records under class name `"manual"`, giving the key `manual.<name>`. It emits no Micrometer timer at all.
 
 ## How it behaves
 
-**Thread safety.** `ProfilingRegistry` is a `ConcurrentHashMap` of per-method accumulators; every write goes through `compute` (one writer per key) and every accumulator method is `synchronized`, so concurrent reads during report generation are consistent. `ProfilingAspect` holds two concurrent key sets and an `AtomicBoolean`. Both are safe to share as singletons; `MemoryProfiler` and `ThreadContentionCollector` are stateless readers of JVM management beans.
+**Thread safety.** `ProfilingRegistry` is a `ConcurrentHashMap` of per-method accumulators. Every write goes through `compute` (one writer per key), and every accumulator method is `synchronized`. So concurrent reads during report generation are consistent. `ProfilingAspect` holds two concurrent key sets and an `AtomicBoolean`. Both are safe to share as singletons. `MemoryProfiler` and `ThreadContentionCollector` are stateless readers of JVM management beans.
 
-**Resolution and rounding.** Elapsed time is measured with `System.nanoTime()` but converted with `TimeUnit.NANOSECONDS.toMillis()` before it reaches the registry, and the HdrHistogram covers 1 ms to 1 hour at two significant digits. A sub-millisecond method therefore records `0` and its p95/p99 read as `0`. The Micrometer timer keeps the full nanosecond value, so use the timer, not the registry, for fast methods. `ProfilerFacade.profile` uses `System.currentTimeMillis()`, coarser still.
+**Resolution and rounding.** Elapsed time is measured with `System.nanoTime()`. It is converted with `TimeUnit.NANOSECONDS.toMillis()` before it reaches the registry. The HdrHistogram covers 1 ms to 1 hour at two significant digits. So a sub-millisecond method records `0`, and its p95/p99 read as `0`.
 
-**Memory is bounded by construction.** Each accumulator holds one HdrHistogram whose footprint is fixed at construction by its range and precision — it does not grow with sample count. The number of accumulators is capped by `max-tracked-methods`, and the window history at `history-windows` snapshots, oldest evicted first. No per-call data is retained anywhere.
+The Micrometer timer keeps the full nanosecond value. For fast methods, use the timer, not the registry. `ProfilerFacade.profile` uses `System.currentTimeMillis()`, which is coarser still.
 
-**Windows roll forward and discard.** `maybeRollover()` runs on every `record` and `getReport`: a volatile read plus a duration comparison in the common case, and under a `ReentrantLock` with a double check when a rollover is due. On rollover the current stats are snapshotted into `windowHistory` and **`stats.clear()` wipes the live map.** So `getMethodStats` returns empty for a method not called in the current window, hotspots reflect the current window only, and a p99 breach implicitly rearms at every window boundary because the key disappears from the registry. Use `/actuator/profiling/windows` for trend data.
+**Memory is bounded by design.** Each accumulator holds one HdrHistogram. Its size is fixed at construction by its range and precision, and it does not grow with sample count. `max-tracked-methods` caps the number of accumulators. The window history is capped at `history-windows` snapshots, oldest evicted first. No per-call data is kept anywhere.
 
-**Lifecycle and failure.** The beans are plain singletons created at context startup; recording begins with the first proxied call. Nothing is drained or persisted at shutdown, which is correct for this kind of data — but a JFR recording started through the endpoint is *not* stopped on context close, so take a dump before you shut down. The aspect's `finally` block always runs, so a throwing method is still timed and recorded with `success=false` and an `error` tag; exceptions propagate unchanged. With no `MeterRegistry` on the classpath the entire auto-configuration is skipped, endpoint included.
+**Windows roll forward and discard.** `maybeRollover()` runs on every `record` and `getReport`. In the common case it costs a volatile read plus a duration comparison. When a rollover is due, it runs under a `ReentrantLock` with a double check.
+
+On rollover, the current stats are snapshotted into `windowHistory`, and **`stats.clear()` wipes the live map.** This means:
+
+- `getMethodStats` returns empty for a method not called in the current window.
+- Hotspots reflect the current window only.
+- A p99 breach rearms at every window boundary, because the key disappears from the registry.
+
+Use `/actuator/profiling/windows` for trend data.
+
+**Lifecycle and failure.** The beans are plain singletons created at context startup. Recording begins with the first proxied call. Nothing is drained or persisted at shutdown, which is correct for this kind of data. But a JFR recording started through the endpoint is *not* stopped on context close, so take a dump before you shut down.
+
+The aspect's `finally` block always runs. So a method that throws is still timed and recorded with `success=false` and an `error` tag. Exceptions propagate unchanged. With no `MeterRegistry` on the classpath, the entire auto-configuration is skipped, endpoint included.
 
 ## JFR and the cost of leaving it on
 
-`jfr.enabled` is `false` by default and should usually stay that way. A continuous recording is the most expensive thing in this module: it buffers up to `jfr.max-size-mb` on disk, retains `jfr.max-age` of events, and the `profile` preset samples substantially harder than `default`. Dumps accumulate in `jfr.dump-directory` up to `jfr.max-dump-files`, oldest deleted first. The intended workflow is on-demand:
+`jfr.enabled` is `false` by default, and it should usually stay that way. A continuous recording is the most expensive thing in this module:
+
+- It buffers up to `jfr.max-size-mb` on disk.
+- It keeps `jfr.max-age` of events.
+- The `profile` preset samples much harder than `default`.
+
+Dumps build up in `jfr.dump-directory` up to `jfr.max-dump-files`, oldest deleted first. The intended workflow is on demand:
 
 ```bash
 curl -X POST http://localhost:8080/actuator/profiling/jfr-start
@@ -185,9 +236,9 @@ curl http://localhost:8080/actuator/profiling/flamegraph
 curl -X POST http://localhost:8080/actuator/profiling/jfr-stop
 ```
 
-`flamegraph` dumps the running recording on demand, falling back to the most recent retained dump, then collapses it. With neither available it returns `{"error": "No JFR dump available: start the JFR recording first"}` rather than failing.
+`flamegraph` dumps the running recording on demand, or falls back to the most recent retained dump. It then collapses it. If neither is available, it returns `{"error": "No JFR dump available: start the JFR recording first"}` instead of failing.
 
-Thread-contention *time* measurement (`contention.time-monitoring-enabled`) is the other opt-in cost: it enables a JVM-wide per-monitor measurement. Blocked and waited **counts** are always available; only the **times** require it.
+Thread-contention *time* measurement (`contention.time-monitoring-enabled`) is the other opt-in cost. It turns on a JVM-wide per-monitor measurement. Blocked and waited **counts** are always available. Only the **times** need it.
 
 ## Actuator endpoints
 
@@ -208,15 +259,15 @@ POST   /actuator/profiling/jfr-dump             write a dump file
 DELETE /actuator/profiling                      reset all statistics
 ```
 
-An unrecognised section or action returns `{"error": "Unknown section: ..."}` with a 200, not a 404. These are operational endpoints that expose method names and heap figures — secure them like any other non-health Actuator endpoint.
+An unrecognised section or action returns `{"error": "Unknown section: ..."}` with a 200, not a 404. These operational endpoints expose method names and heap figures. Secure them like any other non-health Actuator endpoint.
 
 ## Testing
 
-`adhar-kit-test-commons` has no profiler helper; the components are plain objects, so test them directly.
+`adhar-kit-test-commons` has no profiler helper. The components are plain objects, so test them directly.
 
-- **Aspect tests** — the two-argument `new ProfilingAspect(meterRegistry, registry)` convenience constructor gives sample rate `1.0`, no event publisher, default cap. Pass a `SimpleMeterRegistry` and a real `ProfilingRegistry`, drive a mocked `ProceedingJoinPoint`, then assert on `registry.getMethodStats("Class.method")` and the meter registry's timers. The four-argument form takes a `PerfProfilerProperties` you have configured; a `sampleRate` of `0.0` makes the aspect a pure pass-through, a clean way to assert your method still behaves correctly unprofiled.
-- **Events and windows** — pass a mock `ApplicationEventPublisher` and verify the events rather than scraping logs; construct `new ProfilingRegistry(Duration.ofMillis(50), 2)` so a rollover happens on demand instead of after five minutes.
-- **Disabling side effects** — `adhar.profiler.enabled: false` removes the whole auto-configuration, and omitting Micrometer from the test classpath has the same effect. Avoid `ProfilerFacade.getInstance()` in tests: it is a process-wide singleton shared across the JVM, so construct `new ProfilerFacade(registry, memoryProfiler)` explicitly.
+- **Aspect tests.** The two-argument convenience constructor `new ProfilingAspect(meterRegistry, registry)` gives sample rate `1.0`, no event publisher and the default cap. Pass a `SimpleMeterRegistry` and a real `ProfilingRegistry`, and drive a mocked `ProceedingJoinPoint`. Then assert on `registry.getMethodStats("Class.method")` and the meter registry's timers. The four-argument form takes a `PerfProfilerProperties` you have configured. A `sampleRate` of `0.0` makes the aspect a pure pass-through. This is a clean way to check that your method still behaves correctly without profiling.
+- **Events and windows.** Pass a mock `ApplicationEventPublisher` and verify the events instead of scraping logs. Construct `new ProfilingRegistry(Duration.ofMillis(50), 2)` so a rollover happens on demand instead of after five minutes.
+- **Disabling side effects.** `adhar.profiler.enabled: false` removes the whole auto-configuration. Leaving Micrometer off the test classpath has the same effect. Avoid `ProfilerFacade.getInstance()` in tests. It is a process-wide singleton shared across the JVM, so construct `new ProfilerFacade(registry, memoryProfiler)` explicitly.
 
 ## Configuration
 
@@ -235,7 +286,7 @@ An unrecognised section or action returns `{"error": "Unknown section: ..."}` wi
 | `adhar.profiler.jfr.dump-directory` / `.max-dump-files` | Dump location, and how many are retained (oldest deleted first) | `<java.io.tmpdir>/adhar-profiler-jfr` / `5` |
 | `adhar.profiler.contention.time-monitoring-enabled` / `.top-threads` | JVM contention *time* measurement; default top-N | `false` / `10` |
 
-The slow-call threshold and the slow-call logging flag come from the `@Profiled` annotation (`slowThresholdMs = 500`, `logSlow = true`) on every path. The two module-level properties above are bound and readable but no component consults them; set the annotation attributes instead.
+On every path, the slow-call threshold and the slow-call logging flag come from the `@Profiled` annotation (`slowThresholdMs = 500`, `logSlow = true`). The two module-level properties above are bound and readable, but no component consults them. Set the annotation attributes instead.
 
 ```yaml
 adhar:

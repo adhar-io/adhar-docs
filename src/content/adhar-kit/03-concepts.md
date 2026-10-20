@@ -7,7 +7,7 @@ path: "/adhar-kit/concepts"
 
 # Concepts
 
-Five ideas run through every Adhar Kit module. **Once you can predict what `adhar.getCache()` does before you call it, every module page becomes reference material rather than new learning.** This page is that predictive model.
+Five ideas run through every Adhar Kit module. **Once you can predict what `adhar.getCache()` does before you call it, every module page becomes reference material instead of new learning.** This page gives you that model.
 
 ## At a glance
 
@@ -22,11 +22,11 @@ Five ideas run through every Adhar Kit module. **Once you can predict what `adha
 
 ## 1. The facade pattern, applied twice
 
-Adhar Kit uses the facade pattern at two levels, and confusing them is the most common source of misreading the API.
+Adhar Kit uses the facade pattern at two levels. Mixing them up is the most common reason people misread the API.
 
-**Level one — a facade per module.** Every module exposes exactly one class as its primary API: `MetricsFacade`, `CacheFacade`, `SecurityFacade`, `CircuitBreakerFacade`, and so on; everything else is an implementation detail that may change. Each works standalone — `MetricsFacade.getInstance()` is valid with or without the starter — which is what makes modules independently consumable.
+**Level one — a facade per module.** Every module exposes exactly one class as its main API: `MetricsFacade`, `CacheFacade`, `SecurityFacade`, `CircuitBreakerFacade`, and so on. Everything else is an implementation detail that may change. Each facade works on its own: `MetricsFacade.getInstance()` is valid with or without the starter. That is what lets you use modules independently.
 
-**Level two — `AdharFacade` federates them.** The starter's `AdharFacade` holds all 23 sub-facades and exposes them through accessors, plus shortcuts that compose several at once. It is a plain class with no DI annotations, so the same object works as an injected bean and as `AdharFacade.getInstance()`.
+**Level two — `AdharFacade` brings them together.** The starter's `AdharFacade` holds all 23 sub-facades and exposes them through accessors. It also offers shortcuts that combine several at once. It is a plain class with no DI annotations, so the same object works as an injected bean and as `AdharFacade.getInstance()`.
 
 ```java
 // Level one: full control over one module
@@ -46,21 +46,28 @@ adhar.notify("to@example.com", "Subject", "Body");
 adhar.uuid();  adhar.shortId();  adhar.toJson(obj);  adhar.async(() -> work());
 ```
 
-The shortcuts are not magic; they are the obvious composition, written once. `traced(name, op)` is `metrics.recordTime(name, () -> tracing.executeInSpan(name, op))`. `safe(name, op, fallback)` is `traced(name, () -> resilience.executeWithFallback(name, op, fallback))`. When a shortcut is not quite what you want, drop to the accessor — you lose nothing.
+The shortcuts are not magic. Each is the obvious combination, written once:
+
+- `traced(name, op)` is `metrics.recordTime(name, () -> tracing.executeInSpan(name, op))`.
+- `safe(name, op, fallback)` is `traced(name, () -> resilience.executeWithFallback(name, op, fallback))`.
+
+When a shortcut is not quite what you want, use the accessor instead. You lose nothing.
 
 ## 2. Module independence
 
-Modules are not a layered stack you adopt together. Each is a separate Maven artifact under `com.adhar.kit`, and the edges between them are deliberately sparse: most depend on `adhar-kit-commons` (framework detection, DDD annotations, `AdharCloudEvent`, tenant and correlation context) and on nothing else in the kit.
+Modules are not a layered stack you must adopt together. Each is a separate Maven artifact under `com.adhar.kit`, and they deliberately depend on each other as little as possible. Most depend only on `adhar-kit-commons` and nothing else in the kit. Commons provides framework detection, DDD annotations, `AdharCloudEvent`, and tenant and correlation context.
 
-So you can depend on `adhar-kit-metrics` alone and use `MetricsFacade` directly, and adding a module never changes the behaviour of one you already had — no module mutates a global registry on the way in. `adhar-kit-starter` is the exception: it depends on every module, which is what lets `AdharFacade` federate them.
+So you can depend on `adhar-kit-metrics` alone and use `MetricsFacade` directly. Adding a module never changes the behaviour of one you already had, because no module changes a global registry when it loads.
+
+`adhar-kit-starter` is the exception. It depends on every module, which is what lets `AdharFacade` bring them together.
 
 ## 3. Lazy, gated initialization
 
-Every sub-facade accessor does two things before returning: it checks whether the module is enabled, and it constructs the facade if this is the first access.
+Every sub-facade accessor does two things before it returns. It checks whether the module is enabled. Then, on first access, it builds the facade.
 
-Enablement is owned by one object, `AdharModuleAccess` — a framework-neutral map from module id to boolean. On Spring Boot it is built from `adhar.kit.modules.*` by `AdharKitAutoConfiguration`, and the **same instance** is handed to both `AdharFacade` and the `AdharKitModuleRegistry` behind the actuator endpoint, so the two can never disagree about what is on.
+One object decides which modules are enabled: `AdharModuleAccess`, a framework-neutral map from module id to boolean. On Spring Boot, `AdharKitAutoConfiguration` builds it from `adhar.kit.modules.*`. The **same instance** goes to both `AdharFacade` and the `AdharKitModuleRegistry` behind the actuator endpoint. So the two can never disagree about what is on.
 
-Unknown ids default to enabled, so a module added in a later release is opt-out rather than silently dark. A disabled module fails loudly and tells you the exact property to change:
+Unknown ids default to enabled. So a module added in a later release is opt-out, instead of silently switched off. A disabled module fails loudly and tells you the exact property to change:
 
 ```java
 adhar.getAi();
@@ -68,7 +75,7 @@ adhar.getAi();
 // (adhar.kit.modules.ai=false); enable it to use this facade.
 ```
 
-The 22 module ids are `logging`, `metrics`, `tracing`, `resilience`, `cache`, `health`, `messaging`, `persistence`, `security`, `config`, `docs`, `grpc`, `ai`, `analytics`, `kubernetes`, `dapr`, `graphql`, `batch`, `notification`, `event-sourcing`, `perf-profiler` and `rewrite`. `getUtils()` — the `CoreFacade` — is the one accessor that is never gated.
+The 22 module ids are `logging`, `metrics`, `tracing`, `resilience`, `cache`, `health`, `messaging`, `persistence`, `security`, `config`, `docs`, `grpc`, `ai`, `analytics`, `kubernetes`, `dapr`, `graphql`, `batch`, `notification`, `event-sourcing`, `perf-profiler` and `rewrite`. `getUtils()`, the `CoreFacade`, is the one accessor that is never gated.
 
 ```yaml
 adhar:
@@ -80,21 +87,23 @@ adhar:
       dapr: false
 ```
 
-> Gating is fixed for the lifetime of the singleton. `AdharFacade.getInstance(moduleAccess)` only honours the argument on the call that actually creates the instance; later calls log a debug message and ignore it. Do not treat module toggles as runtime-switchable.
+> Gating is fixed for the lifetime of the singleton. `AdharFacade.getInstance(moduleAccess)` only uses the argument on the call that actually creates the instance. Later calls log a debug message and ignore it. You cannot switch module toggles at runtime.
 
 ## 4. Auto-configuration and discovery
 
-Modules activate without you importing anything. The mechanism has three parts, all conventional Spring Boot.
+Modules activate without you importing anything. The mechanism has three parts, all standard Spring Boot.
 
-1. Each module ships an `@AutoConfiguration` class guarded by `@ConditionalOnProperty`, so it only contributes beans when its property says so.
-2. That class is listed in the module jar's `META-INF/spring/org.springframework.boot.autoconfigure.AutoConfiguration.imports`, which is how Spring Boot finds it.
-3. `AdharKitAutoConfiguration` — itself gated by `@ConditionalOnProperty(prefix = "adhar.kit", name = "enabled", matchIfMissing = true)` — builds the `AdharModuleAccess`, the module registry and the graceful-shutdown orchestrator, then `SpringAdharFacadeConfiguration` runs `@AutoConfigureAfter` it to produce the `AdharFacade` bean.
+1. Each module ships an `@AutoConfiguration` class guarded by `@ConditionalOnProperty`. It only contributes beans when its property says so.
+2. That class is listed in the module jar's `META-INF/spring/org.springframework.boot.autoconfigure.AutoConfiguration.imports`. This is how Spring Boot finds it.
+3. `AdharKitAutoConfiguration` builds the `AdharModuleAccess`, the module registry and the graceful-shutdown orchestrator. It is itself gated by `@ConditionalOnProperty(prefix = "adhar.kit", name = "enabled", matchIfMissing = true)`. Then `SpringAdharFacadeConfiguration` runs `@AutoConfigureAfter` it to produce the `AdharFacade` bean.
 
-Optional pieces stay optional by classpath condition, not by configuration: the actuator endpoint is registered only when Actuator's `Endpoint` annotation is present, and the Spring adapter only when `SpringApplication` is. On other frameworks discovery is the host's — CDI on Quarkus and Helidon MP, `@Factory` on Micronaut, a static bootstrap on Helidon SE and Vert.x. Outside a container it falls back to the JDK `ServiceLoader`, which applies any `AdharFacadeCustomizer` registered under `META-INF/services/` once, when `getInstance()` creates the singleton.
+Optional pieces stay optional through classpath conditions, not configuration. The actuator endpoint is registered only when Actuator's `Endpoint` annotation is present. The Spring adapter is registered only when `SpringApplication` is.
+
+On other frameworks, the host handles discovery: CDI on Quarkus and Helidon MP, `@Factory` on Micronaut, and a static bootstrap on Helidon SE and Vert.x. Outside a container, the kit falls back to the JDK `ServiceLoader`. It applies any `AdharFacadeCustomizer` registered under `META-INF/services/` once, when `getInstance()` creates the singleton.
 
 ## 5. Annotations and aspects
 
-Most modules offer a declarative alternative to facade calls: an annotation plus an AspectJ aspect that implements it. Both paths end in the same module facade, so mixing them is safe.
+Most modules offer a declarative alternative to facade calls: an annotation, plus an AspectJ aspect that implements it. Both paths end in the same module facade, so you can safely mix them.
 
 | Module | Representative annotations | Aspect |
 |---|---|---|
@@ -112,24 +121,26 @@ Most modules offer a declarative alternative to facade calls: an annotation plus
 kit-annotation-vs-facade
 ```
 
-Choose annotations when the concern covers a whole method and you want it visible in the signature; choose facade calls when it covers part of a method, needs a computed name, or has to be conditional. Aspects need a proxy, so self-invocation inside the same object bypasses them — facade calls do not.
+Choose annotations when the concern covers a whole method and you want it visible in the signature. Choose facade calls when it covers part of a method, needs a computed name, or has to be conditional.
 
-Metrics are partly automatic either way: JVM, persistence, cache, messaging and HTTP metrics are collected without annotation, and `@Measured` is the opt-in for method-level latency, count and error tracking.
+Aspects need a proxy. So when an object calls its own method, the aspect is bypassed. Facade calls do not have this problem.
+
+Some metrics are automatic either way. JVM, persistence, cache, messaging and HTTP metrics are collected without annotations. Use `@Measured` to opt in to method-level latency, count and error tracking.
 
 ## 6. Configuration precedence
 
-Four things resolve in order. Reading them as one flat namespace is what makes configuration confusing.
+Four things resolve in order. Configuration gets confusing when you read them as one flat namespace.
 
-1. **`adhar.kit.enabled`** — the master switch for the starter's auto-configuration. Absent means enabled (`matchIfMissing = true`). If this is `false`, nothing below matters.
-2. **`adhar.kit.modules.<id>`** — the gate. Decides whether a module's facade may exist at all. A gate that is off beats any amount of module configuration underneath it.
-3. **`adhar.<module>.*`** — module settings, bound by `@ConfigurationProperties(prefix = "adhar.<module>")`. For example `adhar.security.jwt.secret`, `adhar.cache.ttl`, `adhar.ai.provider`.
-4. **The host framework's source order** — which file or environment variable supplies a given key. The kit does not override this: Spring Boot's ordering (command line, then environment, then profile-specific YAML, then `application.yml`) applies unchanged, and relaxed binding means `adhar.kit.modules.event-sourcing` and `ADHAR_KIT_MODULES_EVENTSOURCING` are the same key.
+1. **`adhar.kit.enabled`** — the master switch for the starter's auto-configuration. If it is absent, the kit is enabled (`matchIfMissing = true`). If it is `false`, nothing below matters.
+2. **`adhar.kit.modules.<id>`** — the gate. It decides whether a module's facade can exist at all. A gate that is off beats any amount of module configuration below it.
+3. **`adhar.<module>.*`** — module settings, bound by `@ConfigurationProperties(prefix = "adhar.<module>")`. Examples: `adhar.security.jwt.secret`, `adhar.cache.ttl`, `adhar.ai.provider`.
+4. **The host framework's source order** — which file or environment variable supplies a given key. The kit does not override this. Spring Boot's ordering applies unchanged: command line, then environment, then profile-specific YAML, then `application.yml`. Relaxed binding means `adhar.kit.modules.event-sourcing` and `ADHAR_KIT_MODULES_EVENTSOURCING` are the same key.
 
-The `adhar-kit-config` module adds a fifth layer *inside* the application: `ConfigFacade` merges multiple `ConfigSource` implementations — file, environment, Kubernetes ConfigMap, Vault, Consul, Dapr — by numeric priority, where **higher priority overrides lower** and the default is `100`. That merge is a kit concern and is independent of how the framework loaded `application.yml`.
+The `adhar-kit-config` module adds a fifth layer *inside* the application. `ConfigFacade` merges several `ConfigSource` implementations (file, environment, Kubernetes ConfigMap, Vault, Consul, Dapr) by numeric priority. **Higher priority overrides lower**, and the default is `100`. The kit handles this merge, separately from how the framework loaded `application.yml`.
 
 ## Inspecting what actually happened
 
-Two checkpoints show the resolved state rather than the intended one. At startup the kit logs a banner listing the detected runtime and every enabled and disabled module. At runtime, with Spring Boot Actuator present:
+Two checkpoints show the actual resolved state, not the intended one. At startup, the kit logs a banner listing the detected runtime and every enabled and disabled module. At runtime, with Spring Boot Actuator present:
 
 ```properties
 management.endpoints.web.exposure.include=adhar
@@ -142,17 +153,20 @@ GET /actuator/adhar/{id}     # one module, e.g. /actuator/adhar/cache
 
 ## Testability
 
-Substitution has three levels.
+You can substitute test doubles at three levels.
 
-- **Mock the whole facade.** `AdharFacade` is a plain class; Mockito can mock it outright.
-- **Override one sub-facade.** Every accessor has a matching setter, so `adhar.setMetrics(mock)` swaps one module on a real instance.
-- **Register a customizer.** Implement `AdharFacadeCustomizer` as a Spring bean (applied in declared order right after the facade is created) or as a `ServiceLoader` provider on other frameworks.
+- **Mock the whole facade.** `AdharFacade` is a plain class, so Mockito can mock it outright.
+- **Override one sub-facade.** Every accessor has a matching setter. So `adhar.setMetrics(mock)` swaps one module on a real instance.
+- **Register a customizer.** Implement `AdharFacadeCustomizer` as a Spring bean, or as a `ServiceLoader` provider on other frameworks. Spring beans are applied in declared order, right after the facade is created.
 
-`AdharFacade.resetForTesting()` clears the process-wide singleton between tests. It is a test-only escape hatch and races with concurrent `getInstance()` callers, so never call it from production code.
+`AdharFacade.resetForTesting()` clears the process-wide singleton between tests. It is for tests only, and it races with concurrent `getInstance()` callers. Never call it from production code.
 
 ## Other conventions
 
-Packages are `com.adhar.kit.<module>.*`. Every event — domain, notification, analytics — uses the CloudEvents 1.0 envelope via `AdharCloudEvent`. Java 25 features (records, sealed interfaces, pattern matching, virtual threads) are used freely. Framework dependencies are `<optional>true</optional>`, so consumers pull only the runtime they use.
+- Packages are `com.adhar.kit.<module>.*`.
+- Every event (domain, notification, analytics) uses the CloudEvents 1.0 envelope through `AdharCloudEvent`.
+- Java 25 features (records, sealed interfaces, pattern matching, virtual threads) are used freely.
+- Framework dependencies are `<optional>true</optional>`, so consumers pull in only the runtime they use.
 
 ## Next steps
 

@@ -1,4 +1,4 @@
-import { useMemo, useState, useEffect } from "react";
+import { useMemo, useState, useEffect, useCallback } from "react";
 import { Link, useLocation } from "@tanstack/react-router";
 import {
   Search, ChevronRight, BookOpen, Rocket, Package, Coffee, Layers,
@@ -10,7 +10,11 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import MarkdownRenderer from "@/components/MarkdownRenderer";
 import type { Registry, DocEntry } from "@/lib/docsRegistry";
-import DocsVersionSelector, { type DocsVersion } from "./DocsVersionSelector";
+import DocsVersionSelector from "./DocsVersionSelector";
+import DocsSearch, { useSearchHotkey } from "./DocsSearch";
+import type { VersionSource } from "@/lib/docsVersions";
+import { headingText } from "@/lib/docsSearch";
+import GithubSlugger from "github-slugger";
 
 interface DocsShellProps {
   registry: Registry;
@@ -19,7 +23,10 @@ interface DocsShellProps {
     subtitle: string;
     homeHref: string;
   };
-  versions?: DocsVersion[];
+  /** Where releases come from, for the version selector */
+  versionSource?: VersionSource;
+  /** Short portal name used in the search placeholder */
+  searchLabel?: string;
 }
 
 const SECTION_ICON: Record<string, typeof BookOpen> = {
@@ -46,17 +53,21 @@ function findEntry(registry: Registry, pathname: string): DocEntry | null {
 }
 
 function extractToc(body: string) {
+  // Ids come from github-slugger — the slugger rehype-slug uses to render the
+  // heading ids — advanced for every heading level, so duplicates (-1, -2) and
+  // punctuation ("Step 1 — Configure" → "step-1--configure") match exactly.
   const out: { id: string; text: string; level: number }[] = [];
+  const slugger = new GithubSlugger();
   const lines = body.split("\n");
   let inFence = false;
   for (const line of lines) {
     if (/^```/.test(line)) { inFence = !inFence; continue; }
     if (inFence) continue;
-    const m = /^(##|###)\s+(.+?)\s*$/.exec(line);
+    const m = /^(#{1,6})\s+(.+?)\s*#*\s*$/.exec(line);
     if (!m) continue;
-    const text = m[2].replace(/`/g, "");
-    const id = text.toLowerCase().trim().replace(/[^\w\s-]/g, "").replace(/\s+/g, "-");
-    out.push({ id, text, level: m[1].length });
+    const text = headingText(m[2]);
+    const id = slugger.slug(text);
+    if (m[1].length === 2 || m[1].length === 3) out.push({ id, text, level: m[1].length });
   }
   return out;
 }
@@ -67,9 +78,20 @@ function readTime(body: string): string {
   return `${mins} min read`;
 }
 
-const DocsShell = ({ registry, brand, versions }: DocsShellProps) => {
-  const { pathname } = useLocation();
+const DocsShell = ({ registry, brand, versionSource, searchLabel }: DocsShellProps) => {
+  const { pathname, hash } = useLocation();
   const [q, setQ] = useState("");
+  const [searchOpen, setSearchOpen] = useState(false);
+  // Phones: the page list is collapsed so the article is not pushed
+  // ~2,000px down by 40 links. Desktop always shows it.
+  const [navOpen, setNavOpen] = useState(false);
+  const openSearch = useCallback(() => setSearchOpen(true), []);
+  useSearchHotkey(openSearch);
+  // Before anything is typed: the first page of each section.
+  const suggestions = useMemo(
+    () => registry.sections.map((s) => s.items[0]).filter(Boolean).slice(0, 8),
+    [registry.sections],
+  );
 
   const entry = useMemo(() => findEntry(registry, pathname), [registry, pathname]);
   const toc = useMemo(() => entry ? extractToc(entry.body) : [], [entry]);
@@ -93,8 +115,28 @@ const DocsShell = ({ registry, brand, versions }: DocsShellProps) => {
     return () => obs.disconnect();
   }, [toc, entry?.path]);
 
-  // Scroll to top on route change
-  useEffect(() => { window.scrollTo({ top: 0 }); }, [pathname]);
+  // On navigation: go to the #section a search result (or a shared link)
+  // points at, otherwise to the top. The content renders after the route
+  // changes, so wait a frame for the heading to exist.
+  useEffect(() => {
+    if (!hash) { window.scrollTo({ top: 0 }); return; }
+    let tries = 0;
+    let raf = 0;
+    const seek = () => {
+      const el = document.getElementById(decodeURIComponent(hash.replace(/^#/, "")));
+      if (el) el.scrollIntoView({ block: "start" });
+      else if (tries++ < 30) raf = requestAnimationFrame(seek);
+    };
+    raf = requestAnimationFrame(seek);
+    return () => cancelAnimationFrame(raf);
+  }, [pathname, hash]);
+
+  // Collapse the mobile page list whenever the page changes.
+  const [navPath, setNavPath] = useState(pathname);
+  if (navPath !== pathname) {
+    setNavPath(pathname);
+    setNavOpen(false);
+  }
 
   const filteredSections = useMemo(() => {
     if (!q.trim()) return registry.sections;
@@ -165,21 +207,56 @@ const DocsShell = ({ registry, brand, versions }: DocsShellProps) => {
                 <Input
                   value={q}
                   onChange={(e) => setQ(e.target.value)}
-                  placeholder="Search docs…"
-                  className="pl-9 h-9 text-sm bg-muted/30 border-border/60 focus-visible:ring-primary/40"
+                  onKeyDown={(e) => {
+                    // Typing filters the page list; Enter searches inside every page.
+                    if (e.key === "Enter") { e.preventDefault(); openSearch(); }
+                    if (e.key === "Escape") setQ("");
+                  }}
+                  placeholder="Filter pages · Enter to search"
+                  aria-label="Filter pages; press Enter to search all documentation"
+                  className="pl-9 pr-12 h-9 text-sm bg-muted/30 border-border/60 focus-visible:ring-primary/40"
                 />
-                <kbd className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[10px] font-mono text-muted-foreground border border-border/60 rounded px-1.5 py-0.5 hidden sm:block">
-                  ⌘K
-                </kbd>
+                <button
+                  type="button"
+                  onClick={openSearch}
+                  title="Search all docs (⌘K, Ctrl+K or /)"
+                  aria-label="Open documentation search"
+                  className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] font-mono text-muted-foreground border border-border/60 rounded px-1.5 py-0.5 hover:text-foreground hover:border-primary/50 transition-colors"
+                >
+                  <span className="hidden sm:inline">⌘K</span>
+                  <span className="sm:hidden">Search</span>
+                </button>
               </div>
 
-              {versions && versions.length > 0 && (
+              {versionSource && (
                 <div className="mb-6">
-                  <DocsVersionSelector versions={versions} />
+                  <DocsVersionSelector source={versionSource} />
                 </div>
               )}
 
-              <nav className="space-y-7 text-sm pb-12">
+              <button
+                type="button"
+                onClick={() => setNavOpen((v) => !v)}
+                aria-expanded={navOpen || !!q}
+                aria-controls="docs-page-list"
+                className="lg:hidden mb-4 flex w-full items-center justify-between rounded-lg border border-border/60 bg-muted/20 px-3 py-2.5 text-left text-sm"
+              >
+                <span className="min-w-0">
+                  <span className="block text-[10px] uppercase tracking-wider text-muted-foreground">
+                    {navOpen ? "Hide pages" : "Browse pages"}
+                  </span>
+                  <span className="block truncate font-medium text-foreground">
+                    {entry ? `${entry.meta.section} › ${entry.meta.title}` : brand.title}
+                  </span>
+                </span>
+                <ChevronRight className={`h-4 w-4 shrink-0 text-muted-foreground transition-transform ${navOpen ? "rotate-90" : ""}`} />
+              </button>
+
+              <nav
+                id="docs-page-list"
+                aria-label={`${brand.title} pages`}
+                className={`space-y-7 text-sm pb-12 ${navOpen || q ? "block" : "hidden"} lg:block`}
+              >
                 {filteredSections.map((sec) => {
                   const Icon = SECTION_ICON[sec.title] ?? BookOpen;
                   return (
@@ -224,7 +301,12 @@ const DocsShell = ({ registry, brand, versions }: DocsShellProps) => {
                   );
                 })}
                 {filteredSections.length === 0 && (
-                  <p className="text-xs text-muted-foreground px-2">No pages match "{q}".</p>
+                  <div className="px-2 text-xs text-muted-foreground space-y-2">
+                    <p>No page titles match "{q}".</p>
+                    <button type="button" onClick={openSearch} className="text-primary hover:underline">
+                      Search inside every page for "{q}" →
+                    </button>
+                  </div>
                 )}
               </nav>
             </aside>
@@ -305,6 +387,14 @@ const DocsShell = ({ registry, brand, versions }: DocsShellProps) => {
         </div>
       </main>
 
+      <DocsSearch
+        open={searchOpen}
+        onOpenChange={setSearchOpen}
+        entries={registry.entries}
+        initialQuery={q}
+        suggestions={suggestions}
+        label={searchLabel ?? brand.title}
+      />
       <Footer />
     </div>
   );

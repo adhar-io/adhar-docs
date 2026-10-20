@@ -7,7 +7,7 @@ path: "/adhar-kit/modules/overview"
 
 # Modules Overview
 
-Adhar Kit ships **29 Maven modules: 27 production modules plus `adhar-kit-bom` and `adhar-kit-parent`.** They are not a stack you adopt whole. Every module is a separate artifact under `com.adhar.kit`, the dependency edges between them are deliberately sparse, and this page is the map you use to take only what you need.
+Adhar Kit ships **29 Maven modules: 27 production modules plus `adhar-kit-bom` and `adhar-kit-parent`.** You do not have to adopt them as a whole stack. Each module is a separate artifact under `com.adhar.kit`, and the modules depend on each other as little as possible. Use this page as a map to pick only what you need.
 
 ## At a glance
 
@@ -23,7 +23,7 @@ Adhar Kit ships **29 Maven modules: 27 production modules plus `adhar-kit-bom` a
 
 ## Core foundation
 
-The modules most services start from. All of them are enabled by default when you use the starter.
+Most services start from these modules. When you use the starter, all of them are enabled by default.
 
 | Module | artifactId | What it provides |
 |---|---|---|
@@ -40,7 +40,7 @@ The modules most services start from. All of them are enabled by default when yo
 
 ## Integration and communication
 
-How the service talks to everything outside its own process.
+These modules connect the service to everything outside its own process.
 
 | Module | artifactId | What it provides |
 |---|---|---|
@@ -65,7 +65,7 @@ Off by default. Turn one on when you need it.
 | [Kubernetes](/adhar-kit/modules/kubernetes) | `adhar-kit-kubernetes` | Fabric8 integration, leader election, HPA, service discovery |
 | [Perf Profiler](/adhar-kit/modules/perf-profiler) | `adhar-kit-perf-profiler` | Method profiling, hotspot and memory analysis |
 
-> Security is a special case: it is **enabled by default** despite sitting in this group, because leaving authorization off by default would be the wrong failure mode.
+> Security is a special case. It sits in this group but is **enabled by default**, because leaving authorization off by default would be the wrong failure mode.
 
 ## Tooling and build
 
@@ -79,7 +79,7 @@ Off by default. Turn one on when you need it.
 
 ## How the modules depend on each other
 
-This is the part that decides how small a dependency set you can get away with. The edges are few and they point almost entirely at two artifacts.
+This section decides how small your dependency set can be. There are few dependency edges, and almost all of them point at two artifacts.
 
 ```diagram
 kit-module-dependencies
@@ -96,11 +96,11 @@ Only one artifact is ever a required dependency of another: `adhar-kit-commons`.
 | **Treat `commons` as optional** | `kubernetes`, `security`, `tracing` |
 | **No kit dependency at all** | `core`, `docs`, `grpc` |
 
-Those three standalone modules are genuinely standalone: `adhar-kit-core` (patterns and utilities), `adhar-kit-docs` (OpenAPI generation) and `adhar-kit-grpc` declare no `com.adhar.kit` dependency whatsoever. You can put any of them on a classpath that contains nothing else from the kit.
+The three standalone modules are truly standalone. `adhar-kit-core` (patterns and utilities), `adhar-kit-docs` (OpenAPI generation) and `adhar-kit-grpc` declare no `com.adhar.kit` dependency at all. You can put any of them on a classpath with nothing else from the kit.
 
 ### The optional edges, and what `<optional>true</optional>` means for you
 
-Every edge between siblings that is *not* the `commons` edge is declared `<optional>true</optional>`:
+Every edge between sibling modules, other than the `commons` edge, is declared `<optional>true</optional>`:
 
 | From | Optional dependency | What it enables |
 |---|---|---|
@@ -109,21 +109,23 @@ Every edge between siblings that is *not* the `commons` edge is declared `<optio
 | `cache`, `config`, `event-sourcing`, `messaging`, `notification`, `persistence`, `security` | `dapr` | Routing that building block through a Dapr sidecar instead of a direct client |
 | `kubernetes`, `security`, `tracing` | `commons` | The shared context and base types |
 
-Maven does not resolve an optional dependency transitively. Three practical consequences:
+Maven does not resolve an optional dependency transitively. This has three practical effects:
 
-1. **Optional edges cost you nothing you did not ask for.** Declaring `adhar-kit-resilience` pulls in `adhar-kit-commons` (required) but *not* `adhar-kit-metrics`. Your classpath stays as small as your own list.
-2. **To light up an integration you must declare both ends yourself.** If you want resilience metrics, put `adhar-kit-metrics` in your own `<dependencies>` — version-free, from the BOM. The module detects its presence at runtime via `@ConditionalOnClass` / `@ConditionalOnBean` and wires the integration; it degrades silently and correctly when absent.
-3. **The three optional-`commons` modules may need commons added by hand.** `tracing`, `kubernetes` and `security` compile against commons but do not bring it. Using one of them on its own and hitting a `NoClassDefFoundError` from `com.adhar.kit.commons.*` means you need to declare `adhar-kit-commons` explicitly. Pair them with any required-commons module and the problem disappears, because that module's transitive commons satisfies it.
+1. **Optional edges add nothing you did not ask for.** Declaring `adhar-kit-resilience` pulls in `adhar-kit-commons` (required) but *not* `adhar-kit-metrics`. Your classpath stays as small as your own list.
+2. **To turn on an integration, declare both ends yourself.** For resilience metrics, add `adhar-kit-metrics` to your own `<dependencies>`, without a version, from the BOM. The module detects it at runtime via `@ConditionalOnClass` / `@ConditionalOnBean` and wires the integration. When it is absent, the module degrades silently and correctly.
+3. **The three optional-`commons` modules may need commons added by hand.** `tracing`, `kubernetes` and `security` compile against commons but do not bring it with them. If you use one on its own and get a `NoClassDefFoundError` from `com.adhar.kit.commons.*`, declare `adhar-kit-commons` explicitly. If you pair it with any module that requires commons, the problem goes away, because that module brings commons transitively.
 
-Conversely, `adhar-kit-commons` arrives transitively for 19 of the 27 production modules, so you almost never declare it yourself — and `test-commons`' `provided`-scope commons is likewise not transitive, which is correct for a test-only artifact.
+On the other hand, `adhar-kit-commons` arrives transitively for 19 of the 27 production modules, so you almost never declare it yourself. The `provided`-scope commons in `test-commons` is also not transitive, which is correct for a test-only artifact.
 
 ### `adhar-kit-starter` is the one heavyweight
 
-The starter requires **all 24 production modules** the facade federates: commons, core, logging, metrics, tracing, config, persistence, cache, messaging, grpc, resilience, security, kubernetes, dapr, health, ai, analytics, docs, graphql, batch, notification, event-sourcing, perf-profiler, rewrite. Every one is a required edge, so it is a single `<dependency>` that resolves the entire kit and its transitive third-party stack — Spring AI, Dapr SDK, Fabric8, Resilience4j, OpenRewrite and the rest. That is the price of `AdharFacade`, and it is why picking modules individually is a real option rather than a token one.
+The starter requires **all 24 production modules** that the facade federates: commons, core, logging, metrics, tracing, config, persistence, cache, messaging, grpc, resilience, security, kubernetes, dapr, health, ai, analytics, docs, graphql, batch, notification, event-sourcing, perf-profiler, rewrite.
+
+Every one is a required edge. So this single `<dependency>` resolves the entire kit and its transitive third-party stack: Spring AI, Dapr SDK, Fabric8, Resilience4j, OpenRewrite and the rest. That is the price of `AdharFacade`. It is also why picking modules one by one is a real option, not a token one.
 
 ## Picking only what you need
 
-Import the BOM once, then add modules. Start from one of these, not from the full list.
+Import the BOM once, then add modules. Start from one of these sets, not from the full list.
 
 | Goal | Modules to declare | Why |
 |---|---|---|
@@ -160,19 +162,25 @@ Import the BOM once, then add modules. Start from one of these, not from the ful
 </dependencies>
 ```
 
-Verify what you actually got with `mvn dependency:tree -Dincludes=com.adhar.kit` — the optional edges will not appear, which is the quickest way to confirm an integration is or is not wired.
+To check what you actually got, run `mvn dependency:tree -Dincludes=com.adhar.kit`. Optional edges do not appear in the output. This is the quickest way to confirm whether an integration is wired.
 
-Without the starter you use each module's own facade directly — `MetricsFacade.getInstance()`, `CacheFacade.getCache("users")` — and there is no `AdharFacade`, no unified shortcuts and no `/actuator/adhar` endpoint. That is the trade.
+Without the starter, you use each module's own facade directly, such as `MetricsFacade.getInstance()` or `CacheFacade.getCache("users")`. You get no `AdharFacade`, no unified shortcuts and no `/actuator/adhar` endpoint. That is the trade-off.
 
 ## Runtime gating versus build-time selection
 
-The two are independent, and mixing them up causes confusion.
+These two are independent. Mixing them up causes confusion.
 
-**Build time** decides what is on the classpath. **Runtime** decides what is initialized: `adhar.kit.modules.<id>` gates 22 module ids, sub-facades are constructed lazily on first access, and a disabled module throws `IllegalStateException` naming the property to change. Eleven are on by default (logging, metrics, tracing, resilience, security, persistence, cache, messaging, config, health, docs); eleven are off (ai, analytics, kubernetes, dapr, grpc, graphql, batch, notification, event-sourcing, perf-profiler, rewrite). An id that is not listed at all resolves to enabled, so a newly added module is opt-out rather than silently disabled.
+**Build time** decides what is on the classpath. **Runtime** decides what is initialized:
 
-So a starter-based service with `adhar.kit.modules.ai=false` still ships the AI jar — it never constructs `AiFacade`. If jar size matters, select at build time; if startup cost and blast radius matter, gate at runtime; most services do both.
+- `adhar.kit.modules.<id>` gates 22 module ids.
+- Sub-facades are constructed lazily, on first access.
+- A disabled module throws `IllegalStateException` that names the property to change.
 
-> Some advanced modules mark parts of their surface as in progress — certain messaging annotations, Dapr actors and `queryState`, concrete AI providers. Each module page notes its status where relevant.
+Eleven modules are on by default (logging, metrics, tracing, resilience, security, persistence, cache, messaging, config, health, docs). Eleven are off (ai, analytics, kubernetes, dapr, grpc, graphql, batch, notification, event-sourcing, perf-profiler, rewrite). An id that is not listed at all resolves to enabled. So a newly added module is opt-out, not silently disabled.
+
+For example, a starter-based service with `adhar.kit.modules.ai=false` still ships the AI jar, but it never constructs `AiFacade`. If jar size matters, select at build time. If startup cost and blast radius matter, gate at runtime. Most services do both.
+
+> Some advanced modules mark parts of their surface as in progress: certain messaging annotations, Dapr actors and `queryState`, and concrete AI providers. Each module page notes its status where relevant.
 
 ## Next steps
 

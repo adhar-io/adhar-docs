@@ -7,9 +7,11 @@ path: "/docs/providers/digitalocean"
 
 # DigitalOcean
 
-This page takes you from an empty DigitalOcean account to a working Adhar platform on a public domain with a trusted wildcard certificate. It is for anyone deploying Adhar to a cloud for the first time. DigitalOcean is Adhar's **live-verified reference provider**: the full 76-package production profile has been brought up on it end to end, then scaled, upgraded, backed up, restored and torn down clean. Every timing, limit and pitfall on this page came from that run on 2026-09-12 (region `blr1`, HA mode, 3 workers autoscaled to 9), not from a design document.
+This page takes you from an empty DigitalOcean account to a working Adhar platform on a public domain with a trusted wildcard certificate. It is for anyone deploying Adhar to a cloud for the first time.
 
-By the end you will have run one `adhar up`, watched the cluster serve in about five minutes and the platform become usable at about thirteen, and you will know how to check, scale, upgrade and tear it down.
+DigitalOcean is Adhar's **live-verified reference provider**. The full 76-package production profile has been brought up on it end to end. It was then scaled, upgraded, backed up, restored and torn down clean. Every timing, limit and pitfall on this page came from that run on 2026-09-12 (region `blr1`, HA mode, 3 workers autoscaled to 9), not from a design document.
+
+By the end you will have run one `adhar up`. You will see the cluster serve in about five minutes and the platform become usable at about thirteen. You will also know how to check, scale, upgrade and tear it down.
 
 ## At a glance
 
@@ -31,9 +33,11 @@ By the end you will have run one `adhar up`, watched the cluster serve in about 
 dp-digitalocean-topology
 ```
 
-Read it top to bottom. Your browser asks DigitalOcean DNS for `console.<defaultHost>`; the answer is the load balancer's IP, which external-dns wrote there. The load balancer was not created by Adhar's provisioning code — the **cloud-controller-manager** (CCM) running inside the cluster created it when the platform applied the Gateway as a `Service` of type `LoadBalancer`. It forwards 80 and 443 to the Gateway's node ports on the workers. Everything else lives in one VPC behind one cluster firewall.
+Read it top to bottom. Your browser asks DigitalOcean DNS for `console.<defaultHost>`. The answer is the load balancer's IP, which external-dns wrote there.
 
-That split matters at teardown time: the provider tracks what *it* created (droplets, VPC, firewall, SSH key), and teardown separately sweeps what the in-cluster controllers created (the load balancer and any block volumes).
+Adhar's provisioning code did not create the load balancer. The **cloud-controller-manager** (CCM) running inside the cluster created it, when the platform applied the Gateway as a `Service` of type `LoadBalancer`. The load balancer forwards 80 and 443 to the Gateway's node ports on the workers. Everything else lives in one VPC behind one cluster firewall.
+
+That split matters at teardown time. The provider tracks what *it* created (droplets, VPC, firewall, SSH key). Teardown separately sweeps what the in-cluster controllers created (the load balancer and any block volumes).
 
 ## Step 1 — Prerequisites checklist
 
@@ -46,7 +50,7 @@ That split matters at teardown time: the provider tracks what *it* created (drop
 | ☐ | `kubectl` and `dig` on your PATH | `kubectl version --client` |
 | ☐ | Optional: `doctl` for verifying and cleaning up | `doctl version` |
 
-The GitOps stack is seeded from `platform/stack` in the repository checkout, so run `adhar` from inside it:
+Adhar seeds the GitOps stack from `platform/stack` in the repository checkout. So run `adhar` from inside the checkout:
 
 ```bash
 git clone https://github.com/adhar-io/adhar.git && cd adhar
@@ -78,11 +82,11 @@ export DIGITALOCEAN_ACCESS_TOKEN="dop_v1_…"   # DIGITALOCEAN_TOKEN also accept
 doctl --context default -t "$DIGITALOCEAN_ACCESS_TOKEN" compute droplet list   # a table, even if empty
 ```
 
-> **Never judge a token by `doctl account get`.** A *scoped* token — which is what the verified run used — returns `401` on `/v2/account` and `/v2/projects` while working perfectly for droplets, volumes, load balancers, VPCs, DNS and Kubernetes. And `doctl` ignores both `-t` and `DIGITALOCEAN_ACCESS_TOKEN` when its config file has a `context:`, which is why the command above spells out `--context default`.
+> **Never judge a token by `doctl account get`.** The verified run used a *scoped* token. A scoped token returns `401` on `/v2/account` and `/v2/projects`, yet works perfectly for droplets, volumes, load balancers, VPCs, DNS and Kubernetes. Also, `doctl` ignores both `-t` and `DIGITALOCEAN_ACCESS_TOKEN` when its config file has a `context:`. That is why the command above spells out `--context default`.
 
 ## Step 3 — Delegate a DNS zone
 
-`globalSettings.defaultHost` drives every URL (`<app>.<defaultHost>`) and the wildcard certificate (`*.<defaultHost>`), so it must be a zone **hosted in DigitalOcean DNS**. Adhar never creates the zone — creating one means taking over a name you own, which a provisioning tool should not do behind your back.
+`globalSettings.defaultHost` drives every URL (`<app>.<defaultHost>`) and the wildcard certificate (`*.<defaultHost>`). So it must be a zone **hosted in DigitalOcean DNS**. Adhar never creates the zone. Creating one means taking over a name you own, and a provisioning tool should not do that behind your back.
 
 1. Create a zone for exactly your `defaultHost`:
 
@@ -100,13 +104,18 @@ doctl --context default -t "$DIGITALOCEAN_ACCESS_TOKEN" compute droplet list   #
    dig +noall +comment CAA example.com     # → status: NOERROR (empty answer is fine)
    ```
 
-> **Delegate the subdomain, not the whole domain** — unless you also host the apex zone in DigitalOcean. Let's Encrypt walks *up* the tree reading CAA, so issuing `*.platform.example.com` also queries CAA for `example.com`. If the apex is delegated to nameservers holding no zone for it, every lookup returns SERVFAIL and the order fails with a message naming CAA rather than delegation. Every app still resolves and works, which is what makes it hard to spot.
+> **Delegate the subdomain, not the whole domain**, unless you also host the apex zone in DigitalOcean. Let's Encrypt walks *up* the tree reading CAA records. So issuing `*.platform.example.com` also queries CAA for `example.com`. If the apex is delegated to nameservers holding no zone for it, every lookup returns SERVFAIL. The order then fails with a message naming CAA rather than delegation. Every app still resolves and works, which is what makes it hard to spot.
 
-Skipping DNS is supported: the platform comes up on its self-signed certificate, `adhar up` says so in its closing summary, `adhar get status` raises it as a warning, and cert-manager issues a trusted certificate on its own once the zone is fixed.
+You can skip DNS. If you do:
+
+- the platform comes up on its self-signed certificate
+- `adhar up` says so in its closing summary
+- `adhar get status` raises it as a warning
+- cert-manager issues a trusted certificate on its own once the zone is fixed
 
 ## Step 4 — Write the configuration
 
-Copy the shipped example and change three values — `defaultHost`, `email` and `region`:
+Copy the shipped example and change three values: `defaultHost`, `email` and `region`.
 
 ```bash
 cp examples/digitalocean-config.yaml config.yaml
@@ -184,7 +193,7 @@ environments:                           # dev, test, prod — namespaces on ONE 
 | Field | Meaning |
 |---|---|
 | `defaultHost` | The zone. Every hostname is `<app>.<defaultHost>`; the certificate covers `*.<defaultHost>`. |
-| `enableHAMode` | Selects the HA manifest variants: ArgoCD controller ×2, redis-ha ×3, CNPG at 2 instances, PDBs. It does **not** make the Kubernetes control plane HA — one control plane is the only shape today. |
+| `enableHAMode` | Selects the HA manifest variants: ArgoCD controller ×2, redis-ha ×3, CNPG at 2 instances, PDBs. It does **not** make the Kubernetes control plane HA. One control plane is the only shape today. |
 | `primary` | Only this cloud's Crossplane provider packages install. All five clouds together are ≈3000 CRDs, which pushed one control plane into API-server timeouts. |
 | `clusterMode` | `compute`, `managed` or `provided`. The old `useManagedK8s` and `cluster_mode: doks` spellings are **rejected**, not mapped. |
 | `reuse_existing_vpc` / `vpc_cidr` | Reuse a VPC whose CIDR matches. **Required** if you intend to mesh two clusters; otherwise their CIDRs must not overlap. |
@@ -193,7 +202,7 @@ environments:                           # dev, test, prod — namespaces on ONE 
 | `kubeVersion` (in `clusterConfig`) | Pins Kubernetes for this environment. `--kube-version` outranks it; the compiled default is v1.37.0. |
 | `autoscaling.maxWorkers` | The spend ceiling. The verified 76-package run started at 3 and needed 10; the example's 2–5 keeps an idle platform cheap. |
 
-`clusterConfig: []` and an empty `coreServices` are rejected outright. The chart coordinates in the template are recorded and printed by `--dry-run`, and otherwise inert — the foundation ships as embedded manifests.
+`clusterConfig: []` and an empty `coreServices` are rejected outright. The chart coordinates in the template are recorded and printed by `--dry-run`. Otherwise they are inert, because the foundation ships as embedded manifests.
 
 ## Step 5 — Dry run
 
@@ -229,7 +238,7 @@ Core Services:
 No changes will be made in dry-run mode
 ```
 
-Template entries come first, then the environment's own. The `Core Services` flags only report which chart blocks the config carries; ArgoCD, Gitea and the Gateway install regardless.
+Template entries come first, then the environment's own. The `Core Services` flags only report which chart blocks the config carries. ArgoCD, Gitea and the Gateway install regardless.
 
 ## Step 6 — Provision
 
@@ -237,7 +246,7 @@ Template entries come first, then the environment's own. The `Core Services` fla
 ./adhar up -f config.yaml --env dev
 ```
 
-The CLI draws one checklist for the run. The first three stages are the CLI's own; from **Cilium & Gateway** onward the in-cluster `AdharPlatform` controller does the work and the CLI reports what it observes:
+The CLI draws one checklist for the run. The CLI runs the first three stages itself. From **Cilium & Gateway** onward, the in-cluster `AdharPlatform` controller does the work and the CLI reports what it observes:
 
 ```terminal
 $ ./adhar up -f config.yaml --env dev
@@ -261,20 +270,27 @@ What happens underneath, measured on the 3-worker verified run:
 pv-digitalocean-sequence
 ```
 
-**About 5 minutes** in, the cluster is serving: VPC, firewall and SSH key created, the droplets prepared in parallel, `kubeadm init` and `join` done (kube-proxy skipped — Cilium replaces it), and the DigitalOcean CCM and CSI installed over SSH. Nodes stay `NotReady` until Cilium arrives; that is by design. **About 13 minutes** in, the platform bootstrap has finished and the CLI hands over with the platform URLs.
+**About 5 minutes** in, the cluster is serving. By then:
+
+- the VPC, firewall and SSH key are created
+- the droplets are prepared in parallel
+- `kubeadm init` and `join` are done (kube-proxy is skipped, because Cilium replaces it)
+- the DigitalOcean CCM and CSI are installed over SSH
+
+Nodes stay `NotReady` until Cilium arrives. That is by design. **About 13 minutes** in, the platform bootstrap has finished and the CLI hands over with the platform URLs.
 
 During bootstrap the CLI also:
 
-- writes the kubeconfig to `~/.adhar/clusters/adhar/kubeconfig` and merges it into `~/.kube/config` as context `adhar` (made current) — the cluster is named `adhar` unless you pass `--name`;
+- writes the kubeconfig to `~/.adhar/clusters/adhar/kubeconfig` and merges it into `~/.kube/config` as context `adhar` (made current). The cluster is named `adhar` unless you pass `--name`;
 - creates the `adhar-dns-provider` Secret for external-dns and cert-manager;
 - renders the stack for your domain — ClusterIssuers with the DigitalOcean DNS-01 solver, external-dns with `--provider=digitalocean --domain-filter=<host>` — and seeds it into Gitea;
 - applies the cloud Gateway as a `Service` of type `LoadBalancer`.
 
-The closing panel lists the Console, ArgoCD, Gitea, Keycloak, Grafana, Headlamp and Hubble URLs, plus `adhar get secrets`, `adhar get status` and the kube-context. If the zone was not delegated it ends with a `▲ Platform URLs will not resolve, and TLS is SELF-SIGNED` block naming the fix.
+The closing panel lists the Console, ArgoCD, Gitea, Keycloak, Grafana, Headlamp and Hubble URLs. It also shows `adhar get secrets`, `adhar get status` and the kube-context. If the zone was not delegated, the panel ends with a `▲ Platform URLs will not resolve, and TLS is SELF-SIGNED` block naming the fix.
 
-**The catalogue keeps converging for another 30–45 minutes after the CLI returns**, and the autoscaler adds workers while it does (3 → 9 on the verified run). `--apps-timeout` (default 15m) bounds only how long the CLI waits; ArgoCD keeps going either way. That is expected, not a hang.
+**The catalogue keeps converging for another 30–45 minutes after the CLI returns.** The autoscaler adds workers while it does (3 → 9 on the verified run). `--apps-timeout` (default 15m) limits only how long the CLI waits. ArgoCD keeps going either way. That is expected, not a hang.
 
-> **Without `--env`.** `adhar up -f config.yaml` builds **one** cluster for every `isolation: namespace` environment, sized from the production-type one (`prod` here), and creates the `dev`, `test` and `prod` namespaces on it. Each `isolation: cluster` environment gets a cluster of its own.
+> **Without `--env`.** `adhar up -f config.yaml` builds **one** cluster for every `isolation: namespace` environment. It sizes that cluster from the production-type environment (`prod` here) and creates the `dev`, `test` and `prod` namespaces on it. Each `isolation: cluster` environment gets a cluster of its own.
 
 ## Step 7 — Verify
 
@@ -290,7 +306,9 @@ curl -sI https://console.platform.example.com | head -1 # HTTP/2 200, trusted ch
 ./adhar get secrets -p argocd
 ```
 
-Log in at `https://console.platform.example.com`. **Your username is your email** (`user1@noreply.com`, not `user1`) because the realm sets `registrationEmailAsUsername: true`; signing in as `user1` fails with a deliberately vague "Invalid username or password". Keycloak group → Kubernetes role:
+Log in at `https://console.platform.example.com`. **Your username is your email** (`user1@noreply.com`, not `user1`), because the realm sets `registrationEmailAsUsername: true`. Signing in as `user1` fails with a deliberately vague "Invalid username or password".
+
+Keycloak groups map to Kubernetes roles like this:
 
 | Group | Kubernetes role |
 |---|---|
@@ -310,11 +328,11 @@ The verified full profile ran on `s-8vcpu-16gb` workers. Sizing is about **memor
 
 **If you undersize**, this is what you see, in the order it bites:
 
-- Pods `Pending` with `Insufficient cpu` / `Insufficient memory` / `Too many pods`. The kubeadm path raises kubelet `maxPods` to 250, so the pod ceiling arrives later than the 110 default suggests.
-- `node(s) exceed max volume count` — a droplet attaches at most **7 block volumes**. The default StorageClass is node-local (`adhar-local`), so this only affects claims that explicitly ask for `adhar-block`. The autoscaler treats the message as a scale-up trigger.
-- SystemOOM. The eBPF agents (Beyla, Tetragon, Pixie) are the first victims when a node saturates, which flaps the node `NotReady` and takes whatever stateful pod lives there with it.
+- Pods `Pending` with `Insufficient cpu` / `Insufficient memory` / `Too many pods`. The kubeadm path raises kubelet `maxPods` to 250, so you hit the pod ceiling later than the 110 default suggests.
+- `node(s) exceed max volume count`. A droplet attaches at most **7 block volumes**. The default StorageClass is node-local (`adhar-local`), so this only affects claims that explicitly ask for `adhar-block`. The autoscaler treats the message as a scale-up trigger.
+- SystemOOM. The eBPF agents (Beyla, Tetragon, Pixie) are the first victims when a node saturates. This flaps the node `NotReady` and takes down whatever stateful pod lives there.
 
-The fix in every case is more workers, not bigger ones — which is what `autoscaling.maxWorkers` is for. Raise it **before** enabling the full profile.
+The fix in every case is more workers, not bigger ones. That is what `autoscaling.maxWorkers` is for. Raise it **before** you enable the full profile.
 
 ## Day-2 operations
 
@@ -329,9 +347,9 @@ The fix in every case is more workers, not bigger ones — which is what `autosc
 
 A worker added by `cluster scale` or the autoscaler takes its Kubernetes version from the running control plane, so a newer CLI cannot introduce skew.
 
-> Pause the autoscaler before a manual capacity test. It treats an empty new node on an idle cluster as removable and will drain one within five minutes: `kubectl -n adhar-system patch adharplatform dev --type=merge -p '{"spec":{"autoscaling":{"enabled":false}}}'`. The `AdharPlatform` is named after the environment you provisioned.
+> Pause the autoscaler before a manual capacity test. It treats an empty new node on an idle cluster as removable, and will drain one within five minutes. To pause it, run `kubectl -n adhar-system patch adharplatform dev --type=merge -p '{"spec":{"autoscaling":{"enabled":false}}}'`. The `AdharPlatform` is named after the environment you provisioned.
 
-Inspect autoscaler decisions at `.status.autoscaling` on the `AdharPlatform` — `workers`, `lastScaleUp`, `lastScaleDown`, `underutilizedSince`, `lastReason`.
+To see autoscaler decisions, inspect `.status.autoscaling` on the `AdharPlatform`: `workers`, `lastScaleUp`, `lastScaleDown`, `underutilizedSince`, `lastReason`.
 
 ### Managed DOKS instead
 
@@ -342,7 +360,7 @@ providers:
     clusterMode: managed     # DOKS; the token also needs the Kubernetes scope
 ```
 
-DOKS moves the control plane to DigitalOcean's free managed one. You give up SSH to the nodes and the Adhar node autoscaler, which can only add workers it provisions and `kubeadm join`s itself.
+DOKS moves the control plane to DigitalOcean's free managed one. You give up SSH to the nodes. You also give up the Adhar node autoscaler, which can only add workers it provisions and `kubeadm join`s itself.
 
 ## Tear down, then check the bill
 
@@ -352,9 +370,19 @@ DOKS moves the control plane to DigitalOcean's free managed one. You give up SSH
 ./adhar cluster delete adhar --force --file config.yaml --purge-orphaned-volumes
 ```
 
-`adhar down` asks you to type `yes` (skip with `--force`), then removes, in order: the CCM load balancer(s), every droplet, block volumes tagged `adhar-cluster-<cluster>`, the firewall, the VPC, the SSH key and local state. `--purge-orphaned-volumes` additionally sweeps unattached `pvc-*` volumes in the region carrying no other cluster's tag — use it only when no other Kubernetes cluster lives in that account and region.
+`adhar down` asks you to type `yes` (skip with `--force`). It then removes, in order:
 
-**DNS records are left in place** (external-dns is upsert-only and never deletes). Verify the teardown rather than assuming it — a half-succeeded teardown keeps billing:
+1. the CCM load balancer(s)
+2. every droplet
+3. block volumes tagged `adhar-cluster-<cluster>`
+4. the firewall
+5. the VPC
+6. the SSH key
+7. local state
+
+`--purge-orphaned-volumes` also sweeps unattached `pvc-*` volumes in the region that carry no other cluster's tag. Use it only when no other Kubernetes cluster lives in that account and region.
+
+**DNS records are left in place** (external-dns is upsert-only and never deletes). Verify the teardown rather than assuming it. A half-succeeded teardown keeps billing:
 
 ```bash
 T="$DIGITALOCEAN_ACCESS_TOKEN"
@@ -365,9 +393,15 @@ doctl --context default -t "$T" compute firewall list --format Name --no-header
 doctl --context default -t "$T" vpcs list --format Name --no-header
 ```
 
-All five empty (or listing only resources that are not Adhar's) means nothing is billing.
+If all five are empty, or list only resources that are not Adhar's, nothing is billing.
 
-**What you pay for while it runs:** the control-plane droplet, each worker droplet, one load balancer, and any block volumes that remain after the node-local default. Worker disks are 256 GiB, shared with the containerd image cache. DNS records and the VPC are not billed. The levers, in order of effect: `maxWorkers` (the ceiling you actually pay), `nodeCount` (what an idle cluster costs), and the enabled package set.
+**What you pay for while it runs:** the control-plane droplet, each worker droplet, one load balancer, and any block volumes beyond the node-local default. Worker disks are 256 GiB, shared with the containerd image cache. DNS records and the VPC are not billed.
+
+The cost levers, in order of effect:
+
+1. `maxWorkers`: the ceiling you actually pay
+2. `nodeCount`: what an idle cluster costs
+3. the enabled package set
 
 ## Common pitfalls
 

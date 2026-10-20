@@ -7,11 +7,13 @@ path: "/docs/providers/overview"
 
 # Providers Overview
 
-This page explains what a provider is in Adhar, how `adhar up` uses one, and how to pick one. Read it before any single provider page: it covers the parts every cloud shares — cluster modes, environments, storage, DNS, commands — so the provider pages can stick to what is specific. At the end you will know which provider fits your situation, how far each one is proven, and how long each takes to a usable platform where that has actually been measured.
+This page explains what a provider is in Adhar, how `adhar up` uses one, and how to pick one. Read it before any single provider page. It covers the parts every cloud shares: cluster modes, environments, storage, DNS and commands. That way the provider pages can stick to what is specific to each cloud.
 
-A **provider is the only part of Adhar that knows what cloud you are on.** Everything above the cluster — Cilium, the Gateway, ArgoCD, Gitea, Crossplane and the whole package catalogue — is byte-identical whether the cluster is a Kind node on your laptop or ten droplets in Bangalore. The provider exists so that the platform never has to care. Without it, "run the platform on Azure" would mean a second platform. With it, you change one word in `config.yaml`.
+By the end you will know three things: which provider fits your situation, how far each one is proven, and how long each takes to reach a usable platform (where that has actually been measured).
 
-> One `adhar up` brings up the whole platform — on your laptop or on any supported cloud. Locally that takes about ten minutes; on a cloud, the provider's machine provisioning sets the pace (DigitalOcean serves in ~5 min and is usable at ~13; AWS first runs take 25–40).
+A **provider is the only part of Adhar that knows what cloud you are on.** Everything above the cluster is byte-identical on every cloud. That includes Cilium, the Gateway, ArgoCD, Gitea, Crossplane and the whole package catalogue. It does not matter whether the cluster is a Kind node on your laptop or ten droplets in Bangalore. The provider exists so the platform never has to care. Without it, "run the platform on Azure" would mean a second platform. With it, you change one word in `config.yaml`.
+
+> One `adhar up` brings up the whole platform, on your laptop or on any supported cloud. Locally it takes about ten minutes. On a cloud, the provider's machine provisioning sets the pace: DigitalOcean serves in ~5 min and is usable at ~13; AWS first runs take 25–40.
 
 ## Choosing a provider
 
@@ -25,15 +27,17 @@ A **provider is the only part of Adhar that knows what cloud you are on.** Every
 | [Civo](/docs/providers/civo) | `civo` | **`managed`** (k3s) | k3s | `CIVO_TOKEN` | DNS-01 via a webhook solver | Render-verified | Unmeasured |
 | [Custom / on-prem](/docs/providers/custom) | `custom` | `compute` (your hosts) | n/a (`provided` adopts an existing cluster) | SSH key to your machines | via another `dnsProvider`, or your own certificate | Render-verified | Unmeasured |
 
-"Usable" means the CLI has handed over with the console serving; the rest of the catalogue keeps converging for another 30–45 minutes on every cloud, which is expected. "Render-verified" means provider registration, config validation and `--dry-run` pass and the code paths are unit-tested, but no complete run on that cloud has been recorded.
+"Usable" means the CLI has handed over and the console is serving. On every cloud, the rest of the catalogue keeps converging for another 30–45 minutes. That is expected.
+
+"Render-verified" means provider registration, config validation and `--dry-run` pass, and the code paths are unit-tested. But no complete run on that cloud has been recorded.
 
 **Pick by what you are doing:**
 
 - Learning, developing, demoing, CI → **Kind**. Free, no credentials, about ten minutes.
-- First cloud deployment, or anything you want to match a known-good run → **DigitalOcean**. It is the reference path; every cloud timing in these docs came off it.
+- First cloud deployment, or anything you want to match a known-good run → **DigitalOcean**. It is the reference path. Every cloud timing in these docs came from it.
 - Data/ML workloads or an existing GCP estate → **GCP**, the second cloud with a live compute bring-up.
 - Cheap, fast, short-lived dev/staging clusters → **Civo**, in managed mode.
-- An existing AWS or Azure estate → **AWS** / **Azure**, treating the first run as a bring-up exercise.
+- An existing AWS or Azure estate → **AWS** / **Azure**. Treat the first run as a bring-up exercise.
 - Hardware you already own → **custom**. A cluster someone else already built → any provider with `clusterMode: provided`.
 
 ## At a glance
@@ -50,7 +54,7 @@ A **provider is the only part of Adhar that knows what cloud you are on.** Every
 
 ## What a provider actually is
 
-`platform/providers/interface.go` declares one `Provider` interface, and `kind/`, `aws/`, `azure/`, `gcp/`, `digitalocean/`, `civo/` and `custom/` each implement it. The method groups are the whole contract:
+`platform/providers/interface.go` declares one `Provider` interface. Each of `kind/`, `aws/`, `azure/`, `gcp/`, `digitalocean/`, `civo/` and `custom/` implements it. These method groups are the whole contract:
 
 | Group | Methods | What it answers |
 |---|---|---|
@@ -63,10 +67,10 @@ A **provider is the only part of Adhar that knows what cloud you are on.** Every
 | Health & cost | `GetClusterHealth`, `GetClusterMetrics`, `GetClusterCost`, `GetCostBreakdown` | Reporting |
 | Addons | `InstallAddon`, `UninstallAddon`, `ListAddons` | Cloud-native extras |
 
-Two capabilities are deliberately **optional interfaces** rather than required methods:
+Two capabilities are deliberately **optional interfaces**, not required methods:
 
-- **`NodeRemover`** — removes one *named* worker. The autoscaler needs it because it picks which node to retire (the emptiest one that is safe to drain), and `ScaleNodeGroup` is a desired-count API that removes the highest-indexed instance. A provider without it does not support automatic scale-down.
-- **`Preflighter`** — replaces the generic pre-create checks with ones that understand the cloud's own quotas and error vocabulary. AWS and Azure implement it; GCP and Civo run their own quota checks inside the create, before anything is made.
+- **`NodeRemover`** removes one *named* worker. The autoscaler needs it because it picks which node to retire: the emptiest one that is safe to drain. `ScaleNodeGroup` cannot do this. It is a desired-count API that removes the highest-indexed instance. A provider without `NodeRemover` does not support automatic scale-down.
+- **`Preflighter`** replaces the generic pre-create checks with ones that understand the cloud's own quotas and error vocabulary. AWS and Azure implement it. GCP and Civo run their own quota checks inside the create, before anything is made.
 
 > A provider that cannot do something returns a clear "not supported" error, not partial behaviour.
 
@@ -79,7 +83,7 @@ Both share the same credentials and the same config file.
 | **Imperative** | The Go `Provider` interface | Day-0 creation (`adhar up`, `adhar cluster create`) and day-2 ops (`scale`, `upgrade`, `delete`) |
 | **Declarative** | Crossplane Compositions | GitOps-managed infrastructure (`Cluster`, `Database`, …) |
 
-The imperative path gets you a management cluster. The declarative path lets that cluster manage everything else. See [Control Plane](/docs/core-concepts/control-plane).
+The imperative path gives you a management cluster. The declarative path lets that cluster manage everything else. See [Control Plane](/docs/core-concepts/control-plane).
 
 ## How `adhar up` flows through a provider
 
@@ -87,11 +91,13 @@ The imperative path gets you a management cluster. The declarative path lets tha
 pv-provider-up-sequence
 ```
 
-Step 4 is the one worth internalising. `--dry-run` validates the *config* and nothing else, so it passes cleanly on an account that cannot create a single resource. Preflight probes the calls that actually gate a create — reads and dry-run writes, quota, and whether the region really offers the instance type you asked for — and refuses **before** anything bills. A failing check prints `✖` with the remedy; passing checks are folded into the `Preflight ✓` line and shown in full with `--verbose`. Kind is exempt: no account, no quota, no permission model.
+Step 4 is the one to remember. `--dry-run` validates the *config* and nothing else. It passes cleanly even on an account that cannot create a single resource.
 
-Step 5 exists because `adhar up` is the command you re-run after a failure. Without it, every re-run asked the cloud for a whole new cluster beside the half-built one, which on a quota-limited account fails with a message blaming your own previous attempt.
+Preflight is different. It probes the calls that actually gate a create: reads and dry-run writes, quota, and whether the region really offers the instance type you asked for. If a check fails, it refuses **before** anything bills. A failing check prints `✖` with the remedy. Passing checks are folded into the `Preflight ✓` line; pass `--verbose` to see them in full. Kind is exempt: it has no account, no quota and no permission model.
 
-On screen, every cloud run draws the same nine-stage checklist. The first three stages are the CLI's; the rest are driven by the in-cluster `AdharPlatform` controller and are identical on every provider:
+Step 5 exists because `adhar up` is the command you re-run after a failure. Without it, every re-run asked the cloud for a whole new cluster beside the half-built one. On a quota-limited account, that fails with a message blaming your own previous attempt.
+
+On screen, every cloud run draws the same nine-stage checklist. The CLI runs the first three stages. The in-cluster `AdharPlatform` controller drives the rest, and they are identical on every provider:
 
 ```terminal
 $ adhar up -f config.yaml --env dev
@@ -111,7 +117,7 @@ Provisioning Adhar Platform
 
 ## Three cluster modes
 
-`clusterMode` on the provider block says where the cluster comes from. The same three words on every cloud, with the service implied by the provider:
+`clusterMode` on the provider block says where the cluster comes from. Every cloud uses the same three words, and the provider decides which service each one means:
 
 ```diagram
 dp-cluster-modes
@@ -127,15 +133,19 @@ dp-cluster-modes
 | `custom` | Your machines + kubeadm | not applicable |
 | `kind` | Local containers | not applicable |
 
-`compute` is the default on purpose: it pays no managed control-plane charge, keeps the node under Adhar's control (kubelet flags, the containerd trust that lets nodes pull images built in the in-cluster Harbor), and is the only mode where the node autoscaler can add a worker — it provisions an instance and `kubeadm join`s it, which a managed node pool does not allow.
+`compute` is the default on purpose, for three reasons:
 
-`provided` installs onto a cluster that already exists, through your kubeconfig. It requires Kubernetes ≥ 1.28 with cluster-admin, and either Cilium with `gatewayAPI.enabled=true` or no CNI at all — a cluster running another CNI is refused rather than having its networking replaced. **`adhar down` on a provided cluster deletes nothing.**
+- It pays no managed control-plane charge.
+- It keeps the node under Adhar's control: kubelet flags, and the containerd trust that lets nodes pull images built in the in-cluster Harbor.
+- It is the only mode where the node autoscaler can add a worker. The autoscaler provisions an instance and `kubeadm join`s it, which a managed node pool does not allow.
 
-> The per-cloud spellings (`eks`, `aks`, `gke`, `doks`, `k3s`, `cluster_mode: k3s`) and the `useManagedK8s` boolean were removed and are now **rejected** with a message naming the replacement. Mapping them silently would have built a kubeadm cluster for someone who asked for GKE, discovered only on the bill.
+`provided` installs onto a cluster that already exists, through your kubeconfig. It requires Kubernetes ≥ 1.28 with cluster-admin. The cluster must run either Cilium with `gatewayAPI.enabled=true` or no CNI at all. A cluster running another CNI is refused; Adhar will not replace its networking. **`adhar down` on a provided cluster deletes nothing.**
+
+> The per-cloud spellings (`eks`, `aks`, `gke`, `doks`, `k3s`, `cluster_mode: k3s`) and the `useManagedK8s` boolean were removed. They are now **rejected** with a message naming the replacement. Mapping them silently would have built a kubeadm cluster for someone who asked for GKE, and they would only find out from the bill.
 
 ## Selecting a provider in config
 
-Two places, and they must agree:
+You set the provider in two places, and they must agree:
 
 ```yaml
 providers:
@@ -153,7 +163,7 @@ environments:
     isolation: namespace   # the default — see below
 ```
 
-`primary: true` matters more than it looks. Each extra upjet provider family registers hundreds of CRDs — AWS, Azure and GCP together are roughly 3000 — and a single control-plane node went into API-server timeouts under all of them. Only the primary cloud's Crossplane packages install.
+`primary: true` matters more than it looks. Each extra upjet provider family registers hundreds of CRDs. AWS, Azure and GCP together are roughly 3000. Under all of them, a single control-plane node went into API-server timeouts. So only the primary cloud's Crossplane packages install.
 
 ## Environments are namespaces by default
 
@@ -164,9 +174,11 @@ Every shipped config declares `dev`, `test` and `prod`. `isolation` decides what
 | `namespace` (default) | A namespace on **one** shared platform cluster | One cluster, one platform install |
 | `cluster` | A cluster of its own, with its own platform | One cluster per environment |
 
-So `adhar up -f config.yaml` with no `--env` builds **one** cluster for all the namespace environments, sized from the production-type one, and creates the `dev`, `test` and `prod` namespaces on it. Three clusters used to mean three installs and three bills, and on a default GCP quota did not even fit. Give `prod` `isolation: cluster` when it needs its own API server, etcd and blast radius. `adhar up -f config.yaml --env dev` provisions just the cluster that `dev` describes.
+So `adhar up -f config.yaml` with no `--env` builds **one** cluster for all the namespace environments. The cluster is sized from the production-type environment. Adhar then creates the `dev`, `test` and `prod` namespaces on it. Three clusters used to mean three installs and three bills, and they did not even fit on a default GCP quota.
 
-The cluster itself is named **`adhar`** unless you pass `--name`; `clusterConfig.name` does not rename it. When a run builds several `isolation: cluster` environments, each becomes `adhar-<env>`. The kubeconfig is written to `~/.adhar/clusters/<cluster>/kubeconfig` and merged into `~/.kube/config` as context `adhar` (or `adhar-<cluster>`).
+Give `prod` `isolation: cluster` when it needs its own API server, etcd and blast radius. `adhar up -f config.yaml --env dev` provisions only the cluster that `dev` describes.
+
+The cluster itself is named **`adhar`** unless you pass `--name`. `clusterConfig.name` does not rename it. When a run builds several `isolation: cluster` environments, each one becomes `adhar-<env>`. The kubeconfig is written to `~/.adhar/clusters/<cluster>/kubeconfig`. It is also merged into `~/.kube/config` as context `adhar` (or `adhar-<cluster>`).
 
 ## What every cloud shares, and what it does not
 
@@ -183,11 +195,11 @@ The cluster itself is named **`adhar`** unless you pass `--name`; `clusterConfig
 
 ## What every cloud needs from you
 
-- **Credentials** — via environment variables, a file path or workload identity, never committed to `config.yaml`.
-- **A delegated DNS zone** (recommended) — `globalSettings.defaultHost` must be a subdomain you delegate to the cloud's DNS. Skipping it is supported: the platform runs on a self-signed certificate and cert-manager issues a trusted one automatically once DNS is fixed.
-- **Quota** — enough vCPU and instances for `maxWorkers`, not just the starting size. New cloud accounts often ship with low defaults (AWS 5 vCPU, Azure 4, GCP 12 project-wide).
+- **Credentials.** Supply them through environment variables, a file path or workload identity. Never commit them to `config.yaml`.
+- **A delegated DNS zone** (recommended). `globalSettings.defaultHost` must be a subdomain you delegate to the cloud's DNS. You can skip this. The platform then runs on a self-signed certificate, and cert-manager issues a trusted one automatically once DNS is fixed.
+- **Quota.** You need enough vCPU and instances for `maxWorkers`, not just the starting size. New cloud accounts often ship with low defaults (AWS 5 vCPU, Azure 4, GCP 12 project-wide).
 
-> **DNS caveat — the apex must resolve.** Let's Encrypt reads CAA up the tree, so issuing `*.platform.example.com` also queries CAA for `example.com`. If the apex is delegated to nameservers holding no zone, orders fail with `SERVFAIL looking up CAA` — a message naming certificates for what is a delegation problem. Verify with `dig +short NS <host>` and `dig +noall +comment CAA <apex>` (an empty answer is correct; SERVFAIL is not).
+> **DNS caveat: the apex must resolve.** Let's Encrypt reads CAA records up the tree. So issuing `*.platform.example.com` also queries CAA for `example.com`. If the apex is delegated to nameservers that hold no zone, orders fail with `SERVFAIL looking up CAA`. The message blames certificates, but the real problem is the delegation. Check with `dig +short NS <host>` and `dig +noall +comment CAA <apex>`. An empty answer is correct; SERVFAIL is not.
 
 | `dnsProvider` | Zone service | Trusted wildcard (DNS-01) | What the in-cluster solver needs |
 |---|---|---|---|
@@ -201,16 +213,16 @@ The cluster itself is named **`adhar`** unless you pass `--name`; `clusterConfig
 
 ## Storage
 
-Every self-managed cloud installs two StorageClasses; the default is node-local:
+Every self-managed cloud installs two StorageClasses. The default is node-local:
 
 | Class | Provisioner | Default | For |
 |---|---|---|---|
 | `adhar-local` | `rancher.io/local-path` | yes | Everything that doesn't ask otherwise |
 | `adhar-block` | the cloud's CSI driver | — | Volumes that must outlive their node |
 
-The reason is arithmetic. A block volume occupies one of the VM's data-disk attach slots, that budget is small at every size a platform cluster would sensibly use, and the enabled packages request roughly 90 claims. Sizing for attach slots meant buying vCPU nobody needed. A node-local volume is a directory: no attach limit, no per-claim cloud API call.
+The reason is arithmetic. A block volume takes one of the VM's data-disk attach slots. That budget is small at every size a platform cluster would sensibly use. Yet the enabled packages request roughly 90 claims. Sizing for attach slots meant buying vCPU nobody needed. A node-local volume is a directory: no attach limit, and no cloud API call per claim.
 
-What it costs: a node-local volume **does not survive its node** and cannot be expanded in place. Durability is the data owner's job — CNPG replication plus backups into the object store — and a workload that genuinely needs a network block device names `adhar-block` explicitly. Civo in compute mode and the custom provider have no cloud CSI, so node-local is all there is.
+The trade-off: a node-local volume **does not survive its node**, and it cannot be expanded in place. Durability is the data owner's job, through CNPG replication plus backups into the object store. A workload that genuinely needs a network block device names `adhar-block` explicitly. Civo in compute mode and the custom provider have no cloud CSI, so node-local is all there is.
 
 ## Shared commands
 

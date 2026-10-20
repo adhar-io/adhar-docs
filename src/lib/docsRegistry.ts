@@ -39,7 +39,7 @@ function parseFrontmatter(raw: string): { data: Record<string, unknown>; body: s
     const i = line.indexOf(":");
     if (i === -1) continue;
     const key = line.slice(0, i).trim();
-    let val = line.slice(i + 1).trim();
+    const val = line.slice(i + 1).trim();
     if (!key) continue;
     try {
       data[key] = JSON.parse(val);

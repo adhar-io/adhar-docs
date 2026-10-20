@@ -7,7 +7,7 @@ path: "/adhar-kit/quickstart"
 
 # Quick Start
 
-This page takes you from an empty `pom.xml` to a running service that logs, counts, traces and caches through a single injected object. **The whole integration is one dependency and one constructor parameter** — everything else on this page is explaining what happens as a result.
+This page takes you from an empty `pom.xml` to a running service. The service logs, counts, traces and caches through one injected object. **The whole integration is one dependency and one constructor parameter.** The rest of this page explains what happens as a result.
 
 ## At a glance
 
@@ -27,7 +27,7 @@ This page takes you from an empty `pom.xml` to a running service that logs, coun
 | Maven | 3.9+ | 3.8 is the enforced floor when building the kit itself; use 3.9+ to consume it |
 | A framework | Spring Boot 4.0+, Quarkus 3.21+, Micronaut 4.8+, Helidon 4.2+ or Vert.x 4.5+ | Optional — the kit also runs standalone |
 
-Check the JDK before anything else, because a Java 24 toolchain fails during dependency resolution rather than at compile time, which produces a confusing error:
+Check the JDK first. A Java 24 toolchain fails during dependency resolution, not at compile time, and the error is confusing:
 
 ```bash
 java -version    # openjdk version "25" …
@@ -36,11 +36,11 @@ mvn -version     # Apache Maven 3.9.x …
 
 ## Step 1 — choose how you depend on it
 
-There are three shapes, and they are not mutually exclusive. Pick one as your primary.
+There are three ways to depend on the kit. You can combine them, but pick one as your main approach.
 
 ### Option A — the starter
 
-The starter transitively brings in every module and registers the framework adapters and auto-configuration. Choose it when you want the full facade and are not counting bytes.
+The starter pulls in every module as a transitive dependency. It also registers the framework adapters and auto-configuration. Choose it when you want the full facade and are not worried about size.
 
 ```xml
 <dependency>
@@ -52,7 +52,7 @@ The starter transitively brings in every module and registers the framework adap
 
 ### Option B — the BOM, then individual modules
 
-Import `adhar-kit-bom` once into `dependencyManagement`, then declare modules without versions. Choose it when you want a slim dependency graph — a metrics-only sidecar, for example.
+Import `adhar-kit-bom` once into `dependencyManagement`. Then declare modules without versions. Choose this when you want a slim dependency graph, such as a metrics-only sidecar.
 
 ```xml
 <dependencyManagement>
@@ -83,11 +83,11 @@ Import `adhar-kit-bom` once into `dependencyManagement`, then declare modules wi
 </dependencies>
 ```
 
-The BOM also manages the third-party versions the kit is tested against — Resilience4j, OpenTelemetry, gRPC, CloudEvents, the Kubernetes client, Spring AI — so importing it keeps your own direct dependencies aligned with the kit's.
+The BOM also manages the third-party versions the kit is tested against: Resilience4j, OpenTelemetry, gRPC, CloudEvents, the Kubernetes client and Spring AI. Importing it keeps your own direct dependencies in line with the kit's.
 
 ### Option C — inherit the parent POM
 
-For a greenfield service, inherit `adhar-kit-parent`. It sets Java 25, UTF-8, Surefire/Failsafe wiring, the Enforcer rules and the JaCoCo coverage gate, and it already imports the BOM.
+For a new service, inherit `adhar-kit-parent`. It sets Java 25, UTF-8, Surefire/Failsafe wiring, the Enforcer rules and the JaCoCo coverage gate. It already imports the BOM.
 
 ```xml
 <parent>
@@ -97,11 +97,11 @@ For a greenfield service, inherit `adhar-kit-parent`. It sets Java 25, UTF-8, Su
 </parent>
 ```
 
-> The parent inherits from `spring-boot-starter-parent`. That is convenient on Spring Boot and harmless elsewhere, but if you are on Quarkus or Micronaut you probably want their platform BOM as your parent and Option A or B for the kit.
+> The parent inherits from `spring-boot-starter-parent`. That is handy on Spring Boot and harmless elsewhere. But on Quarkus or Micronaut you probably want their platform BOM as your parent, and Option A or B for the kit.
 
 ## Step 2 — configure
 
-Everything the starter reads lives under `adhar.kit`. The two keys you always set are the master switch and the application name.
+Everything the starter reads lives under `adhar.kit`. You always set two keys: the master switch and the application name.
 
 ```yaml
 adhar:
@@ -116,11 +116,16 @@ adhar:
       ai: false
 ```
 
-Defaults matter here, and they are asymmetric. Eleven modules are **on** out of the box — logging, metrics, tracing, resilience, security, persistence, cache, messaging, config, health and docs. Eleven are **off** — ai, analytics, kubernetes, dapr, grpc, graphql, batch, notification, event-sourcing, perf-profiler and rewrite. Every entry in the block above restates a default; it is spelled out so you can see the shape of the `modules` map before you change anything in it.
+The defaults matter here, and they are not the same for every module.
+
+- Eleven modules are **on** out of the box: logging, metrics, tracing, resilience, security, persistence, cache, messaging, config, health and docs.
+- Eleven are **off**: ai, analytics, kubernetes, dapr, grpc, graphql, batch, notification, event-sourcing, perf-profiler and rewrite.
+
+Every entry in the block above restates a default. It is spelled out so you can see the shape of the `modules` map before you change anything in it.
 
 ## Step 3 — write the service
 
-On Spring Boot the facade is auto-configured as a bean. Take it as a constructor parameter.
+On Spring Boot, the facade is auto-configured as a bean. Take it as a constructor parameter.
 
 ```java
 package com.example.greeting;
@@ -148,9 +153,13 @@ public class GreetingService {
 }
 ```
 
-Three module boundaries are crossed in that method and none of them appear in the imports. `traced` opens a span through `TracingFacade` and records the duration through `MetricsFacade`. `count` increments a Micrometer counter. `cached` runs the cache-aside pattern against a cache named `greetings`, creating it on first use.
+That method uses three modules, and none of them appear in the imports:
 
-Expose it over HTTP so there is something to call:
+- `traced` opens a span through `TracingFacade` and records the duration through `MetricsFacade`.
+- `count` increments a Micrometer counter.
+- `cached` runs the cache-aside pattern against a cache named `greetings`, and creates the cache on first use.
+
+Expose the service over HTTP so you have something to call:
 
 ```java
 package com.example.greeting;
@@ -182,7 +191,7 @@ mvn clean install
 mvn spring-boot:run
 ```
 
-Adhar Kit prints a banner during startup listing the runtime it detected and which modules are live. Seeing it is how you know auto-configuration fired:
+During startup, Adhar Kit prints a banner. It lists the runtime it detected and which modules are live. If you see it, auto-configuration worked:
 
 ```text
 ===============================================================================
@@ -264,7 +273,7 @@ curl -s http://localhost:8080/actuator/adhar
 
 ## Next steps
 
-- [Framework Support](/adhar-kit/frameworks) — the same service on Quarkus, Micronaut, Helidon or Vert.x. The business code is unchanged; only the injection differs.
+- [Framework Support](/adhar-kit/frameworks) — the same service on Quarkus, Micronaut, Helidon or Vert.x. The business code stays the same; only the injection differs.
 - [Concepts](/adhar-kit/concepts) — why the facade is gated and lazy, and how configuration precedence resolves.
 - [Modules Overview](/adhar-kit/modules/overview) — what else you can turn on.
 - [Building & Contributing](/adhar-kit/build) — build the kit from source if you need an unreleased fix.

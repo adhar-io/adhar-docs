@@ -7,9 +7,17 @@ path: "/adhar-kit/modules/maven-plugin"
 
 # Maven Plugin
 
-`adhar-kit-maven-plugin` is build-time tooling, not a runtime library: it computes semantic versions from Conventional Commits, runs releases, scaffolds components, enforces code and architecture standards, and reports on dependency hygiene and CVEs. It exists because **conventions that live only in a wiki decay** — the layering rule nobody enforces, the version bump someone forgets, the transitive dependency that drifts off the BOM. Wiring these goals into the build turns those conventions into build failures.
+`adhar-kit-maven-plugin` is build-time tooling, not a runtime library. It:
 
-Nothing on this page ends up in your application. There are no beans, no annotations, no auto-configuration and no runtime cost; the artifact is a `maven-plugin` packaging that runs inside Maven's JVM and touches your working tree, your git repository and, for two goals, the network.
+- computes semantic versions from Conventional Commits
+- runs releases
+- scaffolds components
+- enforces code and architecture standards
+- reports on dependency hygiene and CVEs
+
+It exists because **conventions that live only in a wiki decay**. Think of the layering rule nobody enforces, the version bump someone forgets, or the transitive dependency that drifts off the BOM. Wiring these goals into the build turns those conventions into build failures.
+
+Nothing on this page ends up in your application. There are no beans, no annotations, no auto-configuration and no runtime cost. The artifact is a `maven-plugin` packaging that runs inside Maven's JVM. It touches your working tree, your git repository and, for two goals, the network.
 
 ## At a glance
 
@@ -24,17 +32,17 @@ Nothing on this page ends up in your application. There are no beans, no annotat
 
 ## How it works
 
-Each goal is a Maven Mojo with a default lifecycle phase. Bind the ones you want enforcement from, and invoke the rest by hand.
+Each goal is a Maven Mojo (a plugin goal class) with a default lifecycle phase. Bind the goals you want to enforce, and run the rest by hand.
 
 ```diagram
 kit-maven-goals
 ```
 
-Three groups behave differently, and knowing which is which saves time:
+The goals fall into three groups that behave differently. Knowing which is which saves time:
 
-- **Read-only reporters** — `validate`, `deps`, `bom`, `cve`. They walk sources or the resolved dependency tree, write a report under `target/`, and fail the build only when their `failOnError` flag is on. Safe to run anywhere, including on a dirty tree.
-- **Git-aware mutators** — `version`, `release`. They need a real git repository, and by default `version` rewrites `pom.xml`. Rehearse these before running them for real.
-- **File generators** — `generate`, `scaffold`, `adr`. They write new files; `generate` and `scaffold` default to a path under `target/`, so they are harmless until you redirect them. `adr` is the exception: it writes to `${project.basedir}/docs/adr` by default, inside your working tree.
+- **Read-only reporters** — `validate`, `deps`, `bom`, `cve`. They walk sources or the resolved dependency tree and write a report under `target/`. They fail the build only when their `failOnError` flag is on. They are safe to run anywhere, including on a dirty tree.
+- **Git-aware mutators** — `version`, `release`. They need a real git repository. By default `version` rewrites `pom.xml`. Rehearse these before running them for real.
+- **File generators** — `generate`, `scaffold`, `adr`. They write new files. `generate` and `scaffold` default to a path under `target/`, so they are harmless until you redirect them. `adr` is the exception: by default it writes to `${project.basedir}/docs/adr`, inside your working tree.
 
 ## Goals
 
@@ -50,11 +58,11 @@ Three groups behave differently, and knowing which is which saves time:
 | `adhar:cve` | `verify` | Scan dependencies against Sonatype OSS Index |
 | `adhar:adr` | none | Write an Architecture Decision Record |
 
-`bom` and `cve` are declared with `requiresDependencyResolution = ResolutionScope.TEST`, so binding either one forces Maven to resolve the full test-scope dependency tree before the phase runs. On a cold local repository that is the slowest part of the build, and it is why those two goals are the ones that misbehave offline.
+`bom` and `cve` are declared with `requiresDependencyResolution = ResolutionScope.TEST`. So binding either one forces Maven to resolve the full test-scope dependency tree before the phase runs. On a cold local repository, that is the slowest part of the build. It is also why those two goals are the ones that misbehave offline.
 
 ## Semantic versioning from commit history
 
-`adhar:version` with `-Dversion.type=auto` walks commit history through JGit and classifies each message with three patterns:
+`adhar:version` with `-Dversion.type=auto` walks commit history through JGit. It classifies each message with three patterns:
 
 | Bump | Pattern | Matching |
 |---|---|---|
@@ -62,34 +70,49 @@ Three groups behave differently, and knowing which is which saves time:
 | MINOR | `^feat(\(.+\))?:` | Case-insensitive, anchored to the **very start of the full message** |
 | PATCH | `^fix(\(.+\))?:` | Case-insensitive, same anchoring |
 
-Four consequences that are easy to get wrong:
+Four consequences are easy to get wrong:
 
-1. **The patterns are not multiline.** `^` anchors to the first character of the whole commit message, so `feat:` must be the first thing in the subject line. A `feat:` appearing only in the body is invisible.
-2. **The classification is an if/else chain per commit.** A commit carrying both a `BREAKING CHANGE` footer and a `feat:` subject counts only as breaking; the flags are then OR'd across all commits and the highest wins.
-3. **No matching commit means no bump.** The current version is returned unchanged rather than defaulting to a patch.
+1. **The patterns are not multiline.** `^` anchors to the first character of the whole commit message. So `feat:` must be the first thing in the subject line. A `feat:` that appears only in the body is invisible.
+2. **The classification is an if/else chain per commit.** A commit with both a `BREAKING CHANGE` footer and a `feat:` subject counts only as breaking. The flags are then OR'd across all commits, and the highest wins.
+3. **No matching commit means no bump.** The current version is returned unchanged; it does not default to a patch.
 4. **Scope is required to be non-empty if present.** `(\(.+\))?` matches `feat(api):` and `feat:`, but not `feat():`.
 
-`getLastTag()` picks the highest tag that parses as a semantic version, tolerating a leading `v` or `V`, and falls back to the lexicographic maximum if no tag parses. The commit walk is then meant to stop at that tag — but it terminates on `commit.getName().startsWith(lastTag)`, comparing a 40-character SHA against a tag name like `v1.2.0`, which never matches. **In practice `auto` therefore analyses the entire reachable history, not just the commits since the last tag.** Once any `feat:` exists anywhere in the history, `auto` will keep computing at least a minor bump from the current POM version. Prefer an explicit `-Dversion.type=minor` in CI, and treat `auto` as a suggestion you read rather than a decision you automate.
+`getLastTag()` picks the highest tag that parses as a semantic version, allowing a leading `v` or `V`. If no tag parses, it falls back to the lexicographic maximum.
 
-> **`updatePom` rewrites the first `<version>` element in the document.** In a child module whose `<parent>` block precedes its own coordinates, that is the *parent's* version. The POM is also rewritten through a DOM transformer, so formatting and comments can shift. Run with `-Dversion.updatePom=false` first and read the computed version from the log; if you do let it write, review the diff before committing.
+The commit walk is then meant to stop at that tag. But it stops on `commit.getName().startsWith(lastTag)`. That compares a 40-character SHA against a tag name like `v1.2.0`, which never matches. **So in practice `auto` analyses the entire reachable history, not just the commits since the last tag.** Once any `feat:` exists anywhere in the history, `auto` keeps computing at least a minor bump from the current POM version.
+
+Prefer an explicit `-Dversion.type=minor` in CI. Treat `auto` as a suggestion you read, not a decision you automate.
+
+> **`updatePom` rewrites the first `<version>` element in the document.** In a child module whose `<parent>` block comes before its own coordinates, that is the *parent's* version. The POM is also rewritten through a DOM transformer, so formatting and comments can shift. Run with `-Dversion.updatePom=false` first and read the computed version from the log. If you do let it write, review the diff before committing.
 
 ## Architecture rules
 
 `adhar:validate` splits into two validators that count differently.
 
-`CodeStandardsValidator` produces **errors** from package structure, naming conventions, annotations, and exception handling, and **warnings** from documentation and logging. Only errors can fail the build — a build with `failOnError = true` and nothing but Javadoc warnings still passes. Two of its checks surprise people on first adoption:
+`CodeStandardsValidator` produces:
+
+- **errors** from package structure, naming conventions, annotations, and exception handling
+- **warnings** from documentation and logging
+
+Only errors can fail the build. A build with `failOnError = true` and nothing but Javadoc warnings still passes. Two of its checks surprise people when they first adopt it:
 
 - `validatePackageStructure` expects all six of `controller`, `service`, `repository`, `model`, `dto` and `config` to exist as directory segments *somewhere* under the source root. A library module with no controllers reports a missing-package error for each one it lacks.
-- `validateNamingConventions` requires a file under a `controller` segment to contain `Controller` in its name, under `service` to contain `Service` or `ServiceImpl`, and under `repository` to contain `Repository`. Matching is on path *components*, so Windows and Unix separators behave identically.
+- `validateNamingConventions` checks file names by folder. A file under a `controller` segment must contain `Controller` in its name. Under `service` it must contain `Service` or `ServiceImpl`, and under `repository` it must contain `Repository`. Matching is on path *components*, so Windows and Unix separators behave the same.
 
 `ArchitectureRuleValidator` enforces the layering direction `controller -> service -> repository`. It is a text scan, not a compile:
 
 1. It extracts the file's own package with `^\s*package\s+([\w.]+)\s*;` (multiline).
-2. It assigns a layer by scanning the package's dot-separated segments for a component equal to `controller`, `service` or `repository` — so `com.example.service.impl` is SERVICE. A package with no such segment is **neutral**: the file is skipped entirely as an owner.
-3. It extracts every import with `^\s*import\s+(?:static\s+)?([\w.]+(?:\.\*)?)\s*;`, derives each import's package (handling `.*` wildcards correctly), and assigns it a layer the same way.
+2. It assigns a layer. It scans the package's dot-separated segments for a component equal to `controller`, `service` or `repository`, so `com.example.service.impl` is SERVICE. A package with no such segment is **neutral**: the file is skipped entirely as an owner.
+3. It extracts every import with `^\s*import\s+(?:static\s+)?([\w.]+(?:\.\*)?)\s*;`. It works out each import's package (handling `.*` wildcards correctly) and assigns it a layer the same way.
 4. It reports a violation when the owner's rank (`REPOSITORY` 1, `SERVICE` 2, `CONTROLLER` 3) is **lower** than the import's.
 
-So a repository importing a service is a violation; a controller importing a service is fine; and `dto`, `model`, `config`, `mapper`, `util` — anything without a layer segment — is exempt on both sides. Because matching is on whole segments, `com.example.servicecontroller` is not mistaken for either layer. Because it reads imports only, a cross-layer reference written as a fully-qualified inline name, or made between two classes in the same package, is invisible to it.
+So:
+
+- A repository importing a service is a violation.
+- A controller importing a service is fine.
+- `dto`, `model`, `config`, `mapper`, `util` — anything without a layer segment — is exempt on both sides.
+
+Matching is on whole segments, so `com.example.servicecontroller` is not mistaken for either layer. The validator reads imports only. So it cannot see a cross-layer reference written as a fully-qualified inline name, or one between two classes in the same package.
 
 ## Setup
 
@@ -130,7 +153,9 @@ Register the plugin group in `~/.m2/settings.xml` so the short `adhar:` prefix r
 
 ## Worked example — wiring it into CI
 
-Start permissive, then flip the gates once the backlog is clear. `failOnError` defaults to `false` on every reporting goal precisely so that adopting the plugin does not break an existing build on day one. On a multi-module build, put the plugin in the parent's `<pluginManagement>` and the `<executions>` in the modules that have a `src/main/java` — the aggregator POM has no source directory and `validate` will report nothing there.
+Start permissive, then turn on the gates once the backlog is clear. `failOnError` defaults to `false` on every reporting goal so that adopting the plugin does not break an existing build on day one.
+
+On a multi-module build, put the plugin in the parent's `<pluginManagement>`. Put the `<executions>` in the modules that have a `src/main/java`. The aggregator POM has no source directory, so `validate` reports nothing there.
 
 ```xml
 <plugin>
@@ -175,13 +200,15 @@ mvn -B verify
 #   target/adhar-bom-alignment-report.txt
 ```
 
-`cacheDir` is pointed at the repository root rather than `target/` on purpose: `target` is wiped by `clean`, so the OSS Index cache would never survive a CI run. Cache that directory between runs and the CVE scan stops re-querying unchanged coordinates.
+`cacheDir` points at the repository root instead of `target/` on purpose. `clean` wipes `target`, so the OSS Index cache would never survive a CI run. Cache that directory between runs, and the CVE scan stops re-querying unchanged coordinates.
 
-`adhar:cve` is deliberately lenient about the network. If OSS Index is unreachable it logs `OSS Index unreachable, skipping CVE check: ...` and **returns successfully** — a build on an air-gapped runner does not fail, it silently stops scanning. If you need the scan to be mandatory, assert on the presence and content of `target/adhar-cve-report.txt` in a separate CI step rather than relying on the goal's exit status. Use `-Dcve.skip=true` to skip it explicitly and visibly.
+`adhar:cve` is deliberately lenient about the network. If OSS Index is unreachable, it logs `OSS Index unreachable, skipping CVE check: ...` and **returns successfully**. A build on an air-gapped runner does not fail; it silently stops scanning.
+
+If the scan must be mandatory, do not rely on the goal's exit status. Instead, assert on the presence and content of `target/adhar-cve-report.txt` in a separate CI step. Use `-Dcve.skip=true` to skip it explicitly and visibly.
 
 ## Testing: dry-running a goal
 
-"Testing" for a build plugin means running a goal and confirming what it would do without mutating the repository. Every mutating goal has a way to do that.
+"Testing" a build plugin means running a goal and confirming what it would do, without changing the repository. Every goal that changes files has a way to do that.
 
 | Goal | Dry run | What it still does |
 |---|---|---|
@@ -210,7 +237,7 @@ mvn adhar:release -Drelease.type=minor -Drelease.dryRun=true
 mvn adhar:release -Drelease.type=minor -Drelease.deploy=true -Drelease.sign=true
 ```
 
-Note that `release.dryRun` is checked *after* `validateRelease()`, so a dry run on the wrong branch or a dirty tree fails — which is the point: it is a precondition check as much as a preview. A real run on a tree that fails those preconditions never reaches the mutating steps either.
+`release.dryRun` is checked *after* `validateRelease()`. So a dry run on the wrong branch or a dirty tree fails. That is the point: it is a precondition check as much as a preview. A real run on a tree that fails those preconditions never reaches the steps that change anything either.
 
 Other common invocations:
 
@@ -223,7 +250,7 @@ mvn adhar:scaffold -Dscaffold.name=BillingService -Dscaffold.package=com.acme.bi
 mvn adhar:adr -Dadr.title="Adopt Dapr for pub/sub" -Dadr.status=Accepted
 ```
 
-`adhar:generate` adds its `outputDirectory` to the project's compile source roots, and its `testOutputDirectory` to the test compile source roots when `generateTests` is on, so generated code compiles in the same build when bound to `generate-sources`.
+`adhar:generate` adds its `outputDirectory` to the project's compile source roots. When `generateTests` is on, it also adds its `testOutputDirectory` to the test compile source roots. So when the goal is bound to `generate-sources`, generated code compiles in the same build.
 
 ## Parameters
 

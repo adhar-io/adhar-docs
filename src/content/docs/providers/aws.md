@@ -7,9 +7,11 @@ path: "/docs/providers/aws"
 
 # AWS
 
-This page walks you from an AWS account to a working Adhar platform on EC2: organization policies, IAM, quota, Route 53, a complete config file, `adhar up`, verification and a clean teardown. It is for platform engineers on an AWS estate. Read one thing first: **an Adhar cluster on AWS uses three separate AWS identities, not one.** Most first-run failures are one of the three being absent while the other two work.
+This page takes you from an AWS account to a working Adhar platform on EC2. It covers organization policies, IAM, quota, Route 53, a complete config file, `adhar up`, verification and a clean teardown. It is for platform engineers on an AWS estate.
 
-> **Status: render-verified, not live-verified.** Provider registration, config validation and `adhar up --dry-run` pass, and the kubeadm path — node prep, join, drain, scale, CCM, CSI, upgrade — is shared with the live-verified DigitalOcean provider. **No full run on AWS has been completed.** Budget a first run as a bring-up exercise; the repository's runbook plans for **~25–40 minutes** on a first run, which is an estimate rather than a measurement.
+Know one thing before you start: **an Adhar cluster on AWS uses three separate AWS identities, not one.** Most first-run failures happen when one of the three is missing while the other two work.
+
+> **Status: render-verified, not live-verified.** Provider registration, config validation and `adhar up --dry-run` pass. The kubeadm path (node prep, join, drain, scale, CCM, CSI, upgrade) is shared with the live-verified DigitalOcean provider. **No full run on AWS has been completed.** Treat a first run as a bring-up exercise. The repository's runbook plans for **~25–40 minutes** on a first run. That is an estimate, not a measurement.
 
 ## At a glance
 
@@ -33,7 +35,15 @@ This page walks you from an AWS account to a working Adhar platform on EC2: orga
 dp-aws-topology
 ```
 
-The provider creates one VPC with a public subnet for the nodes and a private subnet tagged for internal load balancers (created, currently unused), an internet gateway **with a `0.0.0.0/0` route through it**, one security group, a key pair and the instances. Nodes take a public IP on launch, so there is **no NAT gateway and no Elastic IP** to pay for. The ELB or NLB in front of the Gateway is created later by the cloud-controller-manager inside the cluster, which is why teardown sweeps load balancers separately.
+The provider creates:
+
+- one VPC, with a public subnet for the nodes and a private subnet tagged for internal load balancers (created, currently unused)
+- an internet gateway **with a `0.0.0.0/0` route through it**
+- one security group
+- a key pair
+- the instances
+
+Nodes take a public IP on launch, so there is **no NAT gateway and no Elastic IP** to pay for. The ELB or NLB in front of the Gateway comes later. The cloud-controller-manager inside the cluster creates it. That is why teardown sweeps load balancers separately.
 
 ## The three identities
 
@@ -41,15 +51,19 @@ The provider creates one VPC with a public subnet for the nodes and a private su
 pv-aws-ownership
 ```
 
-Identity 1 never calls Route 53 — DNS is entirely an in-cluster concern. Identity 2 is what turns nodes usable: until the cloud-controller-manager runs, every node keeps the `node.cloudprovider.kubernetes.io/uninitialized:NoSchedule` taint and nothing schedules.
+Identity 1 never calls Route 53. DNS is entirely an in-cluster concern.
 
-**Prefer an instance profile or IRSA for identity 1** when `adhar` itself runs on AWS. `useInstanceProfile: true` takes short-lived credentials from the instance metadata service (or the IRSA web-identity token) instead of a key pair you store and rotate, and it suppresses writing `kube-system/aws-secret`, so no long-lived key lands inside the cluster. The trade-off is explicit: Adhar does **not** attach an instance profile to the workers it creates on the kubeadm path, so with the flag on you must attach a node role yourself or identity 2 has nothing to authenticate with. Managed mode closes that gap — Adhar creates `adhar-<cluster>-eks-node` and the managed node group carries it.
+Identity 2 is what makes nodes usable. Until the cloud-controller-manager runs, every node keeps the `node.cloudprovider.kubernetes.io/uninitialized:NoSchedule` taint, and nothing schedules.
 
-Identity 3 has no workload-identity option today: the cert-manager Route 53 solver reads `accessKeyId` and `secretAccessKey` from a Secret, so an instance profile or SSO session is not enough even though provisioning works fine from one.
+**Prefer an instance profile or IRSA for identity 1** when `adhar` itself runs on AWS. With `useInstanceProfile: true`, Adhar takes short-lived credentials from the instance metadata service (or the IRSA web-identity token). You no longer store and rotate a key pair. The flag also stops Adhar writing `kube-system/aws-secret`, so no long-lived key lands inside the cluster.
+
+The trade-off is explicit. On the kubeadm path, Adhar does **not** attach an instance profile to the workers it creates. So with the flag on, you must attach a node role yourself, or identity 2 has nothing to authenticate with. Managed mode closes that gap: Adhar creates `adhar-<cluster>-eks-node`, and the managed node group carries it.
+
+Identity 3 has no workload-identity option today. The cert-manager Route 53 solver reads `accessKeyId` and `secretAccessKey` from a Secret. So an instance profile or SSO session is not enough here, even though provisioning works fine with one.
 
 ## Step 1 — Prerequisites, in order
 
-Ordered so that a failure invalidates everything after it. Checking DNS first and the organization last is how a bring-up gets abandoned twice before anyone looks at the real blocker.
+Work through these in order. Each failure blocks everything after it. If you check DNS first and the organization last, a bring-up can get abandoned twice before anyone looks at the real blocker.
 
 | # | Prerequisite | Who fixes it | Fails as |
 |---|---|---|---|
@@ -58,18 +72,18 @@ Ordered so that a failure invalidates everything after it. Checking DNS first an
 | 3 | EC2 vCPU quota `L-1216C47A` at full cluster size | A support-case quota increase | `adhar up` refuses in preflight, naming the shortfall |
 | 4 | A delegated Route 53 zone for `defaultHost` | You plus your registrar | Self-signed certificates; the platform still runs |
 
-Plus local tooling: `adhar` built from the repository (`make build`), `kubectl`, `dig`, and the `aws` CLI for the checks below (and on PATH wherever an EKS kubeconfig is used).
+You also need local tooling: `adhar` built from the repository (`make build`), `kubectl`, `dig`, and the `aws` CLI. The checks below use the `aws` CLI. It must also be on PATH wherever an EKS kubeconfig is used.
 
 ### 1. Clear the Service Control Policies
 
-An identity policy is a ceiling, not a guarantee. An SCP on the organization or OU can deny an action that `AdministratorAccess` allows, and nothing inside the member account can grant it back — so it reads as an IAM problem, especially as the distinguishing phrase sits at the very end of a long error line:
+An identity policy is a ceiling, not a guarantee. A Service Control Policy (SCP) on the organization or OU can deny an action that `AdministratorAccess` allows. Nothing inside the member account can grant it back. The result looks like an IAM problem, especially because the phrase that tells them apart sits at the very end of a long error line:
 
 | Phrase in the error | Means | Fixed by |
 |---|---|---|
 | `explicit deny in a service control policy` | An org-level block above IAM | The management account |
 | `no identity-based policy allows` | A missing grant | This account's IAM admin |
 
-**Verify with a repeated sample, never one call.** While an SCP is being edited, calls pass briefly and then go back to denied — a real attempt measured a clean batch, then 12 denials, then another clean batch, then 30:
+**Verify with a repeated sample, never one call.** While an SCP is being edited, calls pass briefly and then go back to denied. One real attempt measured a clean batch, then 12 denials, then another clean batch, then 30:
 
 ```bash
 for i in $(seq 1 30); do
@@ -81,7 +95,7 @@ done; echo
 
 ### 2. Grant the provisioning permissions
 
-This policy is derived from the API calls the provider actually makes. `AmazonEC2FullAccess` plus the ELB, quota and STS entries also works.
+This policy comes from the API calls the provider actually makes. `AmazonEC2FullAccess` plus the ELB, quota and STS entries also works.
 
 ```json
 {
@@ -127,31 +141,34 @@ This policy is derived from the API calls the provider actually makes. `AmazonEC
 }
 ```
 
-The NAT and address entries exist only so teardown can remove one an in-cluster controller created. Add these only for the modes you use:
+The NAT and address entries exist only so teardown can remove one that an in-cluster controller created. Add these only for the modes you use:
 
 | Mode | Extra permissions |
 |---|---|
 | `clusterMode: managed` (EKS) | `eks:*` on the cluster and node groups, plus `iam:CreateRole`, `GetRole`, `DeleteRole`, `AttachRolePolicy`, `DetachRolePolicy`, `ListAttachedRolePolicies`, `PassRole` |
 | `roleArn` (assume-role) | `sts:AssumeRole` on that role |
 
-> **A thin policy misreads as a missing image.** The first call it denies is usually `ec2:DescribeImages`, which surfaces as "no AMI found" rather than as a permissions error.
+> **A thin policy looks like a missing image.** The first call it denies is usually `ec2:DescribeImages`. That shows up as "no AMI found", not as a permissions error.
 
-**Verify:** `aws sts get-caller-identity` prints the identity you expect, and `aws ec2 run-instances --image-id ami-0abcdef1234567890 --instance-type r6i.xlarge --dry-run` fails with `DryRunOperation` (allowed) rather than `UnauthorizedOperation`.
+**Verify:**
+
+- `aws sts get-caller-identity` prints the identity you expect.
+- `aws ec2 run-instances --image-id ami-0abcdef1234567890 --instance-type r6i.xlarge --dry-run` fails with `DryRunOperation` (allowed), not `UnauthorizedOperation`.
 
 ### 3. Raise the vCPU quota to cover the whole cluster
 
-`L-1216C47A` is *Running On-Demand Standard (A, C, D, H, I, M, R, T, Z) instances* and it counts **vCPUs, not instances**. Size it for `maxWorkers`: the shipped `examples/aws-config.yaml` runs one `r6i.large` control plane plus up to five `r6i.xlarge` workers — 2 + (5 × 4) = **22 vCPU**. New accounts often start at 5, which is one node, and raising it is a support case, not instant.
+`L-1216C47A` is *Running On-Demand Standard (A, C, D, H, I, M, R, T, Z) instances*. It counts **vCPUs, not instances**. Size it for `maxWorkers`. The shipped `examples/aws-config.yaml` runs one `r6i.large` control plane plus up to five `r6i.xlarge` workers: 2 + (5 × 4) = **22 vCPU**. New accounts often start at 5, which is one node. Raising it takes a support case; it is not instant.
 
 ```bash
 aws service-quotas get-service-quota --service-code ec2 --quota-code L-1216C47A \
   --query 'Quota.Value' --output text --region ap-southeast-1      # must be ≥ 22
 ```
 
-Elastic IPs, NAT gateways and load balancers are also quota-limited per region and are **not** pre-checked.
+Elastic IPs, NAT gateways and load balancers also have per-region quotas. These are **not** pre-checked.
 
 ### 4. Delegate a Route 53 zone
 
-`globalSettings.defaultHost` drives every URL and the wildcard certificate, so it must be a subdomain delegated to a Route 53 **public** hosted zone. Adhar never creates the zone.
+`globalSettings.defaultHost` drives every URL and the wildcard certificate. It must be a subdomain delegated to a Route 53 **public** hosted zone. Adhar never creates the zone.
 
 ```bash
 aws route53 create-hosted-zone --name platform.example.com \
@@ -160,7 +177,11 @@ aws route53 get-hosted-zone --id Z0123456789ABC \
   --query 'DelegationSet.NameServers' --output text
 ```
 
-At your registrar, add **four NS records named `platform`** in the `example.com` zone with those values; the apex stays where it is. Identity 3 needs `route53:ChangeResourceRecordSets`, `route53:ListHostedZonesByName` and `route53:GetChange` on that zone, as **static** keys. **Verify:**
+At your registrar, add **four NS records named `platform`** in the `example.com` zone, with those values. The apex stays where it is.
+
+Identity 3 needs `route53:ChangeResourceRecordSets`, `route53:ListHostedZonesByName` and `route53:GetChange` on that zone, as **static** keys.
+
+**Verify:**
 
 ```bash
 dig +short NS platform.example.com      # the four Route 53 nameservers
@@ -168,11 +189,11 @@ dig +short NS example.com               # your registrar's, unchanged
 dig +noall +comment CAA example.com     # status: NOERROR — an empty answer is correct
 ```
 
-> **Do not delegate the whole registered domain unless you also host its apex zone in Route 53.** Let's Encrypt reads CAA up the tree, so issuing `*.platform.example.com` also queries CAA for `example.com`. Delegated to nameservers holding no zone, every lookup SERVFAILs and the order fails with a message naming CAA rather than delegation. Skipping DNS entirely is supported: the platform comes up self-signed and cert-manager issues a trusted certificate once the delegation is fixed.
+> **Do not delegate the whole registered domain unless you also host its apex zone in Route 53.** Let's Encrypt reads CAA records up the tree. So issuing `*.platform.example.com` also queries CAA for `example.com`. If the apex is delegated to nameservers that hold no zone, every lookup SERVFAILs. The order then fails with a message that names CAA, not delegation. You can skip DNS entirely. The platform comes up self-signed, and cert-manager issues a trusted certificate once the delegation is fixed.
 
 ## Step 2 — Credentials
 
-Pick one of the five methods on the provider block. The shipped example uses the environment:
+Pick one of the five methods on the provider block. The shipped example uses environment variables:
 
 ```yaml
 providers:
@@ -189,7 +210,7 @@ providers:
 export AWS_ACCESS_KEY_ID="…" AWS_SECRET_ACCESS_KEY="…"
 ```
 
-Never put keys in the config file: it gets committed, and a key in Git is a key that has to be rotated.
+Never put keys in the config file. It gets committed, and a key in Git is a key you have to rotate.
 
 ## Step 3 — Write the configuration
 
@@ -257,18 +278,18 @@ environments:                          # dev, test and prod as namespaces on ONE
   # prod: identical to dev except name: adhar-prod and type: production
 ```
 
-The example spells out `test` and `prod` in full; they differ from `dev` only as noted. Things worth knowing:
+The example spells out `test` and `prod` in full. They differ from `dev` only as noted. Worth knowing:
 
-- `clusterConfig` keys match ignoring case and separators, so `machineType`, `machine_type` and `MACHINE_TYPE` are one key.
-- **Root volume size comes from the provider block** (`diskSizeGb`, `diskType`), defaulting to 256 GiB gp3 — the values the example also records in `clusterConfig`.
-- **Pin `ami` for anything reproducible.** The default is the newest Ubuntu 24.04 LTS (noble) AMI Canonical publishes for x86_64, looked up per region, so two runs a week apart boot different images.
+- `clusterConfig` keys match ignoring case and separators. So `machineType`, `machine_type` and `MACHINE_TYPE` are one key.
+- **Root volume size comes from the provider block** (`diskSizeGb`, `diskType`). It defaults to 256 GiB gp3, the same values the example also records in `clusterConfig`.
+- **Pin `ami` for anything reproducible.** The default is the newest Ubuntu 24.04 LTS (noble) AMI that Canonical publishes for x86_64, looked up per region. So two runs a week apart can boot different images.
 - `clusterMode: eks` and `useManagedK8s: true` are **rejected** with a message naming the replacement.
 
 ### Node sizing, from measurement
 
-- **Workers: memory first, vCPU second.** With `adhar-local` as the default StorageClass the binding constraint is memory per worker, not attach slots — so 4 vCPU / 32 GiB (`r6i.xlarge`) beats 8 vCPU / 32 GiB at the same memory, and vCPU is the unit the quota counts. Two workers is the floor, not a working size; expect the autoscaler to add nodes during the first sync.
-- **Control plane: 2 vCPU / 16 GiB.** Burstable types (`t3.medium`) throttle etcd in ways that present as a network fault. `m6i.large` has the CPU but not the memory: during the first sync of 75 applications the API server began failing TLS handshakes.
-- **Root volumes: 256 GiB gp3.** The containerd image cache (~35 GiB) and every node-local PersistentVolume share this disk. Too small and the kubelet takes a `disk-pressure:NoSchedule` taint, which reads exactly like a CPU shortage.
+- **Workers: memory first, vCPU second.** With `adhar-local` as the default StorageClass, the binding limit is memory per worker, not attach slots. So 4 vCPU / 32 GiB (`r6i.xlarge`) beats 8 vCPU / 32 GiB at the same memory, and vCPU is the unit the quota counts. Two workers is the floor, not a working size. Expect the autoscaler to add nodes during the first sync.
+- **Control plane: 2 vCPU / 16 GiB.** Burstable types (`t3.medium`) throttle etcd in ways that look like a network fault. `m6i.large` has the CPU but not the memory: during the first sync of 75 applications, the API server began failing TLS handshakes.
+- **Root volumes: 256 GiB gp3.** The containerd image cache (~35 GiB) and every node-local PersistentVolume share this disk. If it is too small, the kubelet takes a `disk-pressure:NoSchedule` taint, which looks exactly like a CPU shortage.
 
 ## Step 4 — Dry run
 
@@ -276,7 +297,7 @@ The example spells out `test` and `prod` in full; they differ from `dev` only as
 ./adhar up -f config.yaml --env dev --dry-run
 ```
 
-This resolves the configuration and prints the environment, provider, region, type and the merged `clusterConfig`. It checks **no** permissions, quota or DNS, so it passes cleanly on an account that cannot create a single resource. Its job is to catch schema mistakes for free.
+This resolves the configuration. It prints the environment, provider, region, type and the merged `clusterConfig`. It checks **no** permissions, quota or DNS, so it passes cleanly even on an account that cannot create a single resource. Its job is to catch schema mistakes for free.
 
 ## Step 5 — Provision
 
@@ -284,7 +305,7 @@ This resolves the configuration and prints the environment, provider, region, ty
 ./adhar up -f config.yaml --env dev
 ```
 
-The first stage is a real preflight, run before any create call. A `✖` line stops the run there and names the limit and the remedy. Passing checks are folded into the `Preflight ✓` stage; `--verbose` prints them:
+The first stage is a real preflight. It runs before any create call. A `✖` line stops the run there and names the limit and the remedy. Passing checks are folded into the `Preflight ✓` stage. `--verbose` prints them:
 
 ```text
 preflight ● EC2 permissions: all 13 required actions permitted
@@ -313,7 +334,14 @@ Provisioning Adhar Platform
   ◌ GitOps sync - platform stack   platform apps via ArgoCD
 ```
 
-After the first joins, compute mode installs over SSH on the control plane: the `aws-cloud-controller-manager` chart, the `aws-ebs-csi-driver` chart (with `kube-system/aws-secret` when static keys are configured; nothing when `useInstanceProfile: true`), the `adhar-block` gp3 StorageClass and the CSI startup-taint toleration. The CLI finishes with a panel of platform URLs, and warns explicitly if TLS is still self-signed. The catalogue keeps converging for another 30–45 minutes while the autoscaler adds workers; that is expected.
+After the first joins, compute mode installs these over SSH on the control plane:
+
+- the `aws-cloud-controller-manager` chart
+- the `aws-ebs-csi-driver` chart, with `kube-system/aws-secret` when static keys are configured (nothing when `useInstanceProfile: true`)
+- the `adhar-block` gp3 StorageClass
+- the CSI startup-taint toleration
+
+The CLI finishes with a panel of platform URLs. It warns explicitly if TLS is still self-signed. The catalogue keeps converging for another 30–45 minutes while the autoscaler adds workers. That is expected.
 
 ## Step 6 — Verify
 
@@ -327,7 +355,7 @@ kubectl -n adhar-system get certificate adhar-cert       # READY True once DNS-0
 ./adhar get secrets -p argocd
 ```
 
-A node still carrying `node.cloudprovider.kubernetes.io/uninitialized` means identity 2 has no credentials — see the pitfalls table.
+If a node still carries `node.cloudprovider.kubernetes.io/uninitialized`, identity 2 has no credentials. See the pitfalls table.
 
 ## Day-2 operations
 
@@ -338,7 +366,7 @@ A node still carrying `node.cloudprovider.kubernetes.io/uninitialized` means ide
 ./adhar upgrade --diff-only && ./adhar upgrade --yes
 ```
 
-The cluster is named `adhar` unless you passed `--name` to `adhar up`; `clusterConfig.name` is not the cluster name.
+The cluster is named `adhar` unless you passed `--name` to `adhar up`. `clusterConfig.name` is not the cluster name.
 
 ### Managed EKS instead
 
@@ -349,7 +377,15 @@ providers:
     clusterMode: managed     # EKS instead of EC2 + kubeadm
 ```
 
-Creates the same VPC, subnets and security group, two IAM roles (`adhar-<cluster>-eks-cluster`, `adhar-<cluster>-eks-node`), the EKS control plane, one managed node group per node group and the `aws-ebs-csi-driver` addon. The kubeconfig authenticates through `aws eks get-token`, so the **`aws` CLI must be on PATH** wherever it is used. EKS adds a control-plane charge, and the Adhar node autoscaler cannot add workers to a managed node group.
+This creates:
+
+- the same VPC, subnets and security group
+- two IAM roles (`adhar-<cluster>-eks-cluster`, `adhar-<cluster>-eks-node`)
+- the EKS control plane
+- one managed node group per node group
+- the `aws-ebs-csi-driver` addon
+
+The kubeconfig authenticates through `aws eks get-token`. So the **`aws` CLI must be on PATH** wherever the kubeconfig is used. EKS adds a control-plane charge. The Adhar node autoscaler cannot add workers to a managed node group.
 
 ## Tear down, then check the bill
 
@@ -367,7 +403,9 @@ Creates the same VPC, subnets and security group, two IAM roles (`adhar-<cluster
 | EBS CSI driver | unattached volumes with **no** cluster tag | only with `--purge-orphaned-volumes` |
 | anything | a resource tagged for two clusters (`shared`) | never |
 
-The load-balancer sweep runs **before** the security-group, subnet and VPC steps, because an ELB holds a reference to the VPC and leaving one behind makes the VPC delete fail with `DependencyViolation`. **Point `down` at the same config file you used for `up`**; aimed elsewhere it prints `Nothing was deleted.` and names the providers it searched.
+The load-balancer sweep runs **before** the security-group, subnet and VPC steps. An ELB holds a reference to the VPC. If one is left behind, the VPC delete fails with `DependencyViolation`.
+
+**Point `down` at the same config file you used for `up`.** With any other file, it prints `Nothing was deleted.` and names the providers it searched.
 
 **Check nothing is billing:**
 
@@ -381,7 +419,13 @@ aws ec2 describe-volumes --region $R --filters Name=status,Values=available \
   --query 'Volumes[].VolumeId' --output text
 ```
 
-**What you pay for while it runs:** node hours (and `maxWorkers` is the spend ceiling as much as the quota ceiling), one load balancer per `LoadBalancer` Service, and one EBS volume per `adhar-block` PersistentVolume plus each node's root volume. Node-local volumes cost nothing extra. No NAT gateway hours. EKS adds a control-plane charge.
+**What you pay for while it runs:**
+
+- Node hours. `maxWorkers` is your spend ceiling as much as your quota ceiling.
+- One load balancer per `LoadBalancer` Service.
+- One EBS volume per `adhar-block` PersistentVolume, plus each node's root volume.
+
+Node-local volumes cost nothing extra. There are no NAT gateway hours. EKS adds a control-plane charge.
 
 ## Common pitfalls
 

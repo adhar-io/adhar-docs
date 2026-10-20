@@ -7,9 +7,11 @@ path: "/docs/providers/civo"
 
 # Civo
 
-This page takes you from a Civo account to a working Adhar platform: token, quota, a Civo DNS zone, a complete config file, `adhar up`, verification and teardown. It is for teams who want fast, low-cost dev and staging clusters. Civo is the **closest analogue to DigitalOcean** in this platform — a small, flat API and cheap instances — with one structural difference you need to understand before choosing a mode: **Civo's cloud-controller-manager only works on Civo's own managed Kubernetes.** That is why Civo is the one cloud whose shipped config uses `clusterMode: managed`.
+This page takes you from a Civo account to a working Adhar platform. It covers the token, quota, a Civo DNS zone, a complete config file, `adhar up`, verification and teardown. It is for teams who want fast, low-cost dev and staging clusters.
 
-> **Status: render-verified.** Provider registration, config validation and `adhar up --dry-run` pass, and the kubeadm code is shared with the live-verified DigitalOcean path. Partial live bring-ups shaped the defaults below (node sizes, the volume sweep, the host-network edge), but **no complete measured run exists**, so time to a usable platform is unmeasured. Treat a first bring-up as an exercise, and keep [DigitalOcean](/docs/providers/digitalocean) open for everything that is not cloud-specific.
+Civo is the **closest analogue to DigitalOcean** in this platform: a small, flat API and cheap instances. But there is one structural difference to understand before you choose a mode. **Civo's cloud-controller-manager only works on Civo's own managed Kubernetes.** That is why Civo is the one cloud whose shipped config uses `clusterMode: managed`.
+
+> **Status: render-verified.** Provider registration, config validation and `adhar up --dry-run` pass. The kubeadm code is shared with the live-verified DigitalOcean path. Partial live bring-ups shaped the defaults below (node sizes, the volume sweep, the host-network edge). But **no complete measured run exists**, so time to a usable platform is unmeasured. Treat a first bring-up as an exercise. Keep [DigitalOcean](/docs/providers/digitalocean) open for everything that is not cloud-specific.
 
 ## At a glance
 
@@ -33,11 +35,15 @@ This page takes you from a Civo account to a working Adhar platform: token, quot
 dp-civo-topology
 ```
 
-In the shipped **managed** mode, Civo builds the cluster: a k3s control plane you never see as an instance, a node pool, Civo's own CCM and CSI driver. Adhar asks for the cluster with Cilium as its CNI (the platform's data path) and opts out of Civo's default marketplace applications — Traefik would claim node ports and hostnames the Cilium Gateway is supposed to own. Because Civo installed Cilium, the platform bootstrap deliberately **does not** install its own over it. The Gateway Service gets a real Civo load balancer, and external-dns publishes its address.
+In the shipped **managed** mode, Civo builds the cluster. That means a k3s control plane you never see as an instance, a node pool, and Civo's own CCM and CSI driver.
+
+Adhar asks for the cluster with Cilium as its CNI (the platform's data path). It also opts out of Civo's default marketplace applications, because Traefik would claim node ports and hostnames that the Cilium Gateway is supposed to own. Since Civo installed Cilium, the platform bootstrap deliberately **does not** install its own over it. The Gateway Service gets a real Civo load balancer, and external-dns publishes its address.
 
 ### Why not compute mode by default
 
-On plain instances there is no Civo cluster record, and the Civo CCM resolves `CIVO_CLUSTER_ID` against the **managed** Kubernetes API. On a kubeadm cluster it nil-panics and never clears `node.cloudprovider.kubernetes.io/uninitialized`; the Civo CSI plugin then cannot work either, because it needs `.spec.providerID`, which only the CCM sets. So compute mode installs **neither**, and gets its edge from the nodes:
+On plain instances there is no Civo cluster record. The Civo CCM resolves `CIVO_CLUSTER_ID` against the **managed** Kubernetes API. So on a kubeadm cluster it nil-panics and never clears `node.cloudprovider.kubernetes.io/uninitialized`.
+
+The Civo CSI plugin then cannot work either. It needs `.spec.providerID`, and only the CCM sets that. So compute mode installs **neither**, and gets its edge from the nodes:
 
 | | `managed` (shipped) | `compute` |
 |---|---|---|
@@ -49,7 +55,17 @@ On plain instances there is no Civo cluster record, and the Civo CCM resolves `C
 | Node SSH | No | Yes |
 | Maturity | The exercised path | Built 2026-10-07, not yet live-verified |
 
-In compute mode, three Cilium settings have to agree for the host-network Gateway to listen — `gateway-api-hostnetwork-enabled: "true"`, `NET_BIND_SERVICE` on `cilium-envoy`, and `--keep-cap-net-bind-service` on `cilium-envoy-starter` — and the platform sets all three. The first attempt set only the first and produced a Gateway that reported `Programmed` while nothing listened on 443. Inside the cluster, CoreDNS points `*.<host>` at a shim Service listing the nodes' internal addresses, because a pod sent to a node's public address hairpins back through NAT, and every oauth2-proxy resolves `https://keycloak.<host>` at start-up. The trade-off: one Envoy per node with DNS round-robin, so losing a node removes one A record's worth of capacity until the next reconcile; a cloud load balancer health-checks instead.
+In compute mode, three Cilium settings must agree for the host-network Gateway to listen. The platform sets all three:
+
+- `gateway-api-hostnetwork-enabled: "true"`
+- `NET_BIND_SERVICE` on `cilium-envoy`
+- `--keep-cap-net-bind-service` on `cilium-envoy-starter`
+
+The first attempt set only the first one. It produced a Gateway that reported `Programmed` while nothing listened on 443.
+
+Inside the cluster, CoreDNS points `*.<host>` at a shim Service that lists the nodes' internal addresses. This is needed because a pod sent to a node's public address hairpins back through NAT, and every oauth2-proxy resolves `https://keycloak.<host>` at start-up.
+
+The trade-off is one Envoy per node with DNS round-robin. Losing a node removes one A record's worth of capacity until the next reconcile. A cloud load balancer health-checks instead.
 
 ## Step 1 — Prerequisites checklist
 
@@ -63,13 +79,17 @@ In compute mode, three Cilium settings have to agree for the host-network Gatewa
 
 ### Sizes differ by mode, and by region
 
-Managed mode draws from a **different size family** — `g4s.kube.*`, `g3.k3s.*`, `g4m.kube.*` — not the instance list (`g3.*`). A `g3.*` size fails at create in managed mode. The shipped `g4s.kube.large` is 4 vCPU / 8 GB with a 60 GB disk; the 60 GB matters because `adhar-local` keeps platform volumes on the node filesystem, and the `g3.k3s.*` sizes carry only 15 GB.
+Managed mode draws from a **different size family** (`g4s.kube.*`, `g3.k3s.*`, `g4m.kube.*`), not the instance list (`g3.*`). A `g3.*` size fails at create in managed mode.
 
-> **Confirm the size and image for your region before the first run.** A size that does not exist there fails at create time — *after* the network and firewall already exist. The quota preflight cannot help: an unknown size contributes nothing to the check rather than a made-up number, so a newly released size never blocks a create.
+The shipped `g4s.kube.large` is 4 vCPU / 8 GB with a 60 GB disk. The 60 GB matters because `adhar-local` keeps platform volumes on the node filesystem. The `g3.k3s.*` sizes carry only 15 GB.
+
+> **Confirm the size and image for your region before the first run.** A size that does not exist there fails at create time, *after* the network and firewall already exist. The quota preflight cannot help. An unknown size adds nothing to the check rather than a made-up number, so a newly released size never blocks a create.
 
 ## Step 2 — Token and quota
 
-Create a token in the Civo dashboard under **Settings → Profile → Security**. It must be able to create and delete instances or Kubernetes clusters, networks, firewalls, SSH keys, load balancers, volumes and DNS records. In compute mode Adhar also writes it to `kube-system/civo-api-access` (API key, region, cluster id) for anything in-cluster that needs to call Civo.
+Create a token in the Civo dashboard under **Settings → Profile → Security**. It must be able to create and delete instances or Kubernetes clusters, networks, firewalls, SSH keys, load balancers, volumes and DNS records.
+
+In compute mode, Adhar also writes the token to `kube-system/civo-api-access` (API key, region, cluster id). Anything in-cluster that needs to call Civo reads it from there.
 
 ```bash
 export CIVO_TOKEN="…"
@@ -77,7 +97,7 @@ civo apikey list          # the token works
 civo region ls            # LON1 / NYC1 / FRA1 / PHX1 …
 ```
 
-Civo accounts start with modest limits, and the full platform will exceed a default one. `adhar up` reads the account's own quota (`GetQuota`) and **refuses before provisioning anything** if the cluster will not fit:
+Civo accounts start with modest limits, and the full platform will exceed a default one. `adhar up` reads the account's own quota (`GetQuota`). If the cluster will not fit, it **refuses before provisioning anything**:
 
 | Checked | Blocking |
 |---|---|
@@ -88,7 +108,11 @@ Civo accounts start with modest limits, and the full platform will exceed a defa
 | Networks (one per cluster) | yes |
 | Load balancers | **no, deliberately** |
 
-A shortfall reads like `instances: need 4, 8 of 10 already in use`. The load-balancer quota is not a blocker because an exhausted one leaves the Gateway Service `Pending` while the platform still comes up — refusing to build over that would trade a recoverable inconvenience for a hard failure. A token that cannot read the quota logs a warning and proceeds. For scale: the shipped sizes were chosen against an account measured at 63 GB RAM and 50 cores in total, where three 8 GB nodes use 24 GB and five use 40 GB — a compute-mode cluster hit `RAM MB quota limit exceeded` reaching for a fourth 16 GB node. Volumes are capped too (40 on the account that hit it).
+A shortfall reads like `instances: need 4, 8 of 10 already in use`.
+
+The load-balancer quota is not a blocker. An exhausted one leaves the Gateway Service `Pending`, but the platform still comes up. Refusing to build over that would trade a recoverable inconvenience for a hard failure. A token that cannot read the quota logs a warning and proceeds.
+
+For scale: the shipped sizes were chosen against an account measured at 63 GB RAM and 50 cores in total. There, three 8 GB nodes use 24 GB and five use 40 GB. A compute-mode cluster hit `RAM MB quota limit exceeded` when reaching for a fourth 16 GB node. Volumes are capped too (40 on the account that hit it).
 
 ## Step 3 — Delegate a DNS zone
 
@@ -105,13 +129,18 @@ dig +short NS example.com               # → your registrar's, unchanged
 dig +noall +comment CAA example.com     # → status: NOERROR (empty answer is fine)
 ```
 
-> **Do not delegate the whole registered domain here unless you also host its apex zone here.** Let's Encrypt reads CAA up the tree, so issuance for `*.platform.example.com` also queries CAA for `example.com`; delegated to nameservers holding no zone, every lookup SERVFAILs and the order fails with a message naming CAA rather than delegation.
+> **Do not delegate the whole registered domain here unless you also host its apex zone here.** Let's Encrypt reads CAA records up the tree. So issuance for `*.platform.example.com` also queries CAA for `example.com`. If the apex is delegated to nameservers holding no zone, every lookup SERVFAILs. The order then fails with a message naming CAA rather than delegation.
 
 ### Certificates
 
-cert-manager has no **built-in** Civo solver, so with `dnsProvider: civo` the cert-manager package renders a webhook solver — `okteto/cert-manager-webhook-civo` 0.5.4, image `okteto/civo-webhook:0.5.4`, registered as an aggregated APIService in `adhar-system` — and a `civo` branch of the `adhar-letsencrypt-dns` ClusterIssuer that uses it. Its secret-reader Role is narrowed to the one `adhar-dns-provider` Secret. DNS-01 never needs a public A record, so this works in both modes and `*.<host>` is a real Let's Encrypt wildcard.
+cert-manager has no **built-in** Civo solver. So with `dnsProvider: civo`, the cert-manager package renders two things:
 
-It is a **third-party component in the certificate path** (a small project, last released March 2024), which is why its image tag is pinned. If that is not acceptable, host the platform zone at a provider cert-manager supports natively and point `dnsProvider` there while the cluster stays on Civo — Cloudflare is the lightest, one API token with `Zone:Read` + `DNS:Edit`:
+- a webhook solver: `okteto/cert-manager-webhook-civo` 0.5.4, image `okteto/civo-webhook:0.5.4`, registered as an aggregated APIService in `adhar-system`
+- a `civo` branch of the `adhar-letsencrypt-dns` ClusterIssuer that uses it
+
+The solver's secret-reader Role is narrowed to the one `adhar-dns-provider` Secret. DNS-01 never needs a public A record. So this works in both modes, and `*.<host>` is a real Let's Encrypt wildcard.
+
+It is a **third-party component in the certificate path** (a small project, last released March 2024). That is why its image tag is pinned. If that is not acceptable, host the platform zone at a provider that cert-manager supports natively. Point `dnsProvider` there while the cluster stays on Civo. Cloudflare is the lightest option: one API token with `Zone:Read` + `DNS:Edit`.
 
 ```yaml
 globalSettings:
@@ -122,7 +151,7 @@ providers:
       cloudflareApiToken: "…"  # or CLOUDFLARE_API_TOKEN in the environment
 ```
 
-Skipping DNS is supported: the platform comes up self-signed, `adhar up` says so in its closing summary, and cert-manager issues a trusted certificate on its own once a usable zone exists.
+You can skip DNS. The platform then comes up self-signed, and `adhar up` says so in its closing summary. cert-manager issues a trusted certificate on its own once a usable zone exists.
 
 ## Step 4 — Write the configuration
 
@@ -209,7 +238,7 @@ environments:                           # dev, test, prod as namespaces on ONE c
 |---|---|
 | `clusterMode` | `managed` (shipped), `compute` or `provided`. The old `cluster_mode: k3s` and `useManagedK8s: true` spellings are **rejected**, not mapped. |
 | `size` / `nodeSize` | Provider default and per-environment override; the environment value wins. Must come from the family your mode uses. |
-| `controlPlaneMachineType` | Compute mode only; inert under managed, where Civo runs the control plane. `g3.large` (4 vCPU / 8 GB), **not** `g3.medium`: a `g3.medium` control plane bootstrapped and then stopped answering its API and SSH once Argo CD reconciled the full profile — etcd plus the API server's watch cache ran out of RAM. |
+| `controlPlaneMachineType` | Compute mode only; inert under managed, where Civo runs the control plane. Use `g3.large` (4 vCPU / 8 GB), **not** `g3.medium`. A `g3.medium` control plane bootstrapped, then stopped answering its API and SSH once Argo CD reconciled the full profile: etcd plus the API server's watch cache ran out of RAM. |
 | `reuse_existing_network` / `cidr` | Reuse a network whose CIDR matches. Clusters you mesh must share it; clusters you do not must not overlap. Accounts cap networks, so reuse helps. |
 | `nodeCount` / `default_node_count` | Workers at creation. |
 | `autoscaling` | Acts in compute mode only; a managed node pool is Civo's to size. |
@@ -220,7 +249,7 @@ environments:                           # dev, test, prod as namespaces on ONE c
 ./adhar up -f config.yaml --env dev --dry-run
 ```
 
-Prints the resolved environment, provider, region, type and merged `clusterConfig`. It validates the **config** only — no token, quota or size check.
+This prints the resolved environment, provider, region, type and merged `clusterConfig`. It validates the **config** only. It does no token, quota or size check.
 
 ## Step 6 — Provision
 
@@ -228,7 +257,7 @@ Prints the resolved environment, provider, region, type and merged `clusterConfi
 ./adhar up -f config.yaml --env dev
 ```
 
-The quota preflight runs before the network is created, and a shortfall stops the run naming each exhausted limit. The checklist then reads `Cloud cluster · adhar · civo · LON1` and continues through the same stages as every cloud. In managed mode the `Cilium & Gateway` stage finds Cilium already present and leaves it as Civo configured it.
+The quota preflight runs before the network is created. A shortfall stops the run and names each exhausted limit. The checklist then reads `Cloud cluster · adhar · civo · LON1` and continues through the same stages as every cloud. In managed mode the `Cilium & Gateway` stage finds Cilium already present and leaves it as Civo configured it.
 
 For compute mode, the sequence looks like this:
 
@@ -236,9 +265,15 @@ For compute mode, the sequence looks like this:
 pv-civo-sequence
 ```
 
-In compute mode the cloud-integration step installs **no** Civo CCM or CSI — the pinned manifests were removed on 2026-10-06. It writes `kube-system/civo-api-access`, makes `adhar-local` the only and default StorageClass, and does not request the CSI startup taint — with no CSI driver to lift it, that taint cost every bring-up a flat ten minutes until it was dropped.
+In compute mode, the cloud-integration step installs **no** Civo CCM or CSI. The pinned manifests were removed on 2026-10-06. Instead, the step:
 
-The platform catalogue keeps converging well after the CLI returns — that is expected on every cloud.
+- writes `kube-system/civo-api-access`
+- makes `adhar-local` the only and default StorageClass
+- does not request the CSI startup taint
+
+With no CSI driver to lift that taint, it cost every bring-up a flat ten minutes until it was dropped.
+
+The platform catalogue keeps converging well after the CLI returns. That is expected on every cloud.
 
 ## Step 7 — Verify
 
@@ -258,9 +293,9 @@ kubectl -n adhar-system get pods | grep civo-dns-webhook # the DNS-01 solver
 
 The binding constraints are memory and pod count, not CPU. The shipped shape is three `g4s.kube.large` workers growing to five. If you undersize, expect, in order:
 
-- Pods `Pending` with `Insufficient cpu` / `Insufficient memory` / `Too many pods`. In compute mode the autoscaler treats all three as scale-up triggers; in managed mode raise the pool yourself.
-- `RAM MB quota limit exceeded` from Civo when the account, not the cluster, runs out.
-- Node saturation, where the eBPF observability agents are the first SystemOOM victims and flap the node `NotReady`.
+- Pods `Pending` with `Insufficient cpu` / `Insufficient memory` / `Too many pods`. In compute mode the autoscaler treats all three as scale-up triggers. In managed mode, raise the pool yourself.
+- `RAM MB quota limit exceeded` from Civo, when the account (not the cluster) runs out.
+- Node saturation. The eBPF observability agents are the first SystemOOM victims, and they flap the node `NotReady`.
 
 ## Tear down, then check the bill
 
@@ -278,7 +313,9 @@ The binding constraints are memory and pod count, not CPU. The shipped shape is 
 | CSI driver | unattached `pvc-*` volumes claimed by nobody | only with `--purge-orphaned-volumes` |
 | anything | a volume attached elsewhere, or tagged for another cluster | never |
 
-**Ordering is not cosmetic.** What the in-cluster controllers created is swept **before** the cluster or network is deleted, because it is attributed through the cluster record. A managed teardown that deleted the cluster first left 36 volumes / 317 GB on the account and then stalled the next bring-up with `Requested volume would exceed volume count limit quota of 40`. Load balancers are matched by **identity, not by name** — the cluster's instance tag, an instance name or IP, or its Civo cluster id. Prefix matching was tried and is wrong: a load balancer called `adhar-mgmt-gateway` is indistinguishable from cluster `adhar` fronting a service called `mgmt-gateway`.
+**Ordering is not cosmetic.** Teardown sweeps what the in-cluster controllers created **before** it deletes the cluster or network, because those resources are attributed through the cluster record. A managed teardown that deleted the cluster first left 36 volumes / 317 GB on the account. It then stalled the next bring-up with `Requested volume would exceed volume count limit quota of 40`.
+
+Load balancers are matched by **identity, not by name**: the cluster's instance tag, an instance name or IP, or its Civo cluster id. Prefix matching was tried and is wrong. A load balancer called `adhar-mgmt-gateway` is indistinguishable from cluster `adhar` fronting a service called `mgmt-gateway`.
 
 **Check nothing is billing:**
 
@@ -290,7 +327,7 @@ civo volume list
 civo network list
 ```
 
-**What you pay for while it runs:** nodes (in compute mode also the control-plane instance), volumes, and the load balancer Civo's CCM creates. Networks, firewalls, SSH keys and DNS records are not the expensive part. Civo's appeal is exactly here — cheap nodes and fast creation suit clusters that exist for a sprint — so the levers that matter are `maxWorkers`, `nodeCount`, and running `adhar down` when you are finished.
+**What you pay for while it runs:** nodes (in compute mode also the control-plane instance), volumes, and the load balancer Civo's CCM creates. Networks, firewalls, SSH keys and DNS records are not the expensive part. This is where Civo appeals: cheap nodes and fast creation suit clusters that exist for a sprint. So the levers that matter are `maxWorkers`, `nodeCount`, and running `adhar down` when you are finished.
 
 ## Common pitfalls
 

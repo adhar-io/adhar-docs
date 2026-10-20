@@ -7,19 +7,28 @@ path: "/docs/core-concepts/control-plane"
 
 # Control Plane
 
-Adhar's control plane turns "my team needs a database / cache / bucket / cluster" from a ticket into a **Kubernetes API call**. It is built on **Crossplane v2** in its namespaced form: a developer creates an ordinary, RBAC-governed object in their own namespace, and the platform composes the real infrastructure behind it — an in-cluster operator on a laptop, a managed cloud service in production — and keeps reconciling it.
+Adhar's control plane turns "my team needs a database / cache / bucket / cluster" from a ticket into a **Kubernetes API call**. It is built on **Crossplane v2**, in its namespaced form. It works like this:
 
-This page is for two readers. If you *consume* the platform, it shows every self-service API that ships, how to request one, where the credentials land and what happens when you delete it. If you *run* the platform, it explains how XRDs, Compositions and composition functions fit together, how the control plane is installed, and how to add an API of your own. By the end you will have requested a PostgreSQL database by hand, followed it down to the objects it produced, bound its credentials, and know how to keep its data when you delete it.
+1. A developer creates an ordinary object in their own namespace. Kubernetes RBAC governs who may do this.
+2. The platform composes (builds) the real infrastructure behind that object. On a laptop, that is an in-cluster operator. In production, it is a managed cloud service.
+3. The platform keeps reconciling it, so the real infrastructure keeps matching the request.
+
+This page is for two readers:
+
+- **If you *consume* the platform**, it shows every self-service API that ships, how to request one, where the credentials land and what happens when you delete it.
+- **If you *run* the platform**, it explains how XRDs, Compositions and composition functions fit together, how the control plane is installed, and how to add an API of your own.
+
+By the end, you will have requested a PostgreSQL database by hand and followed it down to the objects it produced. You will have bound its credentials, and you will know how to keep its data when you delete it.
 
 ## Why a control plane
 
-Traditional provisioning means tickets, wait times and inconsistent results. Adhar instead extends the Kubernetes API server into a **universal control plane**: you declare the infrastructure you want as a Kubernetes object, and the platform makes it real and keeps it that way — reconciling continuously, the same way on every provider.
+Traditional provisioning means tickets, wait times and inconsistent results. Adhar instead extends the Kubernetes API server into a **universal control plane**. You declare the infrastructure you want as a Kubernetes object. The platform makes it real and keeps it that way. It reconciles continuously, the same way on every provider.
 
-Three properties fall out of that design, and they are the reason it is worth the indirection:
+This design adds a layer between you and the infrastructure. Three properties make that layer worth it:
 
 - **One contract, many implementations.** The `Database` API is the same on Kind, AWS, GCP and Azure. A label on the request picks the implementation, so the application's manifest never changes when the platform moves.
-- **Ordinary Kubernetes governance.** Requests are namespaced objects. Kubernetes RBAC decides who may create a `Database`, the namespace's `ResourceQuota` bounds how much they may ask for, and the audit log records who did — no custom admission layer, no separate portal permissions.
-- **One path for every client.** `adhar database create`, the Adhar Console and `kubectl apply` all produce the **same** object. The CLI source says so in as many words: the selection contract is "shared by CLI and Console", so a resource created one way is indistinguishable from one created another.
+- **Ordinary Kubernetes governance.** Requests are namespaced objects. Kubernetes RBAC decides who may create a `Database`. The namespace's `ResourceQuota` limits how much they may ask for. The audit log records who did it. There is no custom admission layer and no separate portal permissions.
+- **One path for every client.** `adhar database create`, the Adhar Console and `kubectl apply` all produce the **same** object. The CLI source states it directly: the selection contract is "shared by CLI and Console". A resource created one way cannot be told apart from one created another way.
 
 ## The building blocks
 
@@ -34,7 +43,7 @@ Crossplane has its own vocabulary. Six terms carry the whole page:
 | **Composed resource** | What a Composition produces: either a native Kubernetes object (a CNPG `Cluster`, a `Secret`) or a **managed resource** (MR) that a provider turns into a cloud API call | The XR's namespace |
 | **ClusterProviderConfig** | Cluster-scoped credentials a provider uses for every namespaced MR | `configuration/providers/` |
 
-Several Compositions can implement the same XRD, one per provider or engine, and the request's labels choose between them. **This is how Adhar does multi-cloud:** the same manifest lands on RDS, Cloud SQL or a local CloudNativePG cluster depending on the selector.
+Several Compositions can implement the same XRD, one per provider or engine. The request's labels choose between them. **This is how Adhar does multi-cloud:** the same manifest lands on RDS, Cloud SQL or a local CloudNativePG cluster, depending on the selector.
 
 ```diagram
 ds-composition-fanout
@@ -42,9 +51,18 @@ ds-composition-fanout
 
 ### Kinds are named after the thing
 
-Every self-service kind lives in `platform.adhar.io/v1alpha1` and is named for what you get: `Database`, `Bucket`, `Application` — **not** `CompositeDatabase`. The `Composite*` names were retired on 2026-10-07 and are **rejected, not aliased**; a test in the repo (`TestNoXRDKindCarriesTheCompositePrefix`) keeps it that way. If you have an older manifest, change the `kind` — `adhar application deploy --file` will even tell you so.
+Every self-service kind lives in `platform.adhar.io/v1alpha1` and is named for what you get: `Database`, `Bucket`, `Application` — **not** `CompositeDatabase`. The `Composite*` names were retired on 2026-10-07. They are **rejected, not aliased**, and a test in the repo (`TestNoXRDKindCarriesTheCompositePrefix`) keeps it that way. If you have an older manifest, change the `kind`. `adhar application deploy --file` will tell you to.
 
-The plain names have one cost: several share a short name with another API group. `Secret` and `Service` collide with core Kubernetes, `Cluster` and `Database` with CloudNativePG, `Application` with Argo CD, `Project` with Kargo, `Release` with provider-helm, `Restore` with Velero. Nothing breaks — the groups differ — but `kubectl get databases` may not show you what you meant. **Qualify the resource whenever it matters:**
+The plain names have one cost: several share a short name with another API group.
+
+- `Secret` and `Service` collide with core Kubernetes.
+- `Cluster` and `Database` collide with CloudNativePG.
+- `Application` collides with Argo CD.
+- `Project` collides with Kargo.
+- `Release` collides with provider-helm.
+- `Restore` collides with Velero.
+
+Nothing breaks, because the groups differ. But `kubectl get databases` may not show you what you meant. **Qualify the resource whenever it matters:**
 
 ```bash
 kubectl get databases.platform.adhar.io -n team-payments     # the XR you requested
@@ -54,7 +72,7 @@ kubectl explain databases.platform.adhar.io.spec.parameters  # the full request 
 
 ## What Crossplane v2 changes
 
-Adhar runs Crossplane **v2.4.2** (core), and uses its namespaced model everywhere. If you know Crossplane v1, these are the differences that matter — every one is enforced by the control-plane conventions in `platform/controlplane/CONVENTIONS.md`:
+Adhar runs Crossplane **v2.4.2** (core) and uses its namespaced model everywhere. If you know Crossplane v1, these are the differences that matter. The control-plane conventions in `platform/controlplane/CONVENTIONS.md` enforce every one of them:
 
 | v1 habit | v2 as Adhar uses it |
 |---|---|
@@ -66,7 +84,7 @@ Adhar runs Crossplane **v2.4.2** (core), and uses its namespaced model everywher
 | `spec.deletionPolicy: Orphan` on an MR | **Not in the schema** — the apply fails with "field not declared in schema". Retention is `managementPolicies` without `Delete` |
 | `connectionSecretKeys` and automatic propagation | **Removed.** A Composition that surfaces credentials writes a `Secret` explicitly |
 
-Because team XRs and their composed resources live in the **team's namespace**, ordinary Kubernetes RBAC and quotas govern who may request what. Crossplane itself runs in `adhar-system` with every other platform component — there is no `crossplane-system` namespace.
+Team XRs and their composed resources live in the **team's namespace**. So ordinary Kubernetes RBAC and quotas govern who may request what. Crossplane itself runs in `adhar-system` with every other platform component. There is no `crossplane-system` namespace.
 
 ## Anatomy of an XRD
 
@@ -120,14 +138,14 @@ spec:
                 port:     { type: integer }
 ```
 
-Two lessons are written into the real file's comments, and both are worth knowing before you author an XRD of your own:
+The real file's comments record two lessons. Learn both before you write an XRD of your own:
 
-- **Undeclared fields are silently pruned.** The API server drops any field the structural schema does not declare, so a Composition that reads it sees nothing. `replicas` once had exactly this bug — "a request for replicas was silently ignored" — until it was declared.
-- **Defaults are policy.** `engineVersion` defaults to `"16"` for the cloud Compositions, but the local CNPG Composition deliberately ignores it and lets the operator choose its image, because deriving the image from that default once downgraded nine live databases from 18 to 16. Pin `imageName` when you need a specific build.
+- **Undeclared fields are silently pruned.** The API server drops any field the structural schema does not declare. A Composition that reads that field sees nothing. `replicas` once had exactly this bug — "a request for replicas was silently ignored" — until it was declared.
+- **Defaults are policy.** `engineVersion` defaults to `"16"` for the cloud Compositions. The local CNPG Composition deliberately ignores it and lets the operator choose its image. Deriving the image from that default once downgraded nine live databases from 18 to 16. Pin `imageName` when you need a specific build.
 
 ## Anatomy of a Composition
 
-A Composition names the XRD it implements, carries the labels a request selects on, and runs a pipeline of functions. This is the head of `database-local-cnpg`, the one a local `Database` uses:
+A Composition does three things. It names the XRD it implements, carries the labels a request selects on, and runs a pipeline of functions. This is the start of `database-local-cnpg`, the Composition a local `Database` uses:
 
 ```yaml
 apiVersion: apiextensions.crossplane.io/v1     # Composition stays v1 in Crossplane v2
@@ -171,7 +189,7 @@ spec:
         name: function-auto-ready              # XR is Ready when every composed object is
 ```
 
-The cloud Compositions use KCL instead of Go templates, and that is where retention is decided. From `database-aws-rds-postgresql`:
+The cloud Compositions use KCL instead of Go templates. That is where retention (whether the data outlives the request) is decided. From `database-aws-rds-postgresql`:
 
 ```python
 # Namespaced (.m) managed resources have NO spec.deletionPolicy.
@@ -196,7 +214,7 @@ Five functions are installed with the control plane (`configuration/functions/fu
 
 ## Every self-service API the platform ships
 
-The control plane ships about **forty XRDs and sixty-odd Compositions**. The live list on your cluster is one command away — `kubectl get xrd` and `kubectl get compositions --show-labels` — and every kind below has a working example under `examples/` in the platform repo (a test fails if one loses its example).
+The control plane ships about **forty XRDs and sixty-odd Compositions**. To see the live list on your cluster, run `kubectl get xrd` and `kubectl get compositions --show-labels`. Every kind below has a working example under `examples/` in the platform repo. A test fails if one loses its example.
 
 ### Tenancy and delivery
 
@@ -243,7 +261,7 @@ The control plane ships about **forty XRDs and sixty-odd Compositions**. The liv
 | `AuthStack` | A Keycloak realm of your own: clients, groups, federation, policies | `authstack-keycloak` |
 | `PlatformConfig` | Platform-wide settings published for workloads to read | `platformconfig-default` |
 
-Kinds with no default (`Storage`, `Secret`, `Service`, `Restore` and a few others) must carry a selector, because there is more than one sensible implementation and the platform will not guess.
+Kinds with no default (`Storage`, `Secret`, `Service`, `Restore` and a few others) must carry a selector. There is more than one sensible implementation, and the platform will not guess.
 
 ## A worked request: PostgreSQL for a team
 
@@ -251,7 +269,7 @@ This walk-through runs on a local platform from [Quick Start](/docs/getting-star
 
 ### 1. Have a namespace to request into
 
-XRs are namespaced, so the team needs a namespace first. In practice a `Project` creates it with quotas and RBAC already attached; for a quick experiment a plain namespace is enough:
+XRs are namespaced, so the team needs a namespace first. In practice, a `Project` creates it with quotas and RBAC already attached. For a quick experiment, a plain namespace is enough:
 
 ```bash
 kubectl create namespace team-payments
@@ -291,14 +309,14 @@ spec:
 kubectl apply -f payments-db.yaml
 ```
 
-The CLI produces the same object. Note that `-n` on `adhar database` means `--name`, not namespace, and that `--version` is required:
+The CLI produces the same object. On `adhar database`, `-n` means `--name`, not namespace. `--version` is required:
 
 ```bash
 adhar database create --name payments-db --engine postgresql --version 16 \
   --size 20Gi --namespace team-payments
 ```
 
-The CLI picks the `provider` label from the `ADHAR_PROVIDER` environment variable, defaulting to `local`, so on a cloud platform `ADHAR_PROVIDER=aws adhar database create …` resolves the identical request to RDS.
+The CLI takes the `provider` label from the `ADHAR_PROVIDER` environment variable, which defaults to `local`. So on a cloud platform, `ADHAR_PROVIDER=aws adhar database create …` resolves the identical request to RDS.
 
 ### 3. Watch it compose
 
@@ -306,13 +324,18 @@ The CLI picks the `provider` label from the `ADHAR_PROVIDER` environment variabl
 cc-request-life
 ```
 
-Crossplane validates the request against the XRD schema, matches the labels to `database-local-cnpg`, runs its pipeline, and creates the results in `team-payments`:
+Crossplane then:
+
+1. Validates the request against the XRD schema.
+2. Matches the labels to `database-local-cnpg`.
+3. Runs its pipeline.
+4. Creates the results in `team-payments`.
 
 ```diagram
 ds-composed-tree
 ```
 
-Verify each layer rather than trusting a summary:
+Check each layer yourself rather than trusting a summary:
 
 ```bash
 # the XR: SYNCED and READY columns, and which Composition was chosen
@@ -328,11 +351,11 @@ kubectl get databases.postgresql.cnpg.io -n team-payments
 adhar database status payments-db --namespace team-payments
 ```
 
-Success looks like `READY True` on the XR and a CNPG `Cluster` reporting its instances healthy. `describe` is the command to reach for when it is not: its events name the Composition that was selected, and any composed object that is not yet ready is listed by its `composition-resource-name` (`db-cluster`, `db-scheduled-backup`, …).
+Success looks like `READY True` on the XR and a CNPG `Cluster` that reports its instances healthy. If that is not what you see, use `describe`. Its events name the Composition that was selected. Any composed object that is not ready yet is listed by its `composition-resource-name` (`db-cluster`, `db-scheduled-backup`, …).
 
 ## Connection Secrets
 
-Crossplane v2 removed native connection-detail propagation from XRs, so **each Composition decides where credentials land** — and they do not all choose the same name. This is the single most useful table on the page when wiring an application:
+Crossplane v2 removed native connection-detail propagation from XRs. So **each Composition decides where credentials land**, and they do not all choose the same name. When you wire up an application, this is the most useful table on the page:
 
 | Request | Secret | Written by | Keys |
 |---|---|---|---|
@@ -341,7 +364,7 @@ Crossplane v2 removed native connection-detail propagation from XRs, so **each C
 | `Database` on AWS, GCP or Azure | `<name>-db` (override with `spec.writeConnectionSecretToRef.name`) | The managed resource, via `writeConnectionSecretToRef` | The provider's connection details |
 | `Bucket` (local RustFS) | Shown by `adhar bucket credentials <name>` | The Composition, as a composed `Secret` | `endpoint`, `bucket`, `region`, and `credentialsSecret` naming the store's credential Secret — referenced, not copied |
 
-Bind a Secret into an application with the CLI, which adds it as `envFrom` on the app's first container and rolls the Deployment:
+Bind a Secret into an application with the CLI. It adds the Secret as `envFrom` on the app's first container and rolls the Deployment:
 
 ```bash
 adhar application bind payments-api payments-db --namespace team-payments
@@ -349,11 +372,11 @@ adhar application bind payments-api payments-db --namespace team-payments
 adhar application bind payments-api payments-db --secret payments-db-db --namespace team-payments
 ```
 
-> **Do not set `credentialsSecret` on a database whose consumers read `<name>-app`.** Given a bootstrap Secret, CNPG stops publishing the generated one, so everything mounting `<name>-app` loses it. The XRD's own description warns about exactly this.
+> **Do not set `credentialsSecret` on a database whose consumers read `<name>-app`.** If you give CNPG a bootstrap Secret, it stops publishing the generated one. Everything that mounts `<name>-app` then loses it. The XRD's own description warns about exactly this.
 
 ## Deleting, and keeping the data
 
-Deleting an XR deletes what it composed. What happens to the *external* resource depends on the composed object's `managementPolicies`:
+Deleting an XR deletes what it composed. What happens to the *external* resource depends on the composed object's `managementPolicies` — the list of actions Crossplane may take on it:
 
 | Request | On delete | How to keep the data |
 |---|---|---|
@@ -362,11 +385,15 @@ Deleting an XR deletes what it composed. What happens to the *external* resource
 | `Cluster` on AWS | The EKS Composition always withholds `Delete` on the cluster's MRs | Clean up deliberately in the cloud account |
 | Local `Database` (CNPG) | The CNPG `Cluster` is deleted with the XR. The Composition does **not** read `deletionPolicy` | Base backups and WAL go to `s3://adhar-backups/cnpg/<name>` on the platform object store, kept for `backupRetentionDays` (default 7) — restore with `adhar database restore` |
 
-`managementPolicies` is the v2 mechanism for all of this, and it is more expressive than the old boolean: `Observe` alone imports an existing resource read-only; dropping `Update` freezes it; dropping `Delete` orphans it.
+`managementPolicies` is the v2 mechanism for all of this. It is more expressive than the old boolean:
+
+- `Observe` alone imports an existing resource read-only.
+- Dropping `Update` freezes it.
+- Dropping `Delete` orphans it.
 
 ## Two provisioning paths
 
-Adhar deliberately keeps two complementary paths — the imperative one builds the management cluster, the declarative one lets that cluster manage everything else:
+Adhar deliberately keeps two paths that complement each other. The imperative path builds the management cluster. The declarative path lets that cluster manage everything else:
 
 | Path | Surface | Used for |
 |---|---|---|
@@ -377,30 +404,30 @@ The imperative path exists because a control plane cannot create the cluster it 
 
 ## Install order
 
-The `AdharPlatform` controller installs the control plane from manifests embedded in the binary, **after** the GitOps ApplicationSet, so applications never wait on Crossplane. Inside, the order is strict:
+The `AdharPlatform` controller installs the control plane from manifests embedded in the binary. It does this **after** the GitOps ApplicationSet, so applications never wait on Crossplane. Within the control plane, the order is strict:
 
 ```diagram
 ds-cp-install-order
 ```
 
-Two choices in that order are deliberate and worth understanding:
+Two choices in that order are deliberate:
 
-- **An empty ProviderConfig list is a hard error.** The provider CRDs register a minute or two after the packages install, and an earlier version treated "CRD not registered yet" as success — which produced live platforms with providers installed and no ProviderConfig at all, unable to reconcile a single managed resource. The step now requires the CRDs and retries until they apply.
-- **Only the active cloud's providers install.** Every upjet provider family registers hundreds of CRDs; AWS, Azure and GCP together come to about 3,000, which pushed a single control-plane node's API server into timeouts. Kind installs no cloud provider at all. Additional clouds are opted in from `configuration/providers/cloud/`.
+- **An empty ProviderConfig list is a hard error.** The provider CRDs register a minute or two after the packages install. An earlier version treated "CRD not registered yet" as success. That produced live platforms with providers installed but no ProviderConfig at all, so they could not reconcile a single managed resource. The step now requires the CRDs and retries until they apply.
+- **Only the active cloud's providers install.** Every upjet provider family registers hundreds of CRDs. AWS, Azure and GCP together come to about 3,000, which pushed a single control-plane node's API server into timeouts. Kind installs no cloud provider at all. You opt in to additional clouds from `configuration/providers/cloud/`.
 
 ## Extend it: add a self-service API
 
 Adding a platform API is declarative and follows the conventions file.
 
-**A new implementation of an existing API** — write one more Composition with the same `compositeTypeRef` and a distinguishing label. Consumers who select that label get it; nobody else notices.
+**A new implementation of an existing API:** write one more Composition with the same `compositeTypeRef` and a distinguishing label. Consumers who select that label get it. Nobody else notices.
 
-**A whole new API** — for example a `Queue` backed by something other than RabbitMQ:
+**A whole new API**, for example a `Queue` backed by something other than RabbitMQ:
 
 1. **Define the XRD** in `configuration/xrd/`: `apiextensions.crossplane.io/v2`, `scope: Namespaced`, `metadata.name` equal to `<plural>.<group>`, a `defaultCompositionRef` if a safe default exists, and **no** `spec.crossplane` in the schema.
 2. **Write one Composition per implementation** in `configuration/compositions/<domain>/`: `apiextensions.crossplane.io/v1`, `mode: Pipeline`, labels `feature: <domain>` and `provider: <name>`, ending in `function-auto-ready` unless it computes readiness itself.
-3. **Use the namespaced MR groups** for anything external, with `providerConfigRef: { kind: ClusterProviderConfig, name: default }`, and express retention with `managementPolicies`, never `deletionPolicy`.
-4. **Add an example** under `examples/` — `TestEveryPlatformObjectHasAnExample` and `TestExamplesMatchTheirSchema` will insist.
-5. **Build and roll out.** The configuration is embedded into the binary at build time (`make build`). On a running platform, `adhar upgrade` with the new binary clears the `controlPlaneApplied` gate for that pass and re-applies every XRD, Composition and Function server-side.
+3. **Use the namespaced MR groups** for anything external, with `providerConfigRef: { kind: ClusterProviderConfig, name: default }`. Express retention with `managementPolicies`, never `deletionPolicy`.
+4. **Add an example** under `examples/`. `TestEveryPlatformObjectHasAnExample` and `TestExamplesMatchTheirSchema` will fail without one.
+5. **Build and roll out.** The configuration is embedded into the binary at build time (`make build`). On a running platform, run `adhar upgrade` with the new binary. It clears the `controlPlaneApplied` gate for that pass and re-applies every XRD, Composition and Function server-side.
 
 A minimal Composition skeleton:
 
@@ -437,7 +464,7 @@ See [Customization](/docs/operations/customization#extend-the-infrastructure-api
 
 ## Day-2 operations
 
-Crossplane v2 adds `Operation`, `CronOperation` and `WatchOperation` (`ops.crossplane.io/v1alpha1`) for work that does not fit the "reconcile a desired state" model. They need the core flag `--enable-operations`, which the platform sets. Five ship in `configuration/operations/`, all running `function-python`:
+Crossplane v2 adds `Operation`, `CronOperation` and `WatchOperation` (`ops.crossplane.io/v1alpha1`). They handle work that does not fit the "reconcile a desired state" model. They need the core flag `--enable-operations`, which the platform sets. Five ship in `configuration/operations/`, and all of them run `function-python`:
 
 | Operation | Kind | Schedule | What it does |
 |---|---|---|---|
@@ -454,7 +481,7 @@ kubectl get operations --sort-by=.metadata.creationTimestamp   # each run, with 
 
 ## Debugging and verification
 
-`adhar get status` reports platform health, including a `CrossplaneReady` condition, but it does **not** prove Crossplane can provision. Confirm the provider configs applied:
+`adhar get status` reports platform health, including a `CrossplaneReady` condition. But it does **not** prove that Crossplane can provision. Confirm that the provider configs applied:
 
 ```bash
 kubectl get clusterproviderconfigs.kubernetes.m.crossplane.io   # expect kubernetes-provider
@@ -463,9 +490,10 @@ kubectl get clusterproviderconfigs.aws.m.upbound.io             # on AWS: expect
 kubectl get providers,functions                                 # all should be HEALTHY
 ```
 
-"No resources found" for the first two means provisioning is broken. A provider showing **0 replicas** is not: since Crossplane 2.4, safe-start provider runtimes scale to zero until one of their CRDs is actually used.
+If the first two return "No resources found", provisioning is broken. A provider showing **0 replicas** is not broken. Since Crossplane 2.4, safe-start provider runtimes scale to zero until one of their CRDs is actually used.
 
 Then inspect a stuck request from the top down:
+
 
 ```bash
 kubectl describe databases.platform.adhar.io payments-db -n team-payments   # events + unready resources

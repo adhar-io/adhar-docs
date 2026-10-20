@@ -1,0 +1,19 @@
+/* Logo marquee in the integrations section. The list is rendered twice so it
+   loops seamlessly; the second copy is hidden from assistive tech. */
+@keyframes adhar-marquee {
+  from { transform: translateX(0); }
+  to { transform: translateX(-50%); }
+}
+.adhar-marquee-track {
+  display: flex;
+  width: max-content;
+  animation: adhar-marquee 46s linear infinite;
+}
+.adhar-marquee:hover .adhar-marquee-track { animation-play-state: paused; }
+
+/* No motion: show every logo once, wrapped and centred. */
+@media (prefers-reduced-motion: reduce) {
+  .adhar-marquee-track { animation: none; flex-wrap: wrap; justify-content: center; width: auto; }
+  .adhar-marquee { mask-image: none !important; -webkit-mask-image: none !important; }
+  .adhar-marquee-dup { display: none !important; }
+}

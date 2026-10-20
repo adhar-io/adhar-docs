@@ -173,10 +173,15 @@ const BlogPost = () => {
   // Claps
   const [clapState, setClapState] = useState({ total: 0, user: 0 });
   const [clapBurst, setClapBurst] = useState(0);
-  useEffect(() => {
-    if (!post) return;
+  const [saved, setSaved] = useState(false);
+
+  // Load this story's claps and bookmark (kept in localStorage) once per story.
+  const [loadedFor, setLoadedFor] = useState<string | null>(null);
+  if (post && loadedFor !== post.slug) {
+    setLoadedFor(post.slug);
     setClapState({ total: getClapCount(post.slug), user: getUserClaps(post.slug) });
-  }, [post]);
+    setSaved(isBookmarked(post.slug));
+  }
 
   const onClap = () => {
     if (!post) return;
@@ -189,11 +194,6 @@ const BlogPost = () => {
   };
 
   // Bookmark
-  const [saved, setSaved] = useState(false);
-  useEffect(() => {
-    if (!post) return;
-    setSaved(isBookmarked(post.slug));
-  }, [post]);
 
   const onBookmark = () => {
     if (!post) return;
@@ -326,7 +326,7 @@ const BlogPost = () => {
             <header className="max-w-3xl mx-auto text-center mb-10 sm:mb-14">
               <div className="inline-flex items-center gap-2.5 mb-6 flex-wrap justify-center">
                 <Link
-                  to={`/blog?category=${encodeURIComponent(post.category)}`}
+                  to="/blog" search={{ category: post.category }}
                   className="inline-flex items-center px-2.5 py-0.5 rounded-full bg-primary/10 text-primary text-xs font-medium ring-1 ring-inset ring-primary/20 hover:ring-primary/40 transition-colors"
                 >
                   {post.category}
@@ -428,7 +428,7 @@ const BlogPost = () => {
                     {tags.map((t) => (
                       <Link
                         key={t}
-                        to={`/blog?tag=${encodeURIComponent(t)}`}
+                        to="/blog" search={{ tag: t }}
                         className="inline-flex items-center gap-1 h-7 px-2.5 rounded-full bg-muted text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-card border border-transparent hover:border-border transition-colors"
                       >
                         <Hash className="w-3 h-3" />
@@ -523,7 +523,7 @@ const BlogPost = () => {
                         {post.authorBio || "Writes about cloud-native platforms, developer experience, and the craft of platform engineering."}
                       </p>
                       <Link
-                        to={`/blog?q=${encodeURIComponent(post.author)}`}
+                        to="/blog" search={{ q: post.author }}
                         className="inline-flex items-center gap-1 mt-3 text-sm font-medium text-primary hover:text-primary/80 transition-colors"
                       >
                         More from {post.author.split(" ")[0]}
@@ -538,7 +538,7 @@ const BlogPost = () => {
                   <nav className="mt-8 grid sm:grid-cols-2 gap-3">
                     {prev ? (
                       <Link
-                        to={`/blog/${prev.slug}`}
+                        to="/blog/$slug" params={{ slug: prev.slug }}
                         className="group block p-5 rounded-2xl border border-border/70 bg-card hover:border-border hover:shadow-[var(--shadow-xs)] transition-all"
                       >
                         <div className="flex items-center gap-1 text-xs text-muted-foreground mb-2">
@@ -552,7 +552,7 @@ const BlogPost = () => {
                     ) : <span />}
                     {next ? (
                       <Link
-                        to={`/blog/${next.slug}`}
+                        to="/blog/$slug" params={{ slug: next.slug }}
                         className="group block p-5 rounded-2xl border border-border/70 bg-card hover:border-border hover:shadow-[var(--shadow-xs)] transition-all sm:text-right"
                       >
                         <div className="flex items-center gap-1 text-xs text-muted-foreground mb-2 sm:justify-end">
@@ -593,7 +593,7 @@ const BlogPost = () => {
                 {related.map((p) => (
                   <Link
                     key={p.id}
-                    to={`/blog/${p.slug}`}
+                    to="/blog/$slug" params={{ slug: p.slug }}
                     className="group flex flex-col overflow-hidden rounded-2xl border border-border/70 bg-card transition-all hover:border-border hover:shadow-[var(--shadow-md)] hover:-translate-y-0.5"
                   >
                     <div className="aspect-[16/10] bg-muted overflow-hidden">

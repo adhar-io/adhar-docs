@@ -2,7 +2,7 @@
 
 > The Open Foundation for Cloud-Native Development
 
-The ADHAR documentation and marketing site — a **full-stack TanStack Start application** with a built-in API and a **PostgreSQL** database (via Drizzle ORM). It hosts ADHAR's product pages, documentation, API reference, Adhar Kit guides, and a Postgres-backed blog with authentication.
+The ADHAR documentation and marketing site with a built-in API and a **PostgreSQL** database. It hosts ADHAR's product pages, documentation, API reference, Adhar Kit guides, and a Technical blog system to share updates and anouncements.
 
 ## Tech Stack
 

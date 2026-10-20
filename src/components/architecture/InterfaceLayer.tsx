@@ -13,10 +13,10 @@ const InterfaceLayer = ({ interfaceItems }: InterfaceLayerProps) => {
       <div className="text-center mb-8">
         <div className="flex items-center justify-center space-x-4 mb-4">
           <div className="w-12 h-0.5 bg-gradient-to-r from-transparent to-green-500"></div>
-          <h3 className="text-2xl font-bold text-gray-800 dark:text-white">Interface Layer</h3>
+          <h3 className="text-2xl font-bold text-gray-800 dark:text-white">Ways in</h3>
           <div className="w-12 h-0.5 bg-gradient-to-l from-transparent to-green-500"></div>
         </div>
-        <p className="text-gray-600 dark:text-gray-300 text-sm">User interfaces and interaction points</p>
+        <p className="text-gray-600 dark:text-gray-300 text-sm">The web console, the command line and Adhar AI — pick whichever suits the task</p>
       </div>
 
       {/* Interface items */}

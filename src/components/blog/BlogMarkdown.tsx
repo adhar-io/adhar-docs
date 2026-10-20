@@ -170,7 +170,7 @@ const BlogMarkdown = ({ content, className }: Props) => {
             <td className="px-4 py-2.5 text-foreground/85 align-top">{children}</td>
           ),
           pre: ({ children }) => {
-            const codeEl: any = Array.isArray(children) ? children[0] : children;
+            const codeEl = (Array.isArray(children) ? children[0] : children) as { props?: { className?: string; children?: ReactNode } } | undefined;
             return (
               <CodeBlock className={codeEl?.props?.className}>
                 {codeEl?.props?.children}

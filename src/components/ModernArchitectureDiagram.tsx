@@ -1,13 +1,14 @@
 
 import React from 'react';
-import { 
-  Brain,
-  Zap,
-  Sparkles,
+import {
+  Rocket,
+  Boxes,
+  GitBranch,
   Bot,
-  Activity,
-  Users,
-  Rocket
+  Route,
+  Ticket,
+  RefreshCw,
+  UserCheck
 } from "lucide-react";
 import CapabilityCard from './CapabilityCard';
 import InteractiveArchitecture from './InteractiveArchitecture';
@@ -15,43 +16,43 @@ import InteractiveArchitecture from './InteractiveArchitecture';
 const ModernArchitectureDiagram = () => {
   const capabilities = [
     {
-      icon: Brain,
-      title: 'AI-Powered Intelligence',
-      description: 'Comprehensive AI assistance across every phase of development lifecycle',
-      feature: 'Smart Automation',
+      icon: Rocket,
+      title: 'Golden paths',
+      description: 'Templates give every new service CI, image signing, GitOps delivery and observability from its first commit.',
+      feature: 'Paved road',
       gradientFrom: 'bg-blue-600',
       gradientTo: '',
-      featureIcon: Sparkles,
+      featureIcon: Route,
       useSolidBackground: true
     },
     {
-      icon: Zap,
-      title: 'Accelerated Development',
-      description: '10x faster development with automated workflows and intelligent code generation',
-      feature: 'Rapid Deployment',
+      icon: Boxes,
+      title: 'Self-service infrastructure',
+      description: 'Request a database, cache or bucket as a Kubernetes resource. Crossplane provisions it within your quota.',
+      feature: 'No tickets',
       gradientFrom: 'bg-purple-600',
       gradientTo: '',
-      featureIcon: Rocket,
+      featureIcon: Ticket,
       useSolidBackground: true
     },
     {
-      icon: Sparkles,
-      title: 'Intelligent Automation',
-      description: 'Self-healing systems with proactive monitoring and automatic optimization',
-      feature: 'Self-Healing',
+      icon: GitBranch,
+      title: 'Reconciled from Git',
+      description: 'ArgoCD keeps the cluster in step with Git. Manual drift is reverted, and every change has a reviewable history.',
+      feature: 'Self-healing',
       gradientFrom: 'bg-green-600',
       gradientTo: '',
-      featureIcon: Activity,
+      featureIcon: RefreshCw,
       useSolidBackground: true
     },
     {
       icon: Bot,
-      title: 'Universal AI Assistant',
-      description: 'Every platform user gets personalized AI guidance for their specific role and tasks',
-      feature: 'Personalized',
+      title: 'Governed AI',
+      description: 'Agents work through one gateway and propose changes as pull requests. A person reviews and merges each one.',
+      feature: 'Human in the loop',
       gradientFrom: 'bg-orange-600',
       gradientTo: '',
-      featureIcon: Users,
+      featureIcon: UserCheck,
       useSolidBackground: true
     }
   ];
@@ -60,9 +61,9 @@ const ModernArchitectureDiagram = () => {
     <div className="space-y-14 lg:space-y-16">
       {/* Capability cards — clean neutral surfaces */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        {capabilities.map((capability, index) => (
+        {capabilities.map((capability) => (
           <CapabilityCard
-            key={index}
+            key={capability.title}
             icon={capability.icon}
             title={capability.title}
             description={capability.description}
