@@ -74,6 +74,40 @@ const About = () => {
         linkedin: "emily-zhang-product",
         twitter: "emily_products"
       }
+    },
+    {
+      name: "David Okafor",
+      role: "VP of Engineering",
+      avatar: "/avatars/professional-man-1.jpg",
+      bio: "Leads the platform and CLI teams, with a focus on reliable, boring-in-the-best-way infrastructure.",
+      location: "London, UK",
+      social: {
+        github: "davidokafor",
+        linkedin: "david-okafor-eng"
+      }
+    },
+    {
+      name: "Priya Nair",
+      role: "Head of Security",
+      avatar: "/avatars/professional-woman-3.jpg",
+      bio: "Owns supply-chain security, policy and secrets, so every Adhar default is a safe one.",
+      location: "Bengaluru, India",
+      social: {
+        github: "priyanair",
+        linkedin: "priya-nair-security"
+      }
+    },
+    {
+      name: "James Whitfield",
+      role: "Head of Developer Relations",
+      avatar: "/avatars/professional-man-3.jpg",
+      bio: "Works with the community on docs, golden paths and the feedback that shapes the roadmap.",
+      location: "Toronto, Canada",
+      social: {
+        github: "jwhitfield",
+        linkedin: "james-whitfield-devrel",
+        twitter: "james_devrel"
+      }
     }
   ];
 

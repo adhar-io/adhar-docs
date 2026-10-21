@@ -121,7 +121,7 @@ Link to other pages with site paths (`/docs/guides/onboard-a-team#how-access-is-
 
 ### Blog posts
 
-Add `src/content/blog/<slug>.md`. The file name is the URL; cover art is generated from the category, so no image is needed:
+Add `src/content/blog/<slug>.md`. The file name is the URL. Cover art is generated in the brand style ([`BlogCover.tsx`](src/components/blog/BlogCover.tsx)), so no image is needed: a new post uses its category's scene until you add its own entry to `SCENES`.
 
 ```markdown
 ---
@@ -193,7 +193,7 @@ adhar-docs/
 │   ├── content/            # Markdown: docs/, adhar-kit/, blog/
 │   ├── data/               # landing-page copy, blog loader
 │   ├── lib/                # docs registry, search, versions, helpers
-│   └── assets/branding/    # Adhar logos and wordmarks
+│   └── assets/branding/    # Adhar logos, wordmarks, banner and poster artwork
 └── vite.config.ts          # tanstackStart (SPA) + tailwindcss + react
 ```
 

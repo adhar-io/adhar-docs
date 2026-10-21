@@ -10,7 +10,7 @@ import {
   Users,
   MessageCircle,
   Tag,
-  Briefcase,
+  Palette,
   ArrowRight,
   type LucideIcon,
 } from "lucide-react";
@@ -25,7 +25,7 @@ interface Item {
 const items: Item[] = [
   { to: "/about", icon: Building2, title: "About us", description: "Who builds Adhar, and why." },
   { to: "/contributors", icon: Users, title: "Contributors", description: "The people building Adhar in the open." },
-  { to: "/careers", icon: Briefcase, title: "Careers", description: "Open roles and what it's like to work here." },
+  { to: "/brand", icon: Palette, title: "Brand & press", description: "Logos, colours and press copy to download." },
   { to: "/contact", icon: MessageCircle, title: "Contact", description: "Get in touch with our team for support or inquiries." },
   { to: "/pricing", icon: Tag, title: "Pricing", description: "Self-host for free, or let us host it with Adhar Cloud." },
 ];

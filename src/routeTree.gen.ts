@@ -20,8 +20,8 @@ import { Route as ExamplesRouteImport } from './routes/examples'
 import { Route as ContributorsRouteImport } from './routes/contributors'
 import { Route as ContactRouteImport } from './routes/contact'
 import { Route as ComplianceRouteImport } from './routes/compliance'
-import { Route as CareersRouteImport } from './routes/careers'
 import { Route as CapabilitiesRouteImport } from './routes/capabilities'
+import { Route as BrandRouteImport } from './routes/brand'
 import { Route as ArchitectureShowcaseRouteImport } from './routes/architecture-showcase'
 import { Route as ArchitectureRouteImport } from './routes/architecture'
 import { Route as AboutRouteImport } from './routes/about'
@@ -89,14 +89,14 @@ const ComplianceRoute = ComplianceRouteImport.update({
   path: '/compliance',
   getParentRoute: () => rootRouteImport,
 } as any)
-const CareersRoute = CareersRouteImport.update({
-  id: '/careers',
-  path: '/careers',
-  getParentRoute: () => rootRouteImport,
-} as any)
 const CapabilitiesRoute = CapabilitiesRouteImport.update({
   id: '/capabilities',
   path: '/capabilities',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const BrandRoute = BrandRouteImport.update({
+  id: '/brand',
+  path: '/brand',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ArchitectureShowcaseRoute = ArchitectureShowcaseRouteImport.update({
@@ -160,8 +160,8 @@ export interface FileRoutesByFullPath {
   '/about': typeof AboutRoute
   '/architecture': typeof ArchitectureRoute
   '/architecture-showcase': typeof ArchitectureShowcaseRoute
+  '/brand': typeof BrandRoute
   '/capabilities': typeof CapabilitiesRoute
-  '/careers': typeof CareersRoute
   '/compliance': typeof ComplianceRoute
   '/contact': typeof ContactRoute
   '/contributors': typeof ContributorsRoute
@@ -186,8 +186,8 @@ export interface FileRoutesByTo {
   '/about': typeof AboutRoute
   '/architecture': typeof ArchitectureRoute
   '/architecture-showcase': typeof ArchitectureShowcaseRoute
+  '/brand': typeof BrandRoute
   '/capabilities': typeof CapabilitiesRoute
-  '/careers': typeof CareersRoute
   '/compliance': typeof ComplianceRoute
   '/contact': typeof ContactRoute
   '/contributors': typeof ContributorsRoute
@@ -213,8 +213,8 @@ export interface FileRoutesById {
   '/about': typeof AboutRoute
   '/architecture': typeof ArchitectureRoute
   '/architecture-showcase': typeof ArchitectureShowcaseRoute
+  '/brand': typeof BrandRoute
   '/capabilities': typeof CapabilitiesRoute
-  '/careers': typeof CareersRoute
   '/compliance': typeof ComplianceRoute
   '/contact': typeof ContactRoute
   '/contributors': typeof ContributorsRoute
@@ -241,8 +241,8 @@ export interface FileRouteTypes {
     | '/about'
     | '/architecture'
     | '/architecture-showcase'
+    | '/brand'
     | '/capabilities'
-    | '/careers'
     | '/compliance'
     | '/contact'
     | '/contributors'
@@ -267,8 +267,8 @@ export interface FileRouteTypes {
     | '/about'
     | '/architecture'
     | '/architecture-showcase'
+    | '/brand'
     | '/capabilities'
-    | '/careers'
     | '/compliance'
     | '/contact'
     | '/contributors'
@@ -293,8 +293,8 @@ export interface FileRouteTypes {
     | '/about'
     | '/architecture'
     | '/architecture-showcase'
+    | '/brand'
     | '/capabilities'
-    | '/careers'
     | '/compliance'
     | '/contact'
     | '/contributors'
@@ -320,8 +320,8 @@ export interface RootRouteChildren {
   AboutRoute: typeof AboutRoute
   ArchitectureRoute: typeof ArchitectureRoute
   ArchitectureShowcaseRoute: typeof ArchitectureShowcaseRoute
+  BrandRoute: typeof BrandRoute
   CapabilitiesRoute: typeof CapabilitiesRoute
-  CareersRoute: typeof CareersRoute
   ComplianceRoute: typeof ComplianceRoute
   ContactRoute: typeof ContactRoute
   ContributorsRoute: typeof ContributorsRoute
@@ -421,18 +421,18 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ComplianceRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/careers': {
-      id: '/careers'
-      path: '/careers'
-      fullPath: '/careers'
-      preLoaderRoute: typeof CareersRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/capabilities': {
       id: '/capabilities'
       path: '/capabilities'
       fullPath: '/capabilities'
       preLoaderRoute: typeof CapabilitiesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/brand': {
+      id: '/brand'
+      path: '/brand'
+      fullPath: '/brand'
+      preLoaderRoute: typeof BrandRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/architecture-showcase': {
@@ -520,8 +520,8 @@ const rootRouteChildren: RootRouteChildren = {
   AboutRoute: AboutRoute,
   ArchitectureRoute: ArchitectureRoute,
   ArchitectureShowcaseRoute: ArchitectureShowcaseRoute,
+  BrandRoute: BrandRoute,
   CapabilitiesRoute: CapabilitiesRoute,
-  CareersRoute: CareersRoute,
   ComplianceRoute: ComplianceRoute,
   ContactRoute: ContactRoute,
   ContributorsRoute: ContributorsRoute,

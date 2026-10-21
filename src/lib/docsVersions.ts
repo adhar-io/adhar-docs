@@ -32,6 +32,9 @@ export interface VersionSource {
 
 const TTL_MS = 60 * 60 * 1000;
 
+/** The selector lists only the most recent releases; older ones are on GitHub. */
+export const MAX_RELEASES = 5;
+
 export const githubUrls = (src: VersionSource) => ({
   releases: `https://github.com/${src.repo}/releases`,
   release: (tag: string) => `https://github.com/${src.repo}/releases/tag/${encodeURIComponent(tag)}`,
@@ -67,11 +70,12 @@ export function useReleases(src: VersionSource): { releases: Release[]; live: bo
     const cached = typeof window === "undefined" ? null : readCache(key);
     return cached?.length ? { releases: cached, live: true } : { releases: src.fallback, live: false };
   });
+  const releases = state.releases.slice(0, MAX_RELEASES);
 
   useEffect(() => {
     if (state.live) return;
     const ctrl = new AbortController();
-    fetch(`https://api.github.com/repos/${repo}/releases?per_page=15`, {
+    fetch(`https://api.github.com/repos/${repo}/releases?per_page=${MAX_RELEASES + 5}`, {
       signal: ctrl.signal,
       headers: { Accept: "application/vnd.github+json" },
     })
@@ -92,7 +96,7 @@ export function useReleases(src: VersionSource): { releases: Release[]; live: bo
     return () => ctrl.abort();
   }, [key, repo, state.live]);
 
-  return state;
+  return { releases, live: state.live };
 }
 
 /** Platform docs (/docs) — fallback is the real release list as of this build. */
@@ -105,9 +109,6 @@ export const PLATFORM_VERSIONS: VersionSource = {
     { tag: "v0.1.40", date: "2026-10-13" },
     { tag: "v0.1.39", date: "2026-10-11" },
     { tag: "v0.1.38", date: "2026-10-10" },
-    { tag: "v0.1.37", date: "2026-10-10" },
-    { tag: "v0.1.36", date: "2026-10-10" },
-    { tag: "v0.1.35", date: "2026-10-09" },
   ],
 };
 

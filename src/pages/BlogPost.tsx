@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "@tanstack/react-router";
 import Navigation from "@/components/landing/Navigation";
 import Footer from "@/components/landing/Footer";
@@ -6,8 +6,10 @@ import BlogMarkdown from "@/components/blog/BlogMarkdown";
 import {
   ArrowLeft,
   ArrowRight,
+  ArrowUp,
   Bookmark,
   BookmarkCheck,
+  Check,
   ChevronLeft,
   ChevronRight,
   Hand,
@@ -91,25 +93,50 @@ const BlogPost = () => {
     [post, allPosts],
   );
 
-  // TOC scroll tracking
+  // TOC scroll tracking: the active section is the last heading that has
+  // scrolled above the reading line, so the highlight follows every scroll —
+  // including jumps — rather than only when a heading crosses a narrow band.
   const [activeId, setActiveId] = useState<string>("");
   useEffect(() => {
     if (!toc.length) return;
-    const obs = new IntersectionObserver(
-      (entries) => {
-        const visible = entries
-          .filter((e) => e.isIntersecting)
-          .sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top);
-        if (visible[0]) setActiveId(visible[0].target.id);
-      },
-      { rootMargin: "-120px 0px -65% 0px", threshold: [0, 1] },
-    );
-    toc.forEach((h) => {
-      const el = document.getElementById(h.id);
-      if (el) obs.observe(el);
-    });
-    return () => obs.disconnect();
+    let frame = 0;
+    const update = () => {
+      frame = 0;
+      const line = 140;
+      let current = "";
+      for (const h of toc) {
+        const el = document.getElementById(h.id);
+        if (el && el.getBoundingClientRect().top <= line) current = h.id;
+      }
+      // At the very bottom, the last section is the one being read.
+      const doc = document.documentElement;
+      if (doc.scrollTop + doc.clientHeight >= doc.scrollHeight - 4) current = toc[toc.length - 1].id;
+      setActiveId(current);
+    };
+    const onScroll = () => {
+      if (!frame) frame = requestAnimationFrame(update);
+    };
+    update();
+    window.addEventListener("scroll", onScroll, { passive: true });
+    window.addEventListener("resize", onScroll);
+    return () => {
+      if (frame) cancelAnimationFrame(frame);
+      window.removeEventListener("scroll", onScroll);
+      window.removeEventListener("resize", onScroll);
+    };
   }, [toc]);
+
+  // Keep the active entry visible inside the TOC's own scroll area.
+  const tocNavRef = useRef<HTMLElement>(null);
+  useEffect(() => {
+    const nav = tocNavRef.current;
+    const item = nav?.querySelector<HTMLElement>(`[data-toc="${CSS.escape(activeId)}"]`);
+    if (!nav || !item) return;
+    const top = item.offsetTop - nav.offsetTop;
+    if (top < nav.scrollTop + 24 || top > nav.scrollTop + nav.clientHeight - 48) {
+      nav.scrollTo({ top: top - nav.clientHeight / 3, behavior: "smooth" });
+    }
+  }, [activeId]);
 
   useEffect(() => { window.scrollTo({ top: 0 }); }, [slug]);
 
@@ -226,151 +253,86 @@ const BlogPost = () => {
 
       <Navigation />
 
-      {/* Floating action rail (desktop) */}
-      <aside className="hidden xl:flex flex-col items-center gap-2 fixed left-6 top-1/2 -translate-y-1/2 z-40">
-        <button
-          onClick={onClap}
-          aria-label="Clap"
-          className="relative w-11 h-11 rounded-full bg-card border border-border/70 hover:border-primary/50 text-muted-foreground hover:text-primary grid place-items-center transition-colors shadow-[var(--shadow-xs)]"
-        >
-          <Hand className="w-4 h-4" />
-          {clapBurst > 0 && (
-            <span
-              key={clapBurst}
-              className="absolute -top-1 -right-1 text-[10px] font-medium text-primary tabular animate-status-blink pointer-events-none"
-            >
-              +1
-            </span>
-          )}
-        </button>
-        <span className="text-[11px] font-medium text-muted-foreground tabular mb-2">
-          {clapState.total}
-        </span>
-
-        <button
-          onClick={onBookmark}
-          aria-label={saved ? "Remove bookmark" : "Bookmark"}
-          className={`w-11 h-11 rounded-full border grid place-items-center transition-colors shadow-[var(--shadow-xs)] ${
-            saved
-              ? "border-primary/50 bg-primary/10 text-primary"
-              : "border-border/70 bg-card text-muted-foreground hover:border-primary/50 hover:text-primary"
-          }`}
-        >
-          {saved ? <BookmarkCheck className="w-4 h-4" /> : <Bookmark className="w-4 h-4" />}
-        </button>
-
-        <button
-          onClick={onShare}
-          aria-label="Share"
-          className="w-11 h-11 rounded-full bg-card border border-border/70 hover:border-primary/50 text-muted-foreground hover:text-primary grid place-items-center transition-colors shadow-[var(--shadow-xs)]"
-        >
-          <Share2 className="w-4 h-4" />
-        </button>
-      </aside>
-
       <main className="pt-16">
         <article className="pt-8 sm:pt-12 pb-16 sm:pb-24">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            {/* Back link */}
-            <Link
-              to="/blog"
-              className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground mb-8 sm:mb-12 transition-colors"
-            >
-              <ArrowLeft className="w-3.5 h-3.5" /> Back to blog
-            </Link>
+          <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div className="lg:grid lg:grid-cols-[minmax(0,1fr)_220px] lg:gap-14 xl:gap-20">
+              <div className="min-w-0">
+                <div className="max-w-[700px] mx-auto">
+                  {/* Back link */}
+                  <Link
+                    to="/blog"
+                    className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground mb-8 sm:mb-10 transition-colors"
+                  >
+                    <ArrowLeft className="w-3.5 h-3.5" /> Back to blog
+                  </Link>
 
-            {/* Article header */}
-            <header className="max-w-3xl mx-auto text-center mb-10 sm:mb-14">
-              <div className="inline-flex items-center gap-2.5 mb-6 flex-wrap justify-center">
-                <Link
-                  to="/blog" search={{ category: post.category }}
-                  className="inline-flex items-center px-2.5 py-0.5 rounded-full bg-primary/10 text-primary text-xs font-medium ring-1 ring-inset ring-primary/20 hover:ring-primary/40 transition-colors"
-                >
-                  {post.category}
-                </Link>
-                <span className="text-xs text-muted-foreground tabular">{post.date}</span>
-                <span className="w-1 h-1 rounded-full bg-border" aria-hidden />
-                <span className="text-xs text-muted-foreground tabular">{post.readTime}</span>
-                {meta && (
-                  <>
-                    <span className="w-1 h-1 rounded-full bg-border" aria-hidden />
-                    <span className="text-xs text-muted-foreground tabular">
-                      {meta.words.toLocaleString()} words
-                    </span>
-                  </>
-                )}
-              </div>
-              <h1 className="[hyphens:manual] text-balance text-foreground font-semibold text-3xl sm:text-4xl md:text-5xl leading-[1.1] tracking-[-0.02em] mb-5 sm:mb-7">
-                {post.title}
-              </h1>
-              {post.excerpt && (
-                <p className="text-pretty text-muted-foreground text-base sm:text-lg max-w-2xl mx-auto leading-relaxed mb-8">
-                  {post.excerpt}
-                </p>
-              )}
-              <div className="flex items-center justify-center gap-2.5">
-                <div className="w-9 h-9 rounded-full bg-muted ring-1 ring-border grid place-items-center text-xs font-semibold text-foreground">
-                  {initials(post.author)}
-                </div>
-                <div className="text-left">
-                  <p className="text-foreground font-semibold text-sm tracking-tight">{post.author}</p>
-                  {post.authorRole && <p className="text-muted-foreground text-xs">{post.authorRole}</p>}
-                </div>
-              </div>
-            </header>
-
-            {/* Cover */}
-            <div className="w-full aspect-[16/10] sm:aspect-[21/9] rounded-2xl ring-1 ring-border mb-12 sm:mb-16 overflow-hidden max-w-5xl mx-auto shadow-[0_30px_80px_-30px_rgb(0_0_0/0.45)]">
-              <BlogCover slug={post.slug} category={post.category} title={post.title} size="lg" />
-            </div>
-
-            {/* Body grid */}
-            <div className="grid grid-cols-12 gap-8 lg:gap-14 max-w-6xl mx-auto">
-              {/* TOC */}
-              {toc.length > 0 && (
-                <aside className="hidden lg:block col-span-3">
-                  <div className="sticky top-28">
-                    <p className="text-xs font-semibold text-muted-foreground mb-4">
-                      On this page
-                    </p>
-                    <nav className="space-y-1 text-sm">
-                      {toc.map((h) => (
-                        <a
-                          key={h.id}
-                          href={`#${h.id}`}
-                          style={{ paddingLeft: h.level === 3 ? 20 : 10 }}
-                          className={`block border-l py-1.5 transition-colors leading-snug ${
-                            activeId === h.id
-                              ? "text-foreground border-primary font-medium"
-                              : "text-muted-foreground hover:text-foreground border-border/60"
-                          }`}
-                        >
-                          {h.text}
-                        </a>
-                      ))}
-                    </nav>
-
-                    {/* Mini meta */}
-                    <dl className="mt-8 pt-6 border-t border-border/60 space-y-2 text-xs">
-                      <div className="flex items-center justify-between">
-                        <dt className="text-muted-foreground">Read time</dt>
-                        <dd className="text-foreground tabular font-medium">{meta?.minutes ?? 5} min</dd>
+                  {/* Article header */}
+                  <header>
+                    <Link
+                      to="/blog" search={{ category: post.category }}
+                      className="inline-flex items-center px-2.5 py-0.5 mb-5 rounded-full bg-primary/10 text-primary text-xs font-medium ring-1 ring-inset ring-primary/20 hover:ring-primary/40 transition-colors"
+                    >
+                      {post.category}
+                    </Link>
+                    <h1 className="[hyphens:manual] text-balance text-foreground font-bold text-[32px] sm:text-[42px] leading-[1.15] tracking-[-0.02em] mb-4">
+                      {post.title}
+                    </h1>
+                    {post.excerpt && (
+                      <p className="text-pretty text-muted-foreground text-lg sm:text-[21px] leading-snug mb-8">
+                        {post.excerpt}
+                      </p>
+                    )}
+                    <div className="flex items-center gap-3">
+                      <div className="w-11 h-11 rounded-full bg-muted ring-1 ring-border grid place-items-center text-sm font-semibold text-foreground shrink-0">
+                        {initials(post.author)}
                       </div>
-                      <div className="flex items-center justify-between">
-                        <dt className="text-muted-foreground">Word count</dt>
-                        <dd className="text-foreground tabular font-medium">{meta?.words.toLocaleString() ?? "—"}</dd>
+                      <div className="min-w-0">
+                        <p className="text-foreground font-medium text-[15px] tracking-tight">
+                          {post.author}
+                          {post.authorRole && <span className="text-muted-foreground font-normal"> · {post.authorRole}</span>}
+                        </p>
+                        <p className="text-muted-foreground text-sm tabular">
+                          {post.readTime}
+                          <span aria-hidden> · </span>
+                          {post.date}
+                        </p>
                       </div>
-                      <div className="flex items-center justify-between">
-                        <dt className="text-muted-foreground">Claps</dt>
-                        <dd className="text-foreground tabular font-medium">{clapState.total}</dd>
-                      </div>
-                    </dl>
+                    </div>
+                  </header>
+
+                  {/* Action bar */}
+                  <div className="mt-8 flex items-center justify-between border-y border-border/70 py-2.5">
+                    <button onClick={onClap} aria-label="Clap" className="group relative inline-flex items-center gap-2 h-9 px-1 text-sm text-muted-foreground hover:text-foreground transition-colors">
+                      <Hand className="w-[18px] h-[18px]" />
+                      <span className="tabular">{clapState.total}</span>
+                      {clapBurst > 0 && (
+                        <span key={clapBurst} className="absolute -top-2 left-3 text-[10px] font-medium text-primary tabular animate-status-blink pointer-events-none">
+                          +1
+                        </span>
+                      )}
+                    </button>
+                    <div className="flex items-center gap-1">
+                      <button
+                        onClick={onBookmark}
+                        aria-label={saved ? "Remove bookmark" : "Bookmark"}
+                        className={`inline-flex items-center justify-center w-9 h-9 rounded-full transition-colors ${saved ? "text-primary" : "text-muted-foreground hover:text-foreground"}`}
+                      >
+                        {saved ? <BookmarkCheck className="w-[18px] h-[18px]" /> : <Bookmark className="w-[18px] h-[18px]" />}
+                      </button>
+                      <button onClick={onShare} aria-label="Share" className="inline-flex items-center justify-center w-9 h-9 rounded-full text-muted-foreground hover:text-foreground transition-colors">
+                        <Share2 className="w-[18px] h-[18px]" />
+                      </button>
+                    </div>
                   </div>
-                </aside>
-              )}
 
-              {/* Content */}
-              <div className={toc.length > 0 ? "col-span-12 lg:col-span-9" : "col-span-12 lg:col-span-10 lg:col-start-2"}>
+                  {/* Cover — flat, full column width */}
+                  <figure className="mt-10 mb-10 sm:mb-12">
+                    <div className="aspect-[16/10] overflow-hidden rounded-md bg-muted">
+                      <BlogCover slug={post.slug} category={post.category} title={post.title} size="lg" />
+                    </div>
+                  </figure>
+
                 <BlogMarkdown content={post.content} />
 
                 {/* Tags */}
@@ -390,7 +352,7 @@ const BlogPost = () => {
                 )}
 
                 {/* Article action bar */}
-                <div className="mt-10 p-5 rounded-2xl border border-border/70 bg-card">
+                <div className="mt-10 py-3 border-y border-border/70">
                   <div className="flex items-center justify-between gap-4 flex-wrap">
                     {/* Claps */}
                     <button
@@ -460,7 +422,7 @@ const BlogPost = () => {
                 </div>
 
                 {/* Author bio */}
-                <div className="mt-8 p-6 rounded-2xl border border-border/70 bg-card">
+                <div className="mt-10 pb-10 border-b border-border/70">
                   <div className="flex items-start gap-4 sm:gap-5">
                     <div className="w-12 h-12 rounded-full bg-muted ring-1 ring-border grid place-items-center text-sm font-semibold text-foreground shrink-0">
                       {initials(post.author)}
@@ -517,7 +479,91 @@ const BlogPost = () => {
                     ) : <span />}
                   </nav>
                 )}
+                </div>
               </div>
+
+              {/* TOC */}
+              {toc.length > 0 && (
+                <aside className="hidden lg:block" aria-label="On this page">
+                  <div className="sticky top-28 flex max-h-[calc(100vh-8.5rem)] flex-col">
+                    {/* Progress */}
+                    <div className="mb-5">
+                      <div className="flex items-baseline justify-between gap-3">
+                        <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-foreground">On this page</p>
+                        <p className="text-xs text-muted-foreground tabular">
+                          {progress >= 0.99 ? "Finished" : `${Math.max(1, Math.ceil((meta?.minutes ?? 5) * (1 - progress)))} min left`}
+                        </p>
+                      </div>
+                      <div className="mt-3 h-1 overflow-hidden rounded-full bg-muted" aria-hidden>
+                        <div className="h-full rounded-full bg-primary transition-[width] duration-150" style={{ width: `${progress * 100}%` }} />
+                      </div>
+                    </div>
+
+                    {/* Sections */}
+                    <nav ref={tocNavRef} className="-mr-2 min-h-0 flex-1 overflow-y-auto overscroll-contain pr-2 [scrollbar-width:thin]">
+                      <ol className="relative border-l border-border/70">
+                        {(() => {
+                          const activeIndex = toc.findIndex((h) => h.id === activeId);
+                          let n = 0;
+                          return toc.map((h, i) => {
+                            const active = h.id === activeId;
+                            const read = activeIndex > -1 && i < activeIndex;
+                            const sub = h.level === 3;
+                            if (!sub) n += 1;
+                            return (
+                              <li key={h.id}>
+                                <a
+                                  href={`#${h.id}`}
+                                  data-toc={h.id}
+                                  aria-current={active ? "location" : undefined}
+                                  className={`group -ml-px flex gap-2.5 border-l-2 py-1.5 leading-snug transition-colors ${
+                                    sub ? "pl-7 text-[13px]" : "pl-3.5 text-sm"
+                                  } ${
+                                    active
+                                      ? "border-primary font-medium text-foreground"
+                                      : read
+                                        ? "border-transparent text-foreground/70 hover:text-foreground"
+                                        : "border-transparent text-muted-foreground hover:text-foreground"
+                                  }`}
+                                >
+                                  {!sub && (
+                                    <span
+                                      className={`mt-px w-5 shrink-0 text-[11px] font-semibold tabular ${active ? "text-primary" : "text-muted-foreground/70"}`}
+                                      aria-hidden
+                                    >
+                                      {read ? <Check className="h-3.5 w-3.5 text-primary/70" /> : String(n).padStart(2, "0")}
+                                    </span>
+                                  )}
+                                  <span className="min-w-0">{h.text}</span>
+                                </a>
+                              </li>
+                            );
+                          });
+                        })()}
+                      </ol>
+                    </nav>
+
+                    {/* Actions */}
+                    <div className="mt-5 flex items-center gap-1 border-t border-border/70 pt-4 text-xs">
+                      <button
+                        onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
+                        className="inline-flex h-8 items-center gap-1.5 rounded-full px-2.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                      >
+                        <ArrowUp className="h-3.5 w-3.5" /> Back to top
+                      </button>
+                      <button
+                        onClick={onCopyLink}
+                        className="inline-flex h-8 items-center gap-1.5 rounded-full px-2.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                      >
+                        <LinkIcon className="h-3.5 w-3.5" /> Copy link
+                      </button>
+                    </div>
+                    <p className="mt-3 px-2.5 text-[11px] text-muted-foreground tabular">
+                      {meta?.minutes ?? 5} min read · {meta?.words.toLocaleString() ?? "—"} words
+                    </p>
+                  </div>
+                </aside>
+              )}
             </div>
           </div>
         </article>

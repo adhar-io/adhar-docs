@@ -227,7 +227,7 @@ const Blog = () => {
                           size="lg"
                           className="min-h-[260px] transition-transform duration-700 group-hover:scale-[1.02]"
                         />
-                        <div className="absolute top-4 left-4">
+                        <div className="absolute top-4 right-4">
                           <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-background/90 backdrop-blur-sm border border-border/70 text-xs font-medium text-foreground shadow-[var(--shadow-xs)]">
                             <Sparkles className="w-3 h-3 text-primary" />
                             Featured

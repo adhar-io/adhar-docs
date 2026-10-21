@@ -16,8 +16,10 @@
  *   authorBio: "…"                # optional
  *   ---
  *
- * Cover art is drawn by <BlogCover> from the category and title, so posts
- * need no image files. Reading time is worked out from the text.
+ * Cover art is drawn by <BlogCover>: each post has its own isometric scene
+ * (SCENES in BlogCover.tsx, keyed by slug); a post without one uses its
+ * category's scene. Posts need no image files. Reading time is worked out
+ * from the text.
  */
 import { parseFrontmatter } from "@/lib/docsRegistry";
 

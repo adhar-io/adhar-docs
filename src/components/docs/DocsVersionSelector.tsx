@@ -36,7 +36,7 @@ const DocsVersionSelector = ({ source }: Props) => {
   const urls = githubUrls(source);
   const stable = releases.filter((r) => !r.prerelease);
   const latest = stable[0] ?? releases[0];
-  const earlier = releases.filter((r) => r !== latest).slice(0, 10);
+  const earlier = releases.filter((r) => r !== latest);
 
   if (!latest) return null;
 

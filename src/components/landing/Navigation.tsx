@@ -92,7 +92,7 @@ const Navigation = () => {
                 {[
                   { to: "/about", label: "About" },
                   { to: "/contributors", label: "Contributors" },
-                  { to: "/careers", label: "Careers" },
+                  { to: "/brand", label: "Brand & press" },
                   { to: "/contact", label: "Contact" },
                 ].map((item) => (
                   <Link

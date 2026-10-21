@@ -728,7 +728,7 @@
    ========================================================= */
 
 /* Prevent any horizontal scroll across the app */
-html, body { max-width: 100%; overflow-x: hidden; }
+html, body { max-width: 100%; overflow-x: clip; }
 img, video, svg, canvas { max-width: 100%; height: auto; }
 pre { max-width: 100%; overflow-x: auto; }
 table { max-width: 100%; }
