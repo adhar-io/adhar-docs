@@ -13,7 +13,7 @@ By the end you will know three things: which provider fits your situation, how f
 
 A **provider is the only part of Adhar that knows what cloud you are on.** Everything above the cluster is byte-identical on every cloud. That includes Cilium, the Gateway, ArgoCD, Gitea, Crossplane and the whole package catalogue. It does not matter whether the cluster is a Kind node on your laptop or ten droplets in Bangalore. The provider exists so the platform never has to care. Without it, "run the platform on Azure" would mean a second platform. With it, you change one word in `config.yaml`.
 
-> One `adhar up` brings up the whole platform, on your laptop or on any supported cloud. Locally it takes about ten minutes. On a cloud, the provider's machine provisioning sets the pace: DigitalOcean serves in ~5 min and is usable at ~13; AWS first runs take 25–40.
+> One `adhar up` brings up the whole platform, on your laptop or on any supported cloud. Locally it takes about ten minutes. On a cloud, the provider's machine provisioning sets the pace. DigitalOcean is serving in about 5 minutes and usable in about 13. For AWS there is only an estimate of 25–40 minutes for a first run, because no complete run has been recorded there yet.
 
 ## Choosing a provider
 
@@ -22,8 +22,8 @@ A **provider is the only part of Adhar that knows what cloud you are on.** Every
 | [Local (Kind)](/docs/providers/local-kind) | `kind` | local containers | n/a | none | self-signed only | Exercised continuously by CI | **~10 min** (warm image cache) |
 | [DigitalOcean](/docs/providers/digitalocean) | `digitalocean` | `compute` (droplets) | DOKS | `DIGITALOCEAN_ACCESS_TOKEN` | DNS-01 | Live-verified end to end | **~5 min serving, ~13 min usable** |
 | [Google Cloud](/docs/providers/gcp) | `gcp` | `compute` (GCE) | GKE | service-account key / ADC | DNS-01 (needs a key file) | Live-verified (compute path) | Unmeasured |
-| [AWS](/docs/providers/aws) | `aws` | `compute` (EC2) | EKS | `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY`, profile, role, instance profile | DNS-01 (static keys) | Render-verified | Unmeasured — 25–40 min first-run estimate |
-| [Azure](/docs/providers/azure) | `azure` | `compute` (VMs) | AKS | `az login` + a service principal or managed identity | DNS-01 | Render-verified; a partial live bring-up reached working TLS | Unmeasured |
+| [AWS](/docs/providers/aws) | `aws` | `compute` (EC2) | EKS | `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` (static keys recommended), or the default AWS credential chain | DNS-01 (static keys) | Render-verified | Unmeasured — 25–40 min first-run estimate |
+| [Azure](/docs/providers/azure) | `azure` | `compute` (VMs) | AKS | a service principal (required in compute mode); `az login` as a fallback | DNS-01 | Render-verified; a partial live bring-up reached working TLS | Unmeasured |
 | [Civo](/docs/providers/civo) | `civo` | **`managed`** (k3s) | k3s | `CIVO_TOKEN` | DNS-01 via a webhook solver | Render-verified | Unmeasured |
 | [Custom / on-prem](/docs/providers/custom) | `custom` | `compute` (your hosts) | n/a (`provided` adopts an existing cluster) | SSH key to your machines | via another `dnsProvider`, or your own certificate | Render-verified | Unmeasured |
 
@@ -236,6 +236,8 @@ adhar cluster upgrade adhar --version 1.37.2 -p <provider> -f config.yaml
 adhar down -f config.yaml --env dev [--purge-orphaned-volumes]
 ```
 
+> **`adhar down --env dev` removes the cluster, not just the `dev` namespace.** With the default `isolation: namespace`, `dev`, `test` and `prod` all live on the one cluster `adhar`. Tearing down any of them deletes that cluster, and the other environments go with it. If you passed `--name` to `adhar up`, pass the same `--name` to `adhar down`.
+
 ## Common pitfalls
 
 | Symptom | Cause | Fix |
@@ -245,6 +247,7 @@ adhar down -f config.yaml --env dev [--purge-orphaned-volumes]
 | `adhar down` deletes nothing on a cloud environment | With no `--file` it only ever inspects Kind | Pass `--file` and `--env` |
 | `down` prints `Nothing was deleted.` and names providers | The file does not define the provider that built the cluster | Use the file you ran `up` with |
 | `cluster "adhar-dev" not found in any configured provider` | `clusterConfig.name` is not the cluster name | Use `adhar`, or the `--name` you gave `adhar up` |
+| `adhar down --env dev` removed `test` and `prod` too | With `isolation: namespace` all three share one cluster, and `down` deletes the cluster | Give an environment `isolation: cluster` if it must be torn down on its own |
 | `adhar up -f` with no `--env` builds more clusters than expected | Each `isolation: cluster` environment gets its own | Leave environments as `namespace` unless they need their own cluster |
 | `--dry-run` passed but the create failed on permissions | `--dry-run` validates config only | Read the preflight `✖` line; it names the limit and the remedy |
 | Create stops on quota after a clean preflight | Quota sized for `nodeCount`, autoscaler needs `maxWorkers` | Size every quota for `maxWorkers` |

@@ -107,24 +107,27 @@ A path that cannot change is dead. A path that changes carelessly costs its user
 
 ## How Adhar does this
 
-Adhar ships golden paths in two ways. Both produce the same shape of service.
+Adhar keeps its golden paths in **one collection with two entry points**. The templates are Backstage scaffolder templates in the `adhar/adhar-templates` repository. The platform's Gitea mirrors that repository from GitHub, so the offer stays current without a platform release.
 
-**CLI templates.** `adhar application deploy --template <name>` scaffolds and deploys from a built-in set: `basic`, `microservice`, `frontend`, `data-pipeline`, `ml`, `argo-workflows`, and `app-with-bucket`. The last one shows the model best: it provisions the application and its object storage together. This works because Crossplane v2 exposes infrastructure as namespaced Kubernetes resources. So you request a bucket in the same place, and the same way, as a Deployment.
+- **From the terminal:** `adhar application templates` lists what your platform offers, and `adhar application deploy <app> --template <name>` renders the chosen skeleton into the application's own Gitea repository, then deploys it.
+- **From the portal:** the Adhar Console's create flow reads the same collection, for teams who prefer a portal to a terminal. Same template, same generated repository.
 
-**Backstage scaffolder templates** in the Adhar Console, for teams who prefer a portal to a terminal. Same result, different entry point.
+The stack's own catalogue registers `basic`, `microservice`, `frontend`, `data-pipeline`, `ml`, `argo-workflows` and `app-with-bucket`. The live list on your platform comes from the mirror, so check `adhar application templates`.
+
+Infrastructure follows the same model. Crossplane v2 exposes databases, caches, buckets and clusters as namespaced Kubernetes resources (`Database`, `Cache`, `Bucket`, `Cluster` and more). So a team requests a bucket in the same place, and the same way, as a Deployment. See [Control Plane](/docs/core-concepts/control-plane).
 
 Scaffolding is only day 0. On its own it would be a snippet generator. What makes these real paths is where the generated service lands:
 
-- registered with Keycloak for OIDC identity
-- routable through the Cilium-backed Gateway API
-- in scope for the cluster's Kyverno policies
-- sending telemetry into the shared observability stack
+- routable through the Cilium-backed Gateway API: the `microservice`, `frontend`, `data-pipeline` and `ml` skeletons ship an `HTTPRoute`
+- scraped by the shared monitoring stack: the same four ship a `ServiceMonitor`, and most ship a Grafana dashboard
+- in scope for the cluster's Kyverno policies, including signature checks on images from Harbor
+- delivered and kept in sync by ArgoCD from Git
 
-None of it needs per-service setup.
+Identity is not wired in per service: the templates do not register an OIDC client in Keycloak for you.
 
-The lifecycle half belongs to the platform, not the template. ArgoCD keeps services in sync with the in-cluster Gitea, with self-heal on. If someone runs an out-of-band `kubectl edit` against a managed object, ArgoCD reverts it within about a minute. Upgrades arrive as changes to packages in `platform/stack/packages`, not as pull requests against every repository.
+The lifecycle half belongs to the platform, not the template. ArgoCD keeps services in sync with the in-cluster Gitea, with self-heal on. If someone runs an out-of-band `kubectl edit` against a managed object, ArgoCD puts it back. Platform capabilities are upgraded as changes to packages in `platform/stack/packages`, not as pull requests against every repository. The generated repository itself belongs to the team, so template improvements do not flow into it automatically.
 
-The escape hatch is the foundation itself. Everything a template generates is ordinary Kubernetes and ordinary Git. A team can stop using the template, keep the cluster, and own the manifests. It loses the upgrade stream and nothing else.
+The escape hatch is the foundation itself. Everything a template generates is ordinary Kubernetes and ordinary Git. A team can stop using the template, keep the cluster, and own the manifests. It keeps everything the platform provides underneath.
 
 ## See also
 

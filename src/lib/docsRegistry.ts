@@ -30,7 +30,7 @@ export interface DocSection {
 
 const FM_RE = /^---\s*\n([\s\S]*?)\n---\s*\n?/;
 
-function parseFrontmatter(raw: string): { data: Record<string, unknown>; body: string } {
+export function parseFrontmatter(raw: string): { data: Record<string, unknown>; body: string } {
   const m = raw.match(FM_RE);
   if (!m) return { data: {}, body: raw };
   const body = raw.slice(m[0].length);

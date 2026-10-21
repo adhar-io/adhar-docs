@@ -119,17 +119,20 @@ A workable exception process has four properties:
 
 Adhar builds the road as a supply chain inside the cluster. The enforcement point is admission to the cluster, not a review step.
 
-**Build and sign.** Tekton pipelines build source code with Cloud Native Buildpacks. That makes the base image and its patching a platform concern, not a `Dockerfile` in each repository. Trivy scans the result, Cosign signs it, and Harbor stores it. The pipeline produces the signature, which is what makes the later admission check meaningful. The signature shows that this digest came out of that build, not that a person vouched for it.
+**Build and sign.** Tekton pipelines build source code with Cloud Native Buildpacks. That makes the base image and its patching a platform concern, not a `Dockerfile` in each repository. The pipeline scans the result, signs it with Cosign, and pushes it to Harbor. The pipeline produces the signature, which is what makes the later admission check meaningful. The signature shows that this digest came out of that build, not that a person vouched for it.
 
-**Admit.** Kyverno is the policy engine, and the cluster admits only signed images. An image built on a laptop and pushed by hand does not run. That is not because someone noticed. It is because the admission webhook rejected it.
+**Admit.** Kyverno is the policy engine, and admission works in two layers:
 
-**Policy as a package.** Supply-chain rules ship as the `security/adhar-supply-chain-policies` package. It runs in audit mode by default and in enforce mode in the production profile. That is the audit-before-enforce sequence written as configuration. A local or evaluation cluster reports what would have been blocked. The production profile turns the same rules into refusals. You see the violation list before it becomes an outage.
+- **In every profile**, the `verify-supply-chain-images` policy (shipped by the `adhar-supply-chain` package) runs in Enforce mode for images from Harbor's `library/*` project in workload namespaces. An unsigned image pushed there by hand does not run. That is not because someone noticed. It is because the admission webhook rejected it. Images from upstream registries are not matched by this policy.
+- **In the production profile**, the `security/adhar-supply-chain-policies` packs add a registry allowlist, a rule against `:latest` tags, and signature checks for workload namespaces. Both the audit pack and the enforce pack are on in production; both are off locally.
 
-**Reconciliation, so the road reasserts itself.** ArgoCD continuously reconciles the cluster from the in-cluster Gitea, with self-heal enabled. Reconciling means it keeps restoring what Git declares. So a `kubectl edit` against a managed object is reverted within about a minute.
+**Policy as a package.** Because supply-chain rules ship as packages, the audit-before-enforce sequence is something you run through configuration. Turn on the audit pack first, read its PolicyReports, then turn on the enforce pack once the violation list is short. You see the violation list before it becomes an outage. Adhar's own Pod Security Standards policies (`adhar-kyverno-policies`) follow the same idea: they ship in Audit mode, for you to promote.
+
+**Reconciliation, so the road reasserts itself.** ArgoCD continuously reconciles the platform from the in-cluster Gitea, with self-heal enabled. Reconciling means it keeps restoring what Git declares. So a `kubectl edit` against a managed object is put back.
 
 This is the strongest form of property-not-gate. The cluster does not ask anyone to avoid manual changes. It does not detect them later for a report. It keeps restoring the declared state. Drift is not an incident to investigate; it is a condition the system removes.
 
-As a result, there is no supported way to put something into a managed Adhar cluster that the road has not seen. Changing what runs means changing what is in Git. That means going through the pipeline, so the guarantees above apply by design.
+As a result, changing what ArgoCD runs means changing what is in Git. That route goes through the pipeline, so the guarantees above apply by design. How tightly the road is closed beyond that depends on the admission layers you have turned on: the registry allowlist, for example, is production-only.
 
 One thing Adhar does not claim: there is no SPIFFE/SPIRE workload identity. Identity comes from Keycloak (OIDC) at the application layer. Secrets come from OpenBao with External Secrets. If your threat model needs cryptographic workload attestation between services, that is a gap you must close yourself, not a property to assume.
 

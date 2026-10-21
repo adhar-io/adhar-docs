@@ -1,0 +1,141 @@
+# Build, check and deploy the site to Netlify (https://adhar.io).
+#
+#   push to main      -> production deploy
+#   pull request      -> preview deploy (URL in the job summary and a PR comment)
+#   manual run        -> production deploy of the chosen ref
+#
+# The site is built here, then the static output (dist/client) is uploaded with
+# the Netlify CLI. Netlify does not build it again; netlify.toml still supplies
+# the SPA redirect and cache headers.
+#
+# Required repository secrets (Settings -> Secrets and variables -> Actions):
+#   NETLIFY_AUTH_TOKEN  personal access token from Netlify (User settings -> Applications)
+#   NETLIFY_SITE_ID     the site's ID (Site configuration -> General -> Site details)
+
+name: Deploy to Netlify
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pull-requests: write # to comment the preview URL on PRs
+
+# One production deploy at a time; a newer push to the same PR cancels the older preview.
+concurrency:
+  group: deploy-${{ github.event_name == 'pull_request' && github.event.pull_request.number || 'production' }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  NODE_VERSION: "22" # keep in step with netlify.toml
+  NETLIFY_CLI_VERSION: "17"
+
+jobs:
+  build:
+    name: Check and build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: Type-check
+        run: npx tsc --noEmit -p tsconfig.app.json
+
+      - name: Lint
+        run: npx eslint src
+
+      - name: Build
+        run: npm run build
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: site
+          path: dist/client
+          retention-days: 7
+
+  deploy:
+    name: Deploy
+    needs: build
+    runs-on: ubuntu-latest
+    # Pull requests from forks have no access to secrets, so they stop after the build.
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    environment:
+      name: ${{ github.event_name == 'pull_request' && 'preview' || 'production' }}
+      url: ${{ steps.deploy.outputs.url }}
+    steps:
+      # netlify.toml (redirects, headers) must sit next to the deploy directory.
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: netlify.toml
+          sparse-checkout-cone-mode: false
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: site
+          path: dist/client
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Deploy to Netlify
+        id: deploy
+        env:
+          NETLIFY_AUTH_TOKEN: ${{ secrets.NETLIFY_AUTH_TOKEN }}
+          NETLIFY_SITE_ID: ${{ secrets.NETLIFY_SITE_ID }}
+          IS_PROD: ${{ github.event_name != 'pull_request' }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          MESSAGE: ${{ github.event_name == 'pull_request' && format('PR #{0}: {1}', github.event.pull_request.number, github.event.pull_request.title) || github.event.head_commit.message || github.sha }}
+        run: |
+          if [ -z "$NETLIFY_AUTH_TOKEN" ] || [ -z "$NETLIFY_SITE_ID" ]; then
+            echo "::error::NETLIFY_AUTH_TOKEN and NETLIFY_SITE_ID secrets must be set."
+            exit 1
+          fi
+          if [ "$IS_PROD" = "true" ]; then
+            target="--prod"
+          else
+            target="--alias=pr-$PR_NUMBER"
+          fi
+          npx --yes "netlify-cli@${NETLIFY_CLI_VERSION}" deploy \
+            --dir=dist/client \
+            --site="$NETLIFY_SITE_ID" \
+            --message="$(echo "$MESSAGE" | head -n1 | cut -c1-200)" \
+            --json $target > deploy.json
+          if [ "$IS_PROD" = "true" ]; then
+            url=$(jq -r '.url' deploy.json)
+          else
+            url=$(jq -r '.deploy_url' deploy.json)
+          fi
+          echo "url=$url" >> "$GITHUB_OUTPUT"
+          echo "### Deployed to Netlify" >> "$GITHUB_STEP_SUMMARY"
+          echo "$url" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Comment preview URL on the PR
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        env:
+          URL: ${{ steps.deploy.outputs.url }}
+        with:
+          script: |
+            const marker = '<!-- netlify-preview -->';
+            const body = `${marker}\n**Preview deployed:** ${process.env.URL}\n\nBuilt from ${context.sha.slice(0, 7)}.`;
+            const { owner, repo } = context.repo;
+            const issue_number = context.payload.pull_request.number;
+            const comments = await github.paginate(github.rest.issues.listComments, { owner, repo, issue_number });
+            const existing = comments.find((c) => c.body?.includes(marker));
+            if (existing) {
+              await github.rest.issues.updateComment({ owner, repo, comment_id: existing.id, body });
+            } else {
+              await github.rest.issues.createComment({ owner, repo, issue_number, body });
+            }

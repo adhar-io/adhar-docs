@@ -74,7 +74,7 @@ DOKS needs the cloud's own version slug, not a bare semver, and **slugs expire**
 doctl kubernetes options versions
 ```
 
-**Expected:** a list of slugs such as `1.36.3-do.4`. Pick one. If you omit `version`, the composition falls back to a built-in default and says so in the XR's status message. That default can go stale too.
+**Expected:** a list of slugs such as `1.36.3-do.4`. Pick one. The `Cluster` schema requires `version`, so you must set it. (The DOKS composition contains a built-in fallback slug, but the schema rejects a request without `version` before the composition ever sees it.)
 
 ## Step 3 — Declare the cluster in Git
 
@@ -98,7 +98,7 @@ spec:
     displayName: "Workload — blr1"
     provider: DIGITALOCEAN_DOKS     # XRD enum: AWS_EKS GCP_GKE AZURE_AKS DIGITALOCEAN_DOKS CIVO_K3S KIND VCLUSTER
     region: blr1                    # required for every provider except VCLUSTER
-    version: "1.36.3-do.4"          # a slug from Step 2
+    version: "1.36.3-do.4"          # required; a slug from Step 2
     controlPlane:
       highAvailability: false
       endpointAccess: Public
@@ -119,13 +119,15 @@ kubectl create namespace fleet      # once, if you apply by hand
 kubectl apply -f clusters/wl-blr1.yaml
 ```
 
-**Verify:** `kubectl -n fleet get cluster wl-blr1` shows the resource with `SYNCED True` immediately. `READY` stays `False` while DigitalOcean builds the cluster.
+**Verify:** `kubectl -n fleet get clusters.platform.adhar.io wl-blr1` shows the resource with `SYNCED True` immediately. `READY` stays `False` while DigitalOcean builds the cluster.
+
+> **Use the full resource name.** CloudNativePG also defines a `Cluster` kind, and it is on in the production profile. A bare `kubectl get cluster` may resolve to the CNPG kind instead of the platform one.
 
 ## Step 4 — Wait for the cluster
 
 ```bash
-kubectl -n fleet get cluster wl-blr1 -w
-kubectl -n fleet get cluster wl-blr1 -o jsonpath='{.status.phase}{"  "}{.status.message}{"\n"}'
+kubectl -n fleet get clusters.platform.adhar.io wl-blr1 -w
+kubectl -n fleet get clusters.platform.adhar.io wl-blr1 -o jsonpath='{.status.phase}{"  "}{.status.message}{"\n"}'
 ```
 
 The composition reports its own phase: `Pending` while waiting for credentials, `Provisioning` once the cluster exists but is not running, and `Available` when DOKS says `running`.
@@ -244,7 +246,7 @@ adhar fleet upgrade --to-version v1.37.2 --dry-run  # print the wave plan, chang
 adhar fleet upgrade --to-version v1.37.2 --canary 1 --batch-size 3 --rollback-on-failure
 ```
 
-`adhar fleet upgrade` never calls a cloud API. It edits `spec.infrastructure.version` on each DataPlane in waves. One canary goes first (the least-loaded plane), then batches follow. Between waves it waits for health (`--wave-timeout`, default 20m). It stops when a plane that **was** Ready stops being Ready. A plane that was already unhealthy does not block the rollout.
+`adhar fleet upgrade` never calls a cloud API. It edits `spec.infrastructure.version` on each DataPlane in waves. One canary goes first (the least-loaded plane), then batches follow. Between waves it waits for health (`--wave-timeout`, default 20m). It stops when a plane that **was** Ready stops being Ready. A plane that was already unhealthy is skipped, so it does not block the rollout; pass `--include-not-ready` to upgrade it too.
 
 The planner is unit-tested, but a live multi-cluster run is still outstanding. Always dry-run first, and keep `--rollback-on-failure` on.
 
@@ -253,7 +255,7 @@ The planner is unit-tested, but a live multi-cluster run is still outstanding. A
 Deleting a `Cluster` removes the ArgoCD registration Secret at the same instant as the cluster. The Applications that targeted it then hang in `Terminating`, because their finalizer can no longer reach the API server. Remove the `Cluster` from Git (or `kubectl delete` it), then clear the leftover finalizers:
 
 ```bash
-kubectl -n fleet delete cluster wl-blr1
+kubectl -n fleet delete clusters.platform.adhar.io wl-blr1
 for app in $(kubectl -n adhar-system get applications.argoproj.io -l adhar.io/cluster=wl-blr1 -o name); do
   kubectl -n adhar-system patch "$app" --type merge -p '{"metadata":{"finalizers":[]}}'
 done

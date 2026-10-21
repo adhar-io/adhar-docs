@@ -17,33 +17,8 @@ import {
   Share2,
 } from "lucide-react";
 import { Linkedin, Twitter } from "@/components/brand-icons";
-import { useQuery } from "@tanstack/react-query";
-import { api, type ApiPost } from "@/lib/api";
 import { blogPosts, type BlogPost as Post } from "@/data/blogData";
 
-function formatPostDate(iso: string): string {
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return iso;
-  return d.toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" });
-}
-
-function toPost(p: ApiPost): Post {
-  return {
-    id: p.id,
-    title: p.title,
-    slug: p.slug,
-    excerpt: p.excerpt,
-    content: p.content,
-    category: p.category,
-    author: p.author,
-    authorRole: (p as { authorRole?: string }).authorRole,
-    authorBio: (p as { authorBio?: string }).authorBio,
-    date: formatPostDate(p.date),
-    readTime: p.readTime,
-    image: p.image,
-    featured: p.featured,
-  };
-}
 import {
   addClap,
   buildShareUrl,
@@ -62,6 +37,7 @@ import {
   wordCount,
 } from "@/lib/blogExtras";
 import { useToast } from "@/hooks/use-toast";
+import BlogCover from "@/components/blog/BlogCover";
 
 interface TocItem {
   id: string;
@@ -93,31 +69,12 @@ const BlogPost = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
 
-  // Single post + the full published list come from the Postgres-backed API,
-  // with static blogData as a fallback for first paint / API outage.
-  const { data: postData } = useQuery({
-    queryKey: ["post", slug],
-    queryFn: () => api.posts.get(slug as string),
-    enabled: !!slug,
-    retry: false,
-  });
-  const { data: listData } = useQuery({
-    queryKey: ["posts", "published"],
-    queryFn: () => api.posts.list(),
-  });
-
-  const post = useMemo<Post | null>(() => {
-    if (postData?.post) return toPost(postData.post);
-    if (!slug) return null;
-    return blogPosts.find((p) => p.slug === slug) || null;
-  }, [postData, slug]);
-
-  const allPosts = useMemo<Post[]>(() => {
-    const source = listData?.posts?.length ? listData.posts.map(toPost) : blogPosts;
-    return [...source].sort(
-      (a, b) => parsePostDate(a.date).getTime() - parsePostDate(b.date).getTime(),
-    );
-  }, [listData]);
+  // Posts are static content (src/data/blogData.ts).
+  const post = useMemo<Post | null>(() => (slug ? blogPosts.find((p) => p.slug === slug) ?? null : null), [slug]);
+  const allPosts = useMemo<Post[]>(
+    () => [...blogPosts].sort((a, b) => parsePostDate(a.date).getTime() - parsePostDate(b.date).getTime()),
+    [],
+  );
 
   const toc = useMemo(() => (post ? extractToc(post.content) : []), [post]);
   const tags = useMemo(() => (post ? tagsForPost(post) : []), [post]);
@@ -343,7 +300,7 @@ const BlogPost = () => {
                   </>
                 )}
               </div>
-              <h1 className="text-balance text-foreground font-semibold text-3xl sm:text-4xl md:text-5xl leading-[1.1] tracking-[-0.02em] mb-5 sm:mb-7">
+              <h1 className="[hyphens:manual] text-balance text-foreground font-semibold text-3xl sm:text-4xl md:text-5xl leading-[1.1] tracking-[-0.02em] mb-5 sm:mb-7">
                 {post.title}
               </h1>
               {post.excerpt && (
@@ -357,21 +314,15 @@ const BlogPost = () => {
                 </div>
                 <div className="text-left">
                   <p className="text-foreground font-semibold text-sm tracking-tight">{post.author}</p>
-                  <p className="text-muted-foreground text-xs">{post.authorRole || "Contributor"}</p>
+                  {post.authorRole && <p className="text-muted-foreground text-xs">{post.authorRole}</p>}
                 </div>
               </div>
             </header>
 
-            {/* Hero image */}
-            {post.image && (
-              <div className="w-full aspect-[16/10] sm:aspect-[21/9] bg-muted rounded-2xl ring-1 ring-border mb-12 sm:mb-16 overflow-hidden max-w-5xl mx-auto">
-                <img
-                  src={post.image}
-                  alt={post.title}
-                  className="w-full h-full object-cover"
-                />
-              </div>
-            )}
+            {/* Cover */}
+            <div className="w-full aspect-[16/10] sm:aspect-[21/9] rounded-2xl ring-1 ring-border mb-12 sm:mb-16 overflow-hidden max-w-5xl mx-auto shadow-[0_30px_80px_-30px_rgb(0_0_0/0.45)]">
+              <BlogCover slug={post.slug} category={post.category} title={post.title} size="lg" />
+            </div>
 
             {/* Body grid */}
             <div className="grid grid-cols-12 gap-8 lg:gap-14 max-w-6xl mx-auto">
@@ -597,12 +548,11 @@ const BlogPost = () => {
                     className="group flex flex-col overflow-hidden rounded-2xl border border-border/70 bg-card transition-all hover:border-border hover:shadow-[var(--shadow-md)] hover:-translate-y-0.5"
                   >
                     <div className="aspect-[16/10] bg-muted overflow-hidden">
-                      <img
-                        src={p.image}
-                        loading="lazy"
-                        decoding="async"
-                        alt={p.title}
-                        className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-[1.03]"
+                      <BlogCover
+                        slug={p.slug}
+                        category={p.category}
+                        title={p.title}
+                        className="transition-transform duration-500 group-hover:scale-[1.03]"
                       />
                     </div>
                     <div className="flex-1 flex flex-col p-5">

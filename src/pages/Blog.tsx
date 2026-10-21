@@ -1,7 +1,5 @@
 import { useMemo, useState } from "react";
 import { Link, useNavigate, useLocation } from "@tanstack/react-router";
-import { useQuery } from "@tanstack/react-query";
-import { api } from "@/lib/api";
 import Navigation from "@/components/landing/Navigation";
 import Footer from "@/components/landing/Footer";
 import {
@@ -18,16 +16,11 @@ import {
 import { blogPosts, type BlogPost } from "@/data/blogData";
 import { initials, listBookmarks, parsePostDate, tagsForPost } from "@/lib/blogExtras";
 import BlogSearch from "@/components/blog/BlogSearch";
+import BlogCover from "@/components/blog/BlogCover";
 
-const CATEGORIES = ["All Stories", "Platform Updates", "DevOps", "Security", "AI/ML", "Community"];
+const CATEGORIES = ["All Stories", "Platform Updates", "DevOps", "Security", "AI/ML"];
 const DEFAULT_CAT = "All Stories";
 
-/** Render an API ISO date as a friendly "Month DD, YYYY" string. */
-function formatPostDate(iso: string): string {
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return iso;
-  return d.toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" });
-}
 
 const Blog = () => {
   const navigate = useNavigate();
@@ -53,32 +46,11 @@ const Blog = () => {
   const resetFilters = () => navigate({ to: "/blog", search: {}, replace: true });
   const hasActiveFilters = cat !== DEFAULT_CAT || q.trim() !== "" || tag.trim() !== "";
 
-  // Published posts now come from the Postgres-backed API. Static blogData is
-  // kept only as a fallback for first paint / when the API is unreachable.
-  const { data } = useQuery({
-    queryKey: ["posts", "published"],
-    queryFn: () => api.posts.list(),
-  });
-
-  const allPosts = useMemo<BlogPost[]>(() => {
-    const fromApi = (data?.posts ?? []).map((p) => ({
-      id: p.id,
-      title: p.title,
-      slug: p.slug,
-      excerpt: p.excerpt,
-      content: p.content,
-      category: p.category,
-      author: p.author,
-      date: formatPostDate(p.date),
-      readTime: p.readTime,
-      image: p.image,
-      featured: p.featured,
-    }));
-    const source = fromApi.length ? fromApi : blogPosts;
-    return [...source].sort(
-      (a, b) => parsePostDate(b.date).getTime() - parsePostDate(a.date).getTime(),
-    );
-  }, [data]);
+  // Posts are static content (src/data/blogData.ts), newest first.
+  const allPosts = useMemo<BlogPost[]>(
+    () => [...blogPosts].sort((x, y) => parsePostDate(y.date).getTime() - parsePostDate(x.date).getTime()),
+    [],
+  );
 
   const tagsByPost = useMemo(() => {
     const map = new Map<string, string[]>();
@@ -150,22 +122,6 @@ const Blog = () => {
                   Field reports on internal developer platforms, cloud-native architecture,
                   and how to ship faster without breaking things.
                 </p>
-              </div>
-              <div className="flex flex-row lg:flex-col items-start lg:items-end gap-3 shrink-0">
-                <Link
-                  to="/blog/admin"
-                  className="btn-secondary-modern inline-flex items-center justify-center gap-2 rounded-full px-4 h-9 text-xs font-medium"
-                >
-                  <PenSquare className="w-3.5 h-3.5" />
-                  Write a story
-                </Link>
-                <a
-                  href="/rss.xml"
-                  className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
-                >
-                  <Rss className="w-3.5 h-3.5" />
-                  RSS feed
-                </a>
               </div>
             </div>
 
@@ -264,10 +220,12 @@ const Blog = () => {
                   >
                     <div className="grid lg:grid-cols-2 gap-0">
                       <div className="relative aspect-[16/10] lg:aspect-auto overflow-hidden bg-muted">
-                        <img
-                          src={featured.image}
-                          alt={featured.title}
-                          className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-[1.02]"
+                        <BlogCover
+                          slug={featured.slug}
+                          category={featured.category}
+                          title={featured.title}
+                          size="lg"
+                          className="min-h-[260px] transition-transform duration-700 group-hover:scale-[1.02]"
                         />
                         <div className="absolute top-4 left-4">
                           <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-background/90 backdrop-blur-sm border border-border/70 text-xs font-medium text-foreground shadow-[var(--shadow-xs)]">
@@ -316,12 +274,11 @@ const Blog = () => {
                         className="group flex flex-col overflow-hidden rounded-2xl border border-border/70 bg-card transition-all hover:border-border hover:shadow-[var(--shadow-md)] hover:-translate-y-0.5"
                       >
                         <div className="relative aspect-[16/10] overflow-hidden bg-muted">
-                          <img
-                            src={p.image}
-                            loading="lazy"
-                            decoding="async"
-                            alt={p.title}
-                            className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-[1.03]"
+                          <BlogCover
+                            slug={p.slug}
+                            category={p.category}
+                            title={p.title}
+                            className="transition-transform duration-500 group-hover:scale-[1.03]"
                           />
                         </div>
                         <div className="flex-1 flex flex-col p-5 sm:p-6">
@@ -449,42 +406,6 @@ const Blog = () => {
           </div>
         </section>
 
-        {/* Newsletter */}
-        <section className="section-padding container-padding">
-          <div className="max-width-content">
-            <div className="relative isolate overflow-hidden rounded-3xl border border-border/70 bg-card">
-              <div className="absolute inset-0 bg-mesh opacity-90 pointer-events-none" />
-              <div className="absolute inset-0 bg-grid opacity-40 dark:opacity-25 pointer-events-none" />
-              <div className="relative px-6 py-14 sm:px-12 sm:py-16 text-center max-w-2xl mx-auto">
-                <span className="eyebrow mb-6">Newsletter</span>
-                <h2 className="section-heading mt-4 text-foreground">Stay in the loop.</h2>
-                <p className="section-subheading mt-5">
-                  Monthly deep-dives on cloud-native architecture, security patches, and platform-engineering trends — straight to your inbox.
-                </p>
-                <form
-                  onSubmit={(e) => e.preventDefault()}
-                  className="mt-8 flex flex-col sm:flex-row gap-3 max-w-md mx-auto"
-                >
-                  <input
-                    type="email"
-                    required
-                    placeholder="email@company.com"
-                    className="flex-1 bg-background border border-border rounded-full px-4 h-11 text-sm focus:outline-none focus:ring-2 focus:ring-ring text-foreground placeholder:text-muted-foreground"
-                  />
-                  <button
-                    type="submit"
-                    className="btn-primary-modern inline-flex items-center justify-center gap-2 rounded-full px-6 h-11 text-sm font-medium"
-                  >
-                    Subscribe
-                  </button>
-                </form>
-                <p className="mt-4 text-xs text-muted-foreground tabular">
-                  12,400+ engineers · No spam · Unsubscribe anytime
-                </p>
-              </div>
-            </div>
-          </div>
-        </section>
       </main>
 
       <Footer />

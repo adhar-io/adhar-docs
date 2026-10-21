@@ -9,7 +9,7 @@ path: "/docs/providers/gcp"
 
 This page takes you from a new Google Cloud project to a working Adhar platform on Compute Engine. It covers billing, a service account with the right roles, APIs, three quotas, a Cloud DNS zone and a complete config file. Then it walks through `adhar up`, verification and a teardown that leaves nothing billing. It is for platform engineers on GCP.
 
-This is the **most thoroughly exercised cloud path after DigitalOcean**. It has been run end to end on a real project, including autoscaling, the full catalogue and a clean teardown.
+> **Status: live-verified (compute path).** GCE + kubeadm has run end to end on a real project: cluster creation, a real load balancer for the Gateway, node autoscaling, the full production profile and a clean `adhar down`. Time to a usable platform was not recorded, so it is unmeasured. Managed mode (GKE) is built but not live-verified.
 
 Most of the setup effort sits in one place. A brand-new project has every API switched off and a service account with no permissions. The failures that follow point almost anywhere except their cause.
 
@@ -21,7 +21,7 @@ Most of the setup effort sits in one place. A brand-new project has every API sw
 | **Default model** | GCE + kubeadm (`clusterMode: compute`; Ubuntu 24.04, containerd, Cilium from the bootstrap) |
 | **Other modes** | `managed` = GKE (needs `gke-gcloud-auth-plugin`) · `provided` = an existing cluster |
 | **Kubernetes** | `v1.37.0` unless pinned with `--kube-version` or `clusterConfig.kubeVersion` |
-| **Credentials** | Service-account key file, ADC, compute metadata or workload identity |
+| **Credentials** | Service-account key file (needed for DNS), or Application Default Credentials for provisioning only |
 | **DNS / trusted TLS** | Cloud DNS DNS-01 wildcard; the solver needs a mountable key file |
 | **Key quotas** | Regional `CPUS`, project-wide `CPUS_ALL_REGIONS`, and `SSD_TOTAL_GB` vs `DISKS_TOTAL_GB` |
 | **Default StorageClass** | `adhar-local` (node-local); `adhar-block` PD is installed but not default |
@@ -37,7 +37,7 @@ dp-gcp-topology
 
 The provider creates a VPC network and subnet, tag-scoped firewall rules, and the instances. Each instance gets an **ephemeral external IP**. So there is no Cloud NAT and no NAT charge, but the nodes are internet-facing.
 
-The forwarding rule and target pool in front of the Gateway come later. `cloud-provider-gcp` creates them from inside the cluster. This mattered on the live teardown: a load balancer and 41 CSI disks survived the first `adhar down`. That is why teardown now sweeps them explicitly.
+The forwarding rule and target pool in front of the Gateway come later. `cloud-provider-gcp` creates them from inside the cluster, so the provider's own resource tracker never sees them. That is why teardown sweeps them explicitly. On the live run it removed the load balancer and 41 CSI disks with no manual step.
 
 ## Which credential does what
 
@@ -45,15 +45,15 @@ The forwarding rule and target pool in front of the Gateway come later. `cloud-p
 pv-gcp-ownership
 ```
 
-**Use workload identity where it works, and a key file where it does not.** For provisioning, prefer the ambient identity (the one the environment already provides):
+**Use a key file unless you skip DNS.** For provisioning alone, Adhar can use the ambient identity (the one the environment already provides):
 
-- `useApplicationDefault: true`
-- `useComputeMetadata: true` when Adhar runs on a GCE instance
-- `useWorkloadIdentity: true` when Adhar runs inside a cluster
+- `useApplicationDefault: true`: Application Default Credentials, which also cover the GCE metadata server when Adhar runs on a GCE instance
+
+(`useComputeMetadata` is accepted but behaves like the default chain. `useWorkloadIdentity` is not read from `config.yaml` in the current release.)
 
 The nodes Adhar creates carry a service account with `cloud-platform` scope. That is how the cloud-controller-manager authenticates without a Secret.
 
-**Application Default Credentials are not enough once `dnsProvider` is set.** external-dns and the cert-manager DNS-01 solver run inside the cluster, and they need a key they can mount. So a deployment with a real `defaultHost` fails at `configuring edge DNS (gcp)` unless you also supply `serviceAccountKeyFile` (or `GOOGLE_APPLICATION_CREDENTIALS`) together with `projectId`. Treat that key as a DNS credential and keep it out of Git.
+**Application Default Credentials are not enough once `dnsProvider` is set.** external-dns and the cert-manager DNS-01 solver run inside the cluster, and they need a key they can mount. So a deployment with a real `defaultHost` fails at `configuring edge DNS (gcp)` unless you also supply `serviceAccountKeyFile` (or `GOOGLE_APPLICATION_CREDENTIALS`) together with the provider-level `projectId` (or `GOOGLE_PROJECT`). `config.project_id` alone is not enough for this step. Treat that key as a DNS credential and keep it out of Git.
 
 ## Step 1 — Prerequisites checklist
 
@@ -112,14 +112,14 @@ gcloud services enable \
 
 Watch for two traps:
 
-- **`container.googleapis.com` is required even in compute mode.** The provider always builds its GKE client. If the Container API is disabled, provider construction fails before any instance exists.
+- **Enable `container.googleapis.com` even for compute mode.** Managed mode (GKE) needs it, and the provider lists GKE clusters when it rediscovers clusters. Enabling it up front means switching modes later needs no API change.
 - **Service Usage cannot bootstrap itself.** On a project where it has never been used, the API you need to turn APIs on is itself off. Break the cycle once from the console with a user account.
 
 ## Step 4 — Quotas: three of them, and they are not the same quota
 
 | Metric | Scope | Default that bites | What it stops |
 |---|---|---|---|
-| `CPUS` | per region | commonly 8–24 on a new project | Node creation in that region |
+| `CPUS` | per region | varies by project | Node creation in that region |
 | `CPUS_ALL_REGIONS` | **project-wide** | 12 on a new project | The last worker of a first deployment; not on the region object, so a regional-only check misses it |
 | `SSD_TOTAL_GB` | per region | 250 GB | Any cluster on `pd-balanced` or `pd-ssd`; `pd-standard` counts against `DISKS_TOTAL_GB` (2 TB) instead |
 
@@ -130,7 +130,7 @@ gcloud compute project-info describe --project $PROJECT \
   --format='table(quotas.metric,quotas.limit)' | grep CPUS_ALL_REGIONS
 ```
 
-Size your quotas for the full cluster. The shipped `prod` environment is an `e2-standard-4` control plane plus up to five `e2-standard-8` workers. That is 4 + (5 × 8) = **44 vCPU** on both `CPUS` and `CPUS_ALL_REGIONS`.
+Size your quotas for the full cluster. With the shipped file, the control plane takes the workers' `e2-standard-8` too: an environment's `machineType` overrides the provider's `machine_type`, and the control plane uses that size unless you set `controlPlaneMachineType`. So the shipped `prod` is one `e2-standard-8` control plane plus up to five `e2-standard-8` workers: 8 + (5 × 8) = **48 vCPU** on both `CPUS` and `CPUS_ALL_REGIONS`. Add `- { key: controlPlaneMachineType, value: e2-standard-4 }` to an environment to bring that down to 44.
 
 The disk quota is the subtle one. Three 100 GB `pd-balanced` workers plus a control plane already exceed a default `SSD_TOTAL_GB`, and the create fails partway with `QUOTA_EXCEEDED`. That is why the shipped config chooses `pd-standard`. For better etcd and image-pull latency, raise `SSD_TOTAL_GB` and switch to `pd-balanced`.
 
@@ -181,19 +181,17 @@ providers:
     type: gcp
     region: asia-southeast1
     primary: true                        # only GCP's Crossplane providers install
-    projectId: your-gcp-project          # needed by the DNS-01 issuer
-    serviceAccountKeyFile: ~/.config/gcloud/your-service-account.json  # mountable key; ~ expanded
+    projectId: your-gcp-project          # needed by the DNS-01 issuer and DNS secret
+    serviceAccountKeyFile: ~/.config/gcloud/your-service-account.json  # use a FULL path (see below)
     # useApplicationDefault: true        # provisioning-only alternative
-    # useComputeMetadata: true           # when adhar runs on a GCE instance
-    # useWorkloadIdentity: true          # when adhar runs inside a cluster
     clusterMode: compute                 # GCE + kubeadm; `managed` = GKE; `provided` = existing
     config:
-      project_id: your-gcp-project       # REQUIRED — no default
+      project_id: your-gcp-project       # no default; required unless projectId is set
       zone: asia-southeast1-a
       vpc_name: adhar-vpc
       subnet_name: adhar-subnet
       subnet_cidr: 10.20.0.0/16          # the firewall rules are built from this
-      machine_type: e2-standard-4        # provider default; sizes the control plane
+      machine_type: e2-standard-4        # overridden by an environment's machineType (below)
       disk_type: pd-standard             # DISKS_TOTAL_GB, not SSD_TOTAL_GB (Step 4)
       disk_size_gb: 100
       image_family: ubuntu-2404-lts-amd64
@@ -248,7 +246,11 @@ environments:                            # dev, test, prod as namespaces on ONE 
     autoscaling: { enabled: true, minWorkers: 3, maxWorkers: 5 }
 ```
 
-`project_id` has **no default**. A missing or placeholder value is the most common first-run failure, and it creates an orphan instance before failing.
+The project has **no default**. Set `projectId` on the provider block (it wins, and the DNS step needs it) and keep `project_id` the same. A missing or placeholder value is the most common first-run failure. The current preflight catches it before anything is created; older builds created an orphan instance first.
+
+Write `serviceAccountKeyFile` as a **full path**. Provider authentication expands a leading `~`, but the steps that copy the key into the cluster (the PD CSI driver and the DNS secret) read the path as written, so `~/…` fails there.
+
+The shipped file sets `image_family: ubuntu-2404-lts-amd64`. Without it, the provider defaults to `ubuntu-2204-lts`.
 
 `subnet_cidr` is really used. The firewall rules built from it cover:
 
@@ -299,21 +301,21 @@ preflight ● credentials and API access: the provider answered; note this provi
             unverified
 ```
 
-Next, before creating anything, the provider runs its own quota check against `CPUS_ALL_REGIONS` and `SSD_TOTAL_GB`/`DISKS_TOTAL_GB`. A shortfall stops the run. The message names the metric, the shortfall and the remedy. When the problem is `SSD_TOTAL_GB`, the remedy includes the `pd-standard` escape hatch. The checklist then reads `Cloud cluster · adhar · gcp · asia-southeast1` and runs through the same stages as every cloud.
+Next, before creating anything, the provider runs its own quota check against `CPUS`, `CPUS_ALL_REGIONS` and `SSD_TOTAL_GB`/`DISKS_TOTAL_GB`. A shortfall stops the run. The message names the metric, the shortfall and the remedy. When the problem is `SSD_TOTAL_GB`, the remedy includes the `pd-standard` escape hatch. This check counts the **starting** nodes, not `maxWorkers`, so a clean pass does not mean the autoscaler has room. Size quotas by hand as in Step 4. The checklist then reads `Cloud cluster · adhar · gcp · asia-southeast1` and runs through the same stages as every cloud.
 
 After the first joins, compute mode installs:
 
 - the `cloud-provider-gcp` manifest
 - the Persistent Disk CSI driver (`gce-pd-csi-driver/cloud-sa` from the key file, or ADC when none is configured)
-- the `adhar-block` pd-balanced StorageClass
+- the `adhar-block` StorageClass, using the same disk type as the nodes (`pd-standard` with the shipped file)
 - the CSI startup-taint toleration
 
-The catalogue keeps converging for 30–45 minutes after the CLI returns.
+The catalogue keeps converging after the CLI returns (30–45 minutes on the DigitalOcean reference run; not recorded on GCP).
 
 ## Step 9 — Verify
 
 ```bash
-export KUBECONFIG=~/.adhar/clusters/adhar/kubeconfig     # context `adhar`
+export KUBECONFIG=~/.adhar/clusters/adhar/kubeconfig     # or: kubectl config use-context adhar
 kubectl get nodes                                        # all Ready
 kubectl -n adhar-system get svc | grep -i gateway        # an external IP, not <pending>
 gcloud compute firewall-rules list --project $PROJECT --format='value(name)' | grep health-checks
@@ -328,8 +330,10 @@ gcloud compute firewall-rules list --project $PROJECT --format='value(name)' | g
 ./adhar cluster list --file config.yaml
 ./adhar cluster scale adhar --workers 6 -p gcp -f config.yaml
 ./adhar cluster upgrade adhar --version 1.37.2 -p gcp -f config.yaml
-./adhar upgrade --diff-only && ./adhar upgrade --yes
+./adhar upgrade --name prod --diff-only && ./adhar upgrade --name prod --yes
 ```
+
+The cluster is named `adhar` unless you passed `--name` to `adhar up`. The `AdharPlatform` that `adhar upgrade --name` targets is named after the environment (`prod` here); check it with `kubectl -n adhar-system get adharplatform`.
 
 ### Managed GKE instead
 
@@ -353,6 +357,10 @@ GKE adds a cluster-management charge. Installing Cilium on a managed plane that 
 ./adhar down -f config.yaml --env prod --purge-orphaned-volumes
 ```
 
+`adhar down` shows what it will delete and asks you to type `yes` (skip with `--force`).
+
+> **`--env prod` removes the whole cluster.** With `isolation: namespace`, `dev`, `test` and `prod` share the one cluster `adhar`. Tearing down any of them deletes it, and the other environments go with it. If you passed `--name` to `adhar up`, pass the same `--name` to `adhar down`.
+
 Teardown always deletes the forwarding rule, target pool and `k8s-*` firewall rules. They hold no data and nothing else records them. The firewall rule also pins the VPC, so the network cannot be removed while the rule exists.
 
 Unattached `pvc-*` disks are deleted only with `--purge-orphaned-volumes`, because a disk may still hold data worth keeping. Without the flag, the output names them.
@@ -373,13 +381,14 @@ gcloud compute disks list --project $PROJECT --filter='-users:*'    # unattached
 |---|---|---|
 | `SERVICE_DISABLED` on a compute call | An API is off | `gcloud services enable …` — and enable Service Usage from the console first |
 | `AUTH_PERMISSION_DENIED` from `gcloud services list` | `roles/serviceusage.serviceUsageAdmin` is missing | Grant the role; this is not an API problem |
-| Provider construction fails before any instance exists | `container.googleapis.com` disabled | Enable it even in compute mode |
-| An orphan instance is created, then the run fails | `project_id` unset or a placeholder | Set `config.project_id`; delete the orphan |
+| Managed mode fails calling the Container API | `container.googleapis.com` disabled | Enable it |
+| The run fails early naming the project | `projectId` / `project_id` unset or a placeholder | Set both to your project ID |
+| Fails at the CSI step or `configuring edge DNS (gcp)` reading the key | `serviceAccountKeyFile` written with `~` | Use the full path |
 | Create fails partway with `QUOTA_EXCEEDED` on disks | `pd-balanced`/`pd-ssd` against a 250 GB `SSD_TOTAL_GB` | Use `disk_type: pd-standard`, or raise `SSD_TOTAL_GB` |
 | Last worker of a first deployment fails while the regional quota looks fine | Project-wide `CPUS_ALL_REGIONS` (default 12) | Raise the project-wide cap, not only the regional one |
 | Workers never finish joining | Node-to-node traffic dropped by a firewall source range that does not match `subnet_cidr` | Set `subnet_cidr` to the range the nodes actually use |
 | `LoadBalancer` Service stays `<pending>` | Health-check ranges or CCM RBAC missing, so the address is never written back | Confirm the `*-allow-health-checks` rule exists and the CCM pod is running |
-| Fails at `configuring edge DNS (gcp)` | ADC alone; no mountable key | Set `serviceAccountKeyFile` **and** `projectId` |
+| Fails at `configuring edge DNS (gcp)` | ADC alone, or no provider-level `projectId` | Set `serviceAccountKeyFile` **and** `projectId` |
 | The DNS-01 ClusterIssuer is rejected outright | The cert-manager `cloudDNS` solver requires a `project` field | Supply `projectId` so the issuer renders with it |
 | `useManagedK8s has been removed` / `clusterMode "gke" names a cloud service` | An old config spelling | `clusterMode: managed` |
 

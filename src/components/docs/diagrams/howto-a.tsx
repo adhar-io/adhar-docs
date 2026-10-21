@@ -50,14 +50,14 @@ const DbGuideSteps = () => (
 
 const PromotionChain = () => (
   <Pipeline
-    label="A push to main runs app-ci, which publishes a signed image to Harbor. The Kargo Warehouse turns it into Freight. Stage dev and Stage test promote automatically; Stage prod promotes only through a Release."
-    caption="One build, one digest — the same artifact moves from dev to prod. Only the commit that pins it changes."
+    label="A push to main runs app-ci, which publishes a signed image to Harbor. The Kargo Warehouse turns it into Freight. The project's Stages dev and test promote automatically; Stage prod promotes only through a Release. Each Stage renders its environment to the stage/<env> branch that ArgoCD syncs."
+    caption="One build, one digest — the same artifact moves from dev to prod. Each promotion renders a new commit on that environment's stage branch."
     stages={[
       { name: "app-ci", detail: "build·scan·sign", guarantee: "signed image\nin Harbor" },
       { name: "Warehouse", detail: "Kargo", guarantee: "Freight =\nimage digest", tone: "primary" },
-      { name: "<app>-dev", detail: "Stage · auto", guarantee: "deploy/envs/dev\npinned" },
-      { name: "<app>-test", detail: "Stage · auto", guarantee: "after dev\nis Healthy" },
-      { name: "<app>-prod", detail: "Stage · manual", guarantee: "a Release\nobject", tone: "accent" },
+      { name: "dev", detail: "Stage · auto", guarantee: "renders\nstage/dev" },
+      { name: "test", detail: "Stage · auto", guarantee: "after dev\nis Healthy" },
+      { name: "prod", detail: "Stage · manual", guarantee: "a Release\nobject", tone: "accent" },
     ]}
   />
 );
@@ -65,19 +65,21 @@ const PromotionChain = () => (
 const PromotionSteps = () => (
   <Ladder
     width={760}
-    label="What one Kargo promotion does: clone the app repository, set the image digest in the environment's kustomization, commit, push, then wait for ArgoCD to apply that commit and report Healthy."
+    label="What one Kargo promotion does: check out main and the environment's stage branch, pin the image digest in the environment's overlay, clear the stage branch, render the overlay into it, commit, push to stage/<env>, then wait for ArgoCD to sync that commit and report Healthy."
     heading={["promotion step", "what it changes"]}
-    caption="A promotion is a Git commit. Kargo never writes to the cluster directly."
+    caption="A promotion is a commit on stage/<env>. Kargo never writes to the cluster, and the digest edit never reaches main."
     rungs={[
-      { name: "git-clone", detail: "branch: main", adds: ["Checks out the application repository into ./src"] },
+      { name: "git-clone", detail: "main → ./src · stage/<env> → ./out", adds: ["Checks out the source and the environment's rendered branch"] },
       {
         name: "kustomize-set-image",
         detail: "deploy/envs/<env>",
         tone: "primary",
-        adds: ["Rewrites ONE overlay's images: block", "by digest — the artifact cosign signed"],
+        adds: ["Pins the image by digest in Kargo's working copy only", "the artifact cosign signed"],
       },
-      { name: "git-commit", detail: "promote(<env>): sha256:…", adds: ["One commit per promotion — your audit trail"] },
-      { name: "git-push", detail: "targetBranch: main", adds: ["The commit lands; nothing has deployed yet"] },
+      { name: "git-clear", detail: "./out", adds: ["Empties the rendered branch's working tree"] },
+      { name: "kustomize-build", detail: "→ ./out/manifests.yaml", adds: ["Renders the overlay into one manifest file"] },
+      { name: "git-commit", detail: "promote(<env>): <app> sha256:…", adds: ["One commit per promotion — your audit trail"] },
+      { name: "git-push", detail: "targetBranch: stage/<env>", adds: ["The commit lands; nothing has deployed yet"] },
       {
         name: "argocd-update",
         detail: "<project>-<app>-<env>",

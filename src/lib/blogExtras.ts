@@ -32,19 +32,13 @@ function writeJSON(key: string, value: unknown) {
 
 /* -------------------------------- CLAPS ------------------------------ */
 
-/** Aggregate claps for a slug, seeded with a stable pseudo-random baseline so
-   even fresh visitors see meaningful numbers. */
-function seedFor(slug: string): number {
-  let hash = 0;
-  for (let i = 0; i < slug.length; i++) hash = ((hash << 5) - hash + slug.charCodeAt(i)) | 0;
-  return Math.abs(hash) % 320 + 40; // 40-360
-}
-
+/**
+ * Claps recorded in this browser. The site is static, so there is no shared
+ * total — we show only what this visitor has given, never an invented count.
+ */
 export function getClapCount(slug: string): number {
   const map = readJSON<Record<string, number>>(CLAPS_KEY, {});
-  const seeded = seedFor(slug);
-  const stored = map[slug] || 0;
-  return seeded + stored;
+  return map[slug] || 0;
 }
 
 export function getUserClaps(slug: string): number {
@@ -95,7 +89,9 @@ export function toggleBookmark(slug: string): boolean {
 
 /** Extract lightweight tags from the post: category + capitalized headings
    words. Tags are derived so we don't need a schema migration. */
-export function tagsForPost(post: Pick<BlogPost, "category" | "content" | "title">): string[] {
+export function tagsForPost(post: Pick<BlogPost, "category" | "content" | "title" | "tags">): string[] {
+  // Tags set in the post's front matter win; otherwise derive them from headings.
+  if (post.tags?.length) return [...new Set([post.category, ...post.tags].filter(Boolean))];
   const out = new Set<string>();
   if (post.category) out.add(post.category);
 

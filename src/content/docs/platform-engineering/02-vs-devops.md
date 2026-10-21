@@ -155,8 +155,8 @@ A healthy split between the last two: the platform ships the dashboards and sens
 Adhar takes the position argued above. Ownership stays with the product team, and the platform makes that ownership sustainable.
 
 - **No ticket for infrastructure.** Crossplane v2 exposes databases, caches, buckets, and clusters as namespaced Kubernetes resources. Ordinary RBAC in the team's own namespace governs them — see [Control Plane](/docs/core-concepts/control-plane).
-- **No gate for compliance.** Tekton with buildpacks builds, Trivy scans, Cosign signs, Harbor stores, and Kyverno admits only signed images. The control is part of the pipeline, not a review meeting.
-- **No console drift.** ArgoCD keeps the cluster in sync with an in-cluster Gitea, with self-heal on. If someone runs an out-of-band `kubectl edit` against a managed object, ArgoCD reverts it within about a minute. A commit is the only lasting way to change the platform.
+- **No gate for compliance.** A Tekton pipeline builds with Cloud Native Buildpacks, scans, signs with Cosign and pushes to Harbor. Kyverno rejects unsigned images from Harbor's `library/*` project in workload namespaces. The control is part of the pipeline and the cluster, not a review meeting.
+- **No console drift.** ArgoCD keeps the platform in sync with an in-cluster Gitea, with self-heal on. If someone runs an out-of-band `kubectl edit` against a managed object, ArgoCD puts it back. A commit is the only lasting way to change what ArgoCD manages.
 - **Reliability signal by default.** Observability is part of the platform, not homework for each team — see [Observability](/docs/operations/observability).
 
 ## Next steps

@@ -9,7 +9,7 @@ path: "/docs/providers/digitalocean"
 
 This page takes you from an empty DigitalOcean account to a working Adhar platform on a public domain with a trusted wildcard certificate. It is for anyone deploying Adhar to a cloud for the first time.
 
-DigitalOcean is Adhar's **live-verified reference provider**. The full 76-package production profile has been brought up on it end to end. It was then scaled, upgraded, backed up, restored and torn down clean. Every timing, limit and pitfall on this page came from that run on 2026-09-12 (region `blr1`, HA mode, 3 workers autoscaled to 9), not from a design document.
+> **Status: live-verified end to end.** DigitalOcean is Adhar's reference provider. The production profile (76 packages at the time of the verified run) has been brought up on it end to end. It was then scaled, upgraded, backed up, restored and torn down clean. The timings, limits and pitfalls on this page come from the September 2026 runs in region `blr1` with HA mode on (the autoscaling run grew from 3 workers to 9), not from a design document.
 
 By the end you will have run one `adhar up`. You will see the cluster serve in about five minutes and the platform become usable at about thirteen. You will also know how to check, scale, upgrade and tear it down.
 
@@ -44,9 +44,9 @@ That split matters at teardown time. The provider tracks what *it* created (drop
 | ✓ | Item | How to check |
 |---|---|---|
 | ☐ | A DigitalOcean account with a payment method | Control panel loads **Droplets** |
-| ☐ | Droplet limit covering 1 + `maxWorkers` droplets | Your account's droplet limit; a `422` on create usually means it is too low |
+| ☐ | Droplet limit covering 1 + `maxWorkers` droplets | Your account's droplet limit. Adhar does not pre-check it; a `422` on create usually means it is too low |
 | ☐ | A domain you control, and access to its registrar | You can add NS records |
-| ☐ | `adhar` built from the repository | `./adhar version` |
+| ☐ | `adhar` built from a repository checkout | `./adhar version` |
 | ☐ | `kubectl` and `dig` on your PATH | `kubectl version --client` |
 | ☐ | Optional: `doctl` for verifying and cleaning up | `doctl version` |
 
@@ -70,10 +70,10 @@ Create one under **API → Tokens** in the control panel. It needs read/write on
 | Block storage | The CSI driver's volumes |
 | SSH keys | The per-cluster ed25519 key Adhar generates |
 | DNS | external-dns records and ACME DNS-01 challenges |
-| Kubernetes | **Only** for `clusterMode: managed` (DOKS) or Crossplane workload clusters |
+| Kubernetes | **Read access in every mode.** The preflight lists Kubernetes clusters and VPCs to prove the token works, even in compute mode. Full access is needed for `clusterMode: managed` (DOKS) or Crossplane workload clusters |
 
 ```bash
-export DIGITALOCEAN_ACCESS_TOKEN="dop_v1_…"   # DIGITALOCEAN_TOKEN also accepted
+export DIGITALOCEAN_ACCESS_TOKEN="dop_v1_…"   # DIGITALOCEAN_TOKEN also accepted, and wins if both are set
 ```
 
 **Verify** with an endpoint the platform actually uses:
@@ -121,11 +121,11 @@ Copy the shipped example and change three values: `defaultHost`, `email` and `re
 cp examples/digitalocean-config.yaml config.yaml
 ```
 
-This is `examples/digitalocean-config.yaml` with its comments condensed into annotations:
+This is `examples/digitalocean-config.yaml` with its comments condensed into annotations. (The repository root also holds `config.digitalocean.yaml`, the maintainers' own working file. It differs: HA off and a higher `maxWorkers`. Copy the one in `examples/`.)
 
 ```yaml
 globalSettings:
-  adharContext: adhar-mgmt              # kube-context prefix and Cilium cluster name
+  adharContext: adhar-mgmt              # recorded and validated; the kube-context comes from the cluster name
   defaultHost: platform.example.com     # YOUR DigitalOcean-hosted zone (Step 3)
   defaultHttpPort: 80
   defaultHttpsPort: 443                 # behind a cloud LB, so URLs carry no port
@@ -184,8 +184,8 @@ environments:                           # dev, test, prod — namespaces on ONE 
     clusterConfig:
       - { key: name,      value: adhar-prod }
       - { key: nodeSize,  value: s-8vcpu-16gb }
-      - { key: nodeCount, value: "2" }
-    autoscaling: { enabled: true, minWorkers: 2, maxWorkers: 5 }
+      - { key: nodeCount, value: "4" }            # the smallest start that brings the console up in budget
+    autoscaling: { enabled: true, minWorkers: 3, maxWorkers: 5 }
 ```
 
 ### Fields that change the outcome
@@ -200,7 +200,7 @@ environments:                           # dev, test, prod — namespaces on ONE 
 | `isolation` | `namespace` (default) puts the environment in a namespace on one shared cluster; `cluster` gives it its own cluster and platform. |
 | `nodeCount` | Workers at **creation**. With autoscaling on, only the starting point. |
 | `kubeVersion` (in `clusterConfig`) | Pins Kubernetes for this environment. `--kube-version` outranks it; the compiled default is v1.37.0. |
-| `autoscaling.maxWorkers` | The spend ceiling. The verified 76-package run started at 3 and needed 10; the example's 2–5 keeps an idle platform cheap. |
+| `autoscaling.maxWorkers` | The spend ceiling. The verified full-profile runs used up to 10 workers. The example caps every environment at 5 to keep an idle platform cheap. With `--env dev` the cluster starts at 2 workers; without `--env` it is sized from `prod` and starts at 4. Raise `maxWorkers` before enabling the full profile. |
 
 `clusterConfig: []` and an empty `coreServices` are rejected outright. The chart coordinates in the template are recorded and printed by `--dry-run`. Otherwise they are inert, because the foundation ships as embedded manifests.
 
@@ -273,7 +273,7 @@ pv-digitalocean-sequence
 **About 5 minutes** in, the cluster is serving. By then:
 
 - the VPC, firewall and SSH key are created
-- the droplets are prepared in parallel
+- the droplets are created, and each runs its node-preparation script as soon as it boots
 - `kubeadm init` and `join` are done (kube-proxy is skipped, because Cilium replaces it)
 - the DigitalOcean CCM and CSI are installed over SSH
 
@@ -281,7 +281,7 @@ Nodes stay `NotReady` until Cilium arrives. That is by design. **About 13 minute
 
 During bootstrap the CLI also:
 
-- writes the kubeconfig to `~/.adhar/clusters/adhar/kubeconfig` and merges it into `~/.kube/config` as context `adhar` (made current). The cluster is named `adhar` unless you pass `--name`;
+- writes the kubeconfig to `~/.adhar/clusters/adhar/kubeconfig` and merges it into `~/.kube/config` as context `adhar` (made current). The cluster is named `adhar` unless you pass `--name` (then the context is `adhar-<name>`);
 - creates the `adhar-dns-provider` Secret for external-dns and cert-manager;
 - renders the stack for your domain — ClusterIssuers with the DigitalOcean DNS-01 solver, external-dns with `--provider=digitalocean --domain-filter=<host>` — and seeds it into Gitea;
 - applies the cloud Gateway as a `Service` of type `LoadBalancer`.
@@ -315,7 +315,8 @@ Keycloak groups map to Kubernetes roles like this:
 | `platform-admin` / `platform-engineer` | `cluster-admin` |
 | `platform-developer` | `edit` |
 | `platform-viewer` | `view` |
-| `application-admin` | `admin` |
+
+Application teams get no cluster-wide role. Onboarding a team grants its `oidc:ws-team-<team>` group `admin` in that team's own namespace only.
 
 ## Node sizing
 
@@ -324,7 +325,7 @@ The verified full profile ran on `s-8vcpu-16gb` workers. Sizing is about **memor
 | Profile | Workers | Notes |
 |---|---|---|
 | Curated (~30 packages) | 3–4 × `s-8vcpu-16gb` | Comfortable |
-| Full production (76 packages) | 10 × `s-8vcpu-16gb` | 8 workers sat at ~55% requested memory but ~130% of limits |
+| Full production (76 packages on the verified run) | up to 10 × `s-8vcpu-16gb` | 8 workers sat at ~55% requested memory but ~130% of limits |
 
 **If you undersize**, this is what you see, in the order it bites:
 
@@ -337,17 +338,19 @@ The fix in every case is more workers, not bigger ones. That is what `autoscalin
 ## Day-2 operations
 
 ```bash
-./adhar cluster list --file config.yaml                                   # --file is required
+./adhar cluster list --file config.yaml                                   # always pass --file
 ./adhar cluster scale adhar --workers 8 -p digitalocean -f config.yaml    # join / drain
-./adhar upgrade --diff-only                                               # preview the stack diff
-./adhar upgrade --yes                                                     # converge foundation + stack
+./adhar upgrade --name dev --diff-only                                    # preview the stack diff
+./adhar upgrade --name dev --yes                                          # converge foundation + stack
 ./adhar cluster upgrade adhar --version 1.37.2 -p digitalocean -f config.yaml
 ./adhar up -f config.yaml --env dev --recreate --force                    # delete + fresh cluster
 ```
 
 A worker added by `cluster scale` or the autoscaler takes its Kubernetes version from the running control plane, so a newer CLI cannot introduce skew.
 
-> Pause the autoscaler before a manual capacity test. It treats an empty new node on an idle cluster as removable, and will drain one within five minutes. To pause it, run `kubectl -n adhar-system patch adharplatform dev --type=merge -p '{"spec":{"autoscaling":{"enabled":false}}}'`. The `AdharPlatform` is named after the environment you provisioned.
+On a cloud cluster the `AdharPlatform` resource is named after the environment you provisioned (`dev` here; `prod` for a shared cluster built without `--env`). `adhar upgrade` looks for one named `adhar` unless you pass `--name`. Check the name with `kubectl -n adhar-system get adharplatform`.
+
+> Pause the autoscaler before a manual capacity test. It treats an empty new node on an idle cluster as removable, and drains it once the scale-down delay passes (10 minutes by default). To pause it, run `kubectl -n adhar-system patch adharplatform dev --type=merge -p '{"spec":{"autoscaling":{"enabled":false}}}'`. The `AdharPlatform` is named after the environment you provisioned.
 
 To see autoscaler decisions, inspect `.status.autoscaling` on the `AdharPlatform`: `workers`, `lastScaleUp`, `lastScaleDown`, `underutilizedSince`, `lastReason`.
 
@@ -370,15 +373,18 @@ DOKS moves the control plane to DigitalOcean's free managed one. You give up SSH
 ./adhar cluster delete adhar --force --file config.yaml --purge-orphaned-volumes
 ```
 
-`adhar down` asks you to type `yes` (skip with `--force`). It then removes, in order:
+`adhar down` shows what it will delete and asks you to type `yes` (skip with `--force`). It then removes, in order:
 
-1. the CCM load balancer(s)
-2. every droplet
+1. every droplet (and waits for them to go)
+2. the CCM load balancer(s) in the cluster's VPC
 3. block volumes tagged `adhar-cluster-<cluster>`
 4. the firewall
 5. the VPC
-6. the SSH key
-7. local state
+6. the per-cluster tag
+7. the SSH key
+8. local state
+
+> **`--env dev` removes the whole cluster.** With `isolation: namespace`, `dev`, `test` and `prod` share the one cluster `adhar`. Tearing down any of them deletes it, and the other environments go with it. If you passed `--name` to `adhar up`, pass the same `--name` to `adhar down`.
 
 `--purge-orphaned-volumes` also sweeps unattached `pvc-*` volumes in the region that carry no other cluster's tag. Use it only when no other Kubernetes cluster lives in that account and region.
 
@@ -395,7 +401,7 @@ doctl --context default -t "$T" vpcs list --format Name --no-header
 
 If all five are empty, or list only resources that are not Adhar's, nothing is billing.
 
-**What you pay for while it runs:** the control-plane droplet, each worker droplet, one load balancer, and any block volumes beyond the node-local default. Worker disks are 256 GiB, shared with the containerd image cache. DNS records and the VPC are not billed.
+**What you pay for while it runs:** the control-plane droplet, each worker droplet, one load balancer, and any block volumes beyond the node-local default. Each droplet's disk is the one its size slug includes; it holds the containerd image cache and every node-local volume. DNS records and the VPC are not billed.
 
 The cost levers, in order of effect:
 

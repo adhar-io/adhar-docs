@@ -9,7 +9,7 @@ path: "/docs/reference/troubleshooting"
 
 This is a diagnostic guide, not a list of tips. **Run the triage checks, work out which phase or layer is failing, then read the matching symptom.**
 
-It is for whoever is on the hook when the platform misbehaves, on a laptop or in production. Every entry has the same shape: symptom, cause, confirm, fix. Examples assume namespace `adhar-system` and local Kind (`*.adhar.localtest.me`). On cloud, substitute your `globalSettings.defaultHost`.
+It is for whoever is on the hook when the platform misbehaves, on a laptop or in production. Every entry has the same shape: symptom, cause, confirm, fix. Examples assume namespace `adhar-system` and local Kind (`*.adhar.localtest.me`). On cloud, substitute your `globalSettings.defaultHost`. Some sections apply only to the production profile, because the packages they cover (OpenBao, the policy packs) are off locally. Those sections say so.
 
 ## Triage: where to start
 
@@ -27,13 +27,13 @@ These are the same checks as commands. Run them before you form a theory. The fi
 kubectl config current-context                      # 1. the cluster you think you are on
 adhar get status                                    # 2. platform conditions + package health
 kubectl -n adhar-system get pods | grep -v Running  # 3. what is not up
-adhar get apps                                      # 4. GitOps convergence
+adhar stack list --problems                         # 4. GitOps convergence: packages not Synced + Healthy
 kubectl get gateway -n adhar-system adhar-gateway \
   -o custom-columns=PROGRAMMED:'.status.conditions[?(@.type=="Programmed")].status'
                                                     # 5. is the data path live
 ```
 
-`adhar get status` shows `ArgoCDReady`, `GatewayReady`, `GiteaReady`, `CrossplaneReady`, `GitOpsReady` and package health. **It does not verify that Crossplane can provision.** Check that separately, as described below. The raw resource holds the phase gates themselves:
+`adhar get status` shows `ArgoCDReady`, `GatewayReady`, `GiteaReady`, `CrossplaneReady`, `GitOpsReady`, the aggregate `Ready`, and package health. `CrossplaneReady` means the control-plane configuration (including ProviderConfigs) was applied. **It does not prove that Crossplane can provision now**: the ProviderConfigs may have been deleted since, or the provider credentials may be wrong. Check that separately, as described below. The raw resource holds the phase gates themselves:
 
 ```bash
 kubectl get adharplatform -n adhar-system -o yaml
@@ -76,14 +76,14 @@ The ladder below shows the same order, and what each step's failure looks like f
 do-bootstrap-failures
 ```
 
-Locally, the controller runs in-process and exits after phase 2, so **nothing retries on its own**. You can safely re-run `adhar up` without `--recreate`. Manifests are server-side applied with `ForceOwnership`, and each phase keys on a status flag, so gates that are already satisfied are skipped.
+Locally, the controller runs inside the `adhar up` process. It exits once phase 2 is done, the Gateway is available and the GitOps sync has converged (or `--apps-timeout` has passed), so **nothing retries on its own** after that. You can safely re-run `adhar up` without `--recreate`. Manifests are server-side applied with `ForceOwnership`, and each phase keys on a status flag, so gates that are already satisfied are skipped.
 
 ```bash
 adhar up               # safe resume
 adhar up --recreate    # DESTRUCTIVE: delete the node and rebuild
 ```
 
-On cloud, roll changes out with `adhar upgrade --yes` (preview with `--diff-only`). Always pass `--env <name>`.
+On cloud, roll changes out with `adhar upgrade --yes` (preview with `--diff-only`), run from the root of your Adhar clone. When you re-run `adhar up -f`, always pass `--env <name>`.
 
 ## Install and provisioning
 
@@ -96,8 +96,8 @@ On cloud, roll changes out with `adhar upgrade --yes` (preview with `--diff-only
 
 ### A core installer errored
 
-**Symptom** — `failed installing <component>: …`; Gateway, ArgoCD, Gitea or Crossplane never becomes `Available`.
-**Cause** — an image pull, admission webhook or resource-pressure failure in the ordered slice.
+**Symptom** — `failed installing <component>: …`, where the component is one of `gateway-api-crds`, `cilium`, `gateway`, `cnpg`, `argocd` or `gitea`; that component never becomes `Available`. (Crossplane failures show up differently, as `failed reconciling Crossplane`.)
+**Cause** — an image pull, admission webhook or resource-pressure failure in the ordered install sequence.
 **Diagnose** — `kubectl -n adhar-system describe pod <pod>`.
 **Fix** — usually self-heals on requeue. If not, `adhar up`; if the node is starved, `--recreate`.
 
@@ -117,29 +117,29 @@ kubectl get clusters.postgresql.cnpg.io -n adhar-system     # HA: is gitea-db he
 ### `CrossplaneReady` never clears
 
 **Symptom** — the foundation is up and apps exist, but `adhar up` keeps requeuing.
-**Cause** — Crossplane reports `Available` as soon as its deployment is up. But the `ClusterProviderConfig`s apply only after their provider CRDs register.
+**Cause** — Crossplane core is marked `Available` once its deployment is up (or after a five-minute wait). But the control-plane configuration, including the `ClusterProviderConfig`s, applies only after the provider CRDs register, and `CrossplaneReady` waits for that.
 **Diagnose** — `kubectl get pkg -A`.
 **Fix** — wait; the loop requeues every 15 seconds. Then check the next entry.
 
 ### Zero ProviderConfigs
 
 **Symptom** — the platform reports healthy but nothing can be provisioned.
-**Cause** — the ProviderConfigs were applied before their CRDs registered, so they were dropped.
+**Cause** — the ProviderConfigs are missing. Current controllers will not mark `CrossplaneReady` until they are applied, so this now happens mainly on platforms bootstrapped by an older binary (which applied them before their CRDs registered and dropped them), or when someone deleted them later.
 **Diagnose** — the check `adhar get status` does not make:
 
 ```bash
 kubectl get clusterproviderconfigs.kubernetes.m.crossplane.io
 kubectl get clusterproviderconfigs.helm.m.crossplane.io
-kubectl get clusterproviderconfigs.aws.m.upbound.io   # per cloud in use
+kubectl get clusterproviderconfigs.aws.m.upbound.io   # per cloud in use (Civo uses providerconfigs.civo.crossplane.io)
 ```
 
 If every group returns "No resources found", this is the failure.
-**Fix** — re-apply the control-plane configuration, or apply the ProviderConfigs from `platform/controlplane/configuration/providers/`.
+**Fix** — re-apply the control-plane configuration (re-run `adhar up` with a current binary), or apply the ProviderConfigs by hand from the Adhar repository: `platform/controlplane/configuration/providers/config/` (Kubernetes and Helm) and `platform/controlplane/configuration/providers/cloud/` (one file per cloud).
 
 ### `adhar cluster list` says "No clusters found"
 
 **Symptom** — an empty list for a cluster you know is running.
-**Cause** — without `--file`, the command loads the default config. That config declares no cloud provider, so nothing is queried.
+**Cause** — without `--file`, the command loads the default config, which declares no cloud provider. Only Kind is queried. The message says so: `No clusters found. No cloud provider is configured — pass --file <config.yaml> to query one.`
 **Fix** — `adhar cluster list --file config.yaml`. Same for `status`, `scale`, `upgrade` and `delete`.
 
 ### Applications hang `Terminating` after a cluster is deleted
@@ -165,7 +165,7 @@ kubectl -n adhar-system patch application <app> --type merge \
 ### Every app goes OutOfSync after a push (expected)
 
 **Symptom** — one commit to `adhar/packages` flips every application to `OutOfSync`.
-**Cause** — each Application tracks the monorepo at `HEAD`, so one commit invalidates every target revision.
+**Cause** — every Application tracks the `main` branch of the same repository, so one commit changes every Application's target revision.
 **Fix** — wait 5–15 minutes for the wave to drain; investigate only an app still `Degraded` afterwards.
 
 ### A sync is wedged
@@ -184,11 +184,9 @@ kubectl -n adhar-system annotate application <app> \
 **Symptom** — on HA, a Keycloak user sees nothing while local `admin` sees everything.
 **Cause** — an empty `argocd-rbac-cm.policy.csv`: no group maps to a role.
 **Diagnose** — `kubectl -n adhar-system get cm argocd-rbac-cm -o jsonpath='{.data.policy\.csv}'` prints nothing.
-**Fix**
+**Fix** — restore the shipped policy, then restart the ArgoCD server. The shipped policy maps `platform-admin` to `role:admin`, `platform-viewer` to `role:readonly`, and `platform-developer` to a custom `role:platform-developer` (get and sync applications, read logs, read repositories, projects and clusters). Copy the full `policy.csv` from the `argocd-rbac-cm` ConfigMap in the ArgoCD manifests of your Adhar version (`platform/controllers/adharplatform/resources/argocd/install.yaml`, or `install-ha.yaml` in HA mode) rather than writing a shorter one: mapping developers to `role:readonly` silently takes away their sync rights.
 
 ```bash
-kubectl -n adhar-system patch cm argocd-rbac-cm --type merge -p '{"data":{"policy.csv":
-"g, platform-admin, role:admin\ng, platform-developer, role:readonly\ng, platform-viewer, role:readonly\n"}}'
 kubectl -n adhar-system rollout restart deploy/argo-cd-argocd-server
 ```
 
@@ -227,7 +225,7 @@ kubectl get ciliumgatewayclassconfig                           # empty = the roo
 
 ```bash
 kubectl port-forward -n adhar-system svc/argo-cd-argocd-server 8443:443
-kubectl port-forward -n adhar-system svc/adhar-console        3000:3000
+kubectl port-forward -n adhar-system svc/console              3000:80
 ```
 
 ## Resource exhaustion
@@ -237,7 +235,7 @@ kubectl port-forward -n adhar-system svc/adhar-console        3000:3000
 **Symptom** — pods stay `Pending`; the node is under memory pressure.
 **Cause** — one Kind node cannot run the whole catalogue. The full set OOM-kills it.
 **Diagnose** — `kubectl top nodes` and recent `adhar-system` events.
-**Fix** — run `adhar stack disable <pkg>` then `adhar upgrade`. Or give the container engine more RAM: 8 CPU and 16 GiB free is the floor for the local core. If everything is wedged, run `adhar up --recreate`.
+**Fix** — run `adhar stack disable <pkg>` then `adhar upgrade`. Or give the container engine more resources: 8 GB of RAM is the minimum and 16 GB is comfortable for the local core (roughly 8 CPU and 16 GiB free is what the Kind provider guide recommends). If everything is wedged, run `adhar up --recreate`.
 
 ### `exceed max volume count` on cloud
 
@@ -268,11 +266,11 @@ kubectl get adharplatform -n adhar-system \
 
 | `lastReason` says | Meaning |
 |---|---|
-| `… but maxWorkers=N reached` | The spend ceiling — raise `autoscaling.maxWorkers` |
-| `… waiting out the 3m scale-up cooldown` | `scaleUpCooldown` since the last addition |
-| `cluster idle for Xs of the required 10m` | `scaleDownDelay` has not elapsed |
+| `N pod(s) pending for capacity but maxWorkers=N reached` | The spend ceiling — raise `autoscaling.maxWorkers` |
+| `… waiting out the 3m0s scale-up cooldown` | `scaleUpCooldown` since the last addition (3m0s is the default) |
+| `cluster idle for Xs of the required 10m0s` | `scaleDownDelay` has not elapsed (10m0s is the default) |
 | `cluster idle … but minWorkers=N reached` | The floor |
-| `cluster idle but a worker was added/removed recently; holding` | One move per delay window, so the cluster settles |
+| `cluster idle but a worker was added recently; holding` (or `removed recently`) | One move per delay window, so the cluster settles |
 | `… no worker is safe to drain: pod <ns>/<name> holds ReadWriteOnce volume <claim>` | A node hosting a ReadWriteOnce volume is never retired |
 
 **Fix** — act on the reason. Pods pending on taints, node affinity or a volume affinity conflict deliberately do not trigger a scale-up. A new worker is a clone of the existing ones, so it would not satisfy them either.
@@ -306,6 +304,8 @@ In production, point the backup location at off-cluster object storage. Alert wh
 
 ## Secrets and OpenBao
 
+*Production profile.* OpenBao is off locally.
+
 **Symptom** — `ExternalSecret`s sit in `SecretSyncedError` and their Secrets never appear.
 **Causes, in order:**
 
@@ -323,7 +323,7 @@ kubectl get clustersecretstore vault -o yaml
 adhar stack conflicts
 ```
 
-**Fix** — the `openbao-bootstrap` Job is idempotent and runs as an ArgoCD sync hook. So `adhar stack sync openbao` re-runs init, unseal and configuration.
+**Fix** — the `openbao-bootstrap` Job is idempotent and runs as an ArgoCD sync hook, so it re-runs init, unseal and configuration whenever the `openbao` Application is synced. Trigger a real sync with `adhar gitops sync openbao` (or **Sync** in the ArgoCD UI). `adhar stack sync openbao` is not enough: it only asks ArgoCD to re-compare, and a re-compare of an app that is already in sync starts no sync.
 
 An application namespace uses its own `SecretStore` instead, with OpenBao role `tenant` and ServiceAccount `adhar-secrets`. See [Manage Secrets End to End](/docs/guides/manage-secrets).
 
@@ -333,8 +333,10 @@ The unseal key and root token live in `Secret/openbao-keys`. In production, pref
 
 ## Policy denials
 
+*Mostly production profile.* Locally, only `verify-supply-chain-images` (unsigned Harbor `library/*` images) enforces; the audit and enforce policy packs are off.
+
 **Symptom** — a deploy is rejected by an admission webhook, or an app is `Degraded` with a Kyverno message.
-**Cause** — a `ClusterPolicy` with `failureAction: Enforce` matched the resource. The supply-chain pack ships twice with identical rules: `audit` reports and `enforce` blocks. So audit findings predict what enforce rejects.
+**Cause** — a `ClusterPolicy` with `failureAction: Enforce` matched the resource. The supply-chain pack ships twice with identical rules: `adhar-supply-chain-policies` (Audit) reports and `adhar-supply-chain-policies-enforce` (Enforce) blocks. So audit findings predict what enforce rejects. The policies in `adhar-kyverno-policies` are all Audit, so they report but never block.
 **Diagnose**
 
 ```bash
@@ -343,7 +345,7 @@ adhar compliance --failures-only    # the same data as a control posture
 kubectl get clusterpolicy
 ```
 
-**Fix** — correct the resource. The three common problems are an unsigned image, a `:latest` tag, and a registry outside the allow-list. Or add a `PolicyException` under `adhar-kyverno-policies/manifests/exceptions/` and run `adhar upgrade`. Moving a rule from enforce to audit is a policy decision. Make it in the stack, not with `kubectl`.
+**Fix** — correct the resource. The three common problems are an unsigned image, a `:latest` tag, and a registry outside the allow-list. Kyverno `PolicyException`s are switched off in the shipped Kyverno install (`--enablePolicyException=false`), so an exception will not help. The enforce policies exempt platform namespaces by name and by the `adhar.io/plane: control` label. Moving a rule from enforce to audit, or exempting a namespace, is a policy decision. Make it in the stack, not with `kubectl`.
 
 ## Debugging toolbox
 
@@ -351,7 +353,7 @@ kubectl get clusterpolicy
 adhar ai diagnose <package>          # agentic triage, if the AI layer is on
 kubectl -n adhar-system logs deploy/argo-cd-argocd-server
 kubectl get events -n adhar-system --sort-by=.lastTimestamp | tail -30
-cilium status && hubble observe --since 5m --namespace <ns>
+cilium status && hubble observe --since 5m --namespace <ns>   # needs the cilium and hubble CLIs; run `cilium hubble port-forward` first
 ```
 
 ## Common pitfalls
@@ -363,7 +365,8 @@ cilium status && hubble observe --since 5m --namespace <ns>
 | `adhar up --recreate` "fixed" it but data is gone | `--recreate` deletes the cluster | Re-run `adhar up` without it first; it resumes |
 | `adhar up -f config.yaml` touched every environment | No `--env` | Always pass `--env <name>` |
 | Diagnosing the wrong cluster | Another kube-context is current | `kubectl config current-context` before anything else |
-| Health looks green, nothing provisions | `adhar get status` does not check ProviderConfigs | `kubectl get clusterproviderconfigs.<group>` |
+| Health looks green, nothing provisions | `adhar get status` does not re-check that ProviderConfigs still exist | `kubectl get clusterproviderconfigs.<group>` |
+| `adhar get apps` is empty | It lists your own applications, not platform packages | `adhar stack list --problems` |
 | Two packages flap `Degraded` forever | A mutual exclusion (for example `vault` and `openbao`) is violated | `adhar stack conflicts`, disable one, `adhar upgrade` |
 
 Still stuck? Ask on [Slack](https://join.slack.com/t/adharworkspace/shared_invite/zt-26586j9sx-QGrIejNigvzGJrnyH~IXww) or open a [GitHub issue](https://github.com/adhar-io/adhar/issues).

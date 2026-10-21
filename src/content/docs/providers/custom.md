@@ -9,11 +9,16 @@ path: "/docs/providers/custom"
 
 This page takes you from a set of machines you already own to a working Adhar platform. The machines can be bare metal, VMs, or another cloud's instances. Adhar installs Kubernetes on them over SSH with kubeadm. This page is for teams on-prem, air-gapped or on hardware Adhar has no provider for.
 
+> **Status: render-verified, not live-verified.** The kubeadm flow is shared with the live-verified DigitalOcean path. But no full run against bring-your-own hosts has been completed, and time to a usable platform is unmeasured. Node preparation dominates the runtime: hosts are prepared one after another, with a 20-minute ceiling each.
+
 First, the boundary: **Adhar owns the Kubernetes layer on these hosts and never owns the hosts themselves.** It builds, joins, drains, upgrades and resets nodes. It never creates, resizes or deletes a machine.
 
-By the end you will have prepared the hosts, run one `adhar up`, and put a load balancer and DNS in front. You will also know what `adhar down` leaves behind.
+By the end you will have prepared the hosts, run one `adhar up`, and pointed DNS (or your own load balancer) at the hosts. You will also know what `adhar down` leaves behind.
 
-> **Status: render-verified, not live-verified.** The kubeadm flow is shared with the live-verified DigitalOcean path. But no full run against bring-your-own hosts has been completed, and time to a usable platform is unmeasured. Node preparation dominates the runtime, with a 20-minute ceiling per host.
+> **Known issues in the current release.** Reading the code turned up gaps that a dry run cannot catch, because `--dry-run` never builds the provider. Expect these on a first run, and report what you find:
+>
+> - **Host settings under `config:` may not reach the provider.** The provider reads `masterIPs`, `workerIPs`, `sshUser` and `sshKeyPath` from the top level of the provider settings, but the config loader passes them only inside `config:`. If `adhar up` stops with `at least one control-plane host IP is required (masterIPs)`, this is the cause.
+> - **The cluster is listed as `on-premises-cluster`, not `adhar`.** `adhar cluster scale`, `cluster upgrade` and `adhar down` look clusters up by name. Run `./adhar cluster list --file config.yaml` and use the name it prints (for `adhar down`, pass it with `--name`).
 
 ## At a glance
 
@@ -25,7 +30,8 @@ By the end you will have prepared the hosts, run one `adhar up`, and put a load 
 | **Control plane** | Exactly one host; HA needs an LB + stacked etcd and is not implemented |
 | **Credentials** | A passphrase-less SSH key; root or passwordless sudo on every host |
 | **Kubernetes** | `v1.37.0` unless pinned with `--kube-version` or `clusterConfig.kubeVersion` |
-| **DNS / TLS** | You provide (LB or MetalLB + `dnsProvider`, or your own certificate) |
+| **Edge** | Host-network Gateway: Envoy binds :80/:443 on every host |
+| **DNS / TLS** | `dnsProvider` publishes every host's IP and issues a DNS-01 wildcard; or your own DNS and certificate |
 | **Storage** | local-path provisioner, node-local, not replicated |
 | **Lifecycle** | No autoscaling; `adhar down` runs `kubeadm reset` and leaves your machines |
 | **Verification** | Render-verified |
@@ -39,7 +45,7 @@ dp-custom-topology
 
 Compare it with any cloud page, and the difference is what is missing: no VPC, no load balancer API, no block storage, no DNS zone. The create step is the SSH bootstrap only.
 
-Everything a cloud would hand the cluster is yours to supply. That means the load balancer in front of node ports 30080/30443, the DNS records pointing at it, and replicated storage.
+Because nothing can hand the Gateway a load-balancer address, the platform runs it on the **host network**. Envoy binds ports 80 and 443 on every node, and no Gateway `Service` is created. With a `dnsProvider` set, external-dns publishes the IP of every host (control plane included) as the platform's A records. Everything else a cloud would provide is yours to supply: a load balancer if you want one in front of the hosts, DNS if you skip `dnsProvider`, and replicated storage.
 
 ```diagram
 pv-custom-ownership
@@ -51,7 +57,7 @@ pv-custom-ownership
 
 The cluster may **already exist**: built by someone else, by another tool, or on a cloud Adhar does not cover. In that case, use `clusterMode: provided` instead. Adhar creates nothing. It reaches the cluster through your kubeconfig and installs the platform onto it. `adhar down` on a provided cluster deletes **nothing**, and tells you how to remove the platform (`kubectl delete adharplatform --all -n adhar-system`). See *Provided mode* below.
 
-`useManagedK8s: true` on `custom` is rejected by name, because bring-your-own hosts are always self-managed.
+There is no `managed` mode for bring-your-own hosts; they are always self-managed. Do not set `clusterMode: managed` here: the current release does not reject it, it simply builds kubeadm as `compute` would.
 
 You *can* re-run against hosts that already form the cluster. Every step is idempotent (safe to repeat):
 
@@ -84,8 +90,7 @@ Mirror what the cloud providers open for themselves:
 | The machine running `adhar` → every host | TCP 22 |
 | The machine running `adhar` and all nodes → control plane | TCP 6443 |
 | Node ↔ node | all TCP/UDP/ICMP, unrestricted |
-| Your load balancer or clients → any node | TCP/UDP 30000–32767 (the Gateway sits on 30080/30443) |
-| Clients → your load balancer | TCP 80, 443 |
+| Clients, or your load balancer → every node | TCP 80, 443 (the host-network Gateway) |
 
 ### Sizing
 
@@ -116,10 +121,10 @@ Also confirm two things:
 
 ## Step 2 — Decide DNS and TLS
 
-Point `*.<defaultHost>` at your load balancer. Two routes lead to a publicly trusted wildcard certificate:
+`*.<defaultHost>` must resolve to the hosts (or to your load balancer in front of them). Two routes lead to a publicly trusted wildcard certificate:
 
-1. **Delegate the platform host to a DNS service the platform can solve DNS-01 with**: `digitalocean`, `aws`, `gcp`, `azure`, `civo` or `cloudflare`. Set `globalSettings.dnsProvider` to it, with that provider's credentials. The cluster stays on your hosts; only the zone lives there. Cloudflare is the lightest (one API token). This is the only route that works for a cluster unreachable from the internet, because DNS-01 never contacts it.
-2. **Bring your own certificate.** Leave `dnsProvider` unset and replace the platform certificate Secret with yours.
+1. **Delegate the platform host to a DNS service the platform can solve DNS-01 with**: `digitalocean`, `aws`, `gcp`, `azure`, `civo` or `cloudflare`. Set `globalSettings.dnsProvider` to it, with that provider's credentials. The cluster stays on your hosts; only the zone lives there. Cloudflare is the lightest (one API token). external-dns then publishes every host's IP. If your hosts sit behind NAT or your own load balancer, those are not the addresses clients should use, so manage the records yourself instead. DNS-01 never contacts the cluster, so this route also works for a cluster unreachable from the internet.
+2. **Bring your own certificate.** Leave `dnsProvider` unset, point the records at the hosts or your load balancer yourself, and replace the platform certificate Secret with yours.
 
 Either way, delegate **only the platform label** at your registrar and leave the apex where it is. Let's Encrypt reads CAA records up the tree. A registrable domain delegated to nameservers holding no zone makes every order fail with `SERVFAIL looking up CAA`, while every app still resolves perfectly.
 
@@ -127,7 +132,7 @@ Either way, delegate **only the platform label** at your registrar and leave the
 
 ## Step 3 — Write the configuration
 
-There is no `examples/custom-config.yaml`. This is the configuration from the repository's custom-provider guide, annotated:
+There is no `examples/custom-config.yaml`. This is the configuration from the repository's custom-provider guide, annotated. Read the known issue at the top of the page about the `config:` block before your first run.
 
 ```yaml
 globalSettings:
@@ -169,8 +174,8 @@ environments:
     provider: custom
     template: nonprod-defaults
     clusterConfig:
-      - { key: name,      value: adhar-mgmt }
-      - { key: nodeCount, value: "3" }       # must match the number of workerIPs
+      - { key: name,      value: adhar-mgmt }   # recorded; the cluster itself is named `adhar` unless --name
+      - { key: nodeCount, value: "3" }          # keep equal to the number of workerIPs
       # - { key: podCIDR, value: 10.244.0.0/16 }   # must not overlap your LAN
 ```
 
@@ -200,7 +205,7 @@ preflight ● credentials and API access: the provider answered; note this provi
 
 The `Cloud cluster` stage is the SSH bootstrap. It runs in three parts:
 
-1. Node prep on every host in parallel (apt installs, containerd, the pinned kubeadm stream; 20-minute ceiling per host).
+1. Node prep on each host in turn (apt installs, containerd, the pinned kubeadm stream; 20-minute ceiling per host).
 2. `kubeadm init` on the control plane, with kube-proxy skipped.
 3. `kubeadm join` on the workers.
 
@@ -209,7 +214,7 @@ In `--verbose` output the lines look like this:
 ```text
 Preparing host 192.0.2.10 (containerd + kubeadm 1.37)
 Worker 192.0.2.11 is already part of the cluster; skipping join
-Cluster "adhar-mgmt" is up: API https://192.0.2.10:6443 (3 workers).
+Cluster "adhar" is up: API https://192.0.2.10:6443 (3 workers).
 Nodes stay NotReady until the platform bootstrap installs Cilium.
 ```
 
@@ -224,7 +229,7 @@ Nodes stay NotReady until the platform bootstrap installs Cilium.
 | Kernel and systemd tuning | `overlay`/`br_netfilter`, IP forwarding, raised inotify and file limits, swap off |
 | Resolver hardening | `/etc/resolv.conf` pinned to real upstreams, so image pulls never depend on the local `systemd-resolved` stub |
 | The cluster | `kubeadm init` with **kube-proxy skipped**, workers joined, kubelet `maxPods` raised to 250 |
-| Cilium | `kubeProxyReplacement`; also the Gateway data path on node ports 30080/30443 |
+| Cilium | `kubeProxyReplacement`; also the Gateway data path, on the host network at :80/:443 |
 | Storage | The local-path provisioner (pinned v0.0.31), marked the default StorageClass `local-path` |
 | The platform | ArgoCD, Gitea, the GitOps stack and the package catalogue, as on every provider |
 
@@ -233,35 +238,35 @@ What it leaves alone:
 - **your machines**
 - **autoscaling** (`minWorkers`/`maxWorkers` have nothing to act on)
 - **firewall and iptables rules** (untouched, including after a reset)
-- **load balancers**
+- **load balancers** (optional; external-dns can point DNS straight at the hosts)
 - **block storage**
 - **DNS zones and certificates**
 - **HA control planes**
 
 ## Step 6 — Put a load balancer in front, then verify
 
-Point your load balancer (or MetalLB) at every worker: 80 → 30080 and 443 → 30443. Then:
+If you use a load balancer, point it at port 80 and 443 on every node. Then:
 
 ```bash
-export KUBECONFIG=~/.adhar/clusters/adhar/kubeconfig     # context `adhar`
+export KUBECONFIG=~/.adhar/clusters/adhar/kubeconfig     # or: kubectl config use-context adhar
 kubectl get nodes                                        # every host Ready
 kubectl -n kube-system get pods -l k8s-app=cilium
 kubectl get storageclass                                 # local-path (default)
-kubectl get svc -A | grep -i gateway                     # node ports 30080/30443
-curl -skI https://console.platform.example.com | head -1 # through your LB
+curl -skI https://console.platform.example.com | head -1 # through DNS or your LB
 ./adhar get status                                       # platform conditions + per-package health
 ./adhar get apps                                         # application sync/health
 ```
 
-The catalogue keeps converging for 30–45 minutes after the CLI returns.
+The catalogue keeps converging after the CLI returns (30–45 minutes on the DigitalOcean reference run; unmeasured on your hosts).
 
 ## Day-2: scaling and upgrades
 
-Scaling does not create machines. It moves the cluster boundary within `workerIPs`:
+Scaling does not create machines. It moves the cluster boundary within `workerIPs`. Use the cluster name `adhar cluster list` prints (see the known issue at the top):
 
 ```bash
-./adhar cluster scale adhar --workers 3 --node-group workers -p custom -f config.yaml
-./adhar cluster upgrade adhar --version 1.37.2 -p custom -f config.yaml
+./adhar cluster list --file config.yaml
+./adhar cluster scale <name> --workers 3 --node-group workers -p custom -f config.yaml
+./adhar cluster upgrade <name> --version 1.37.2 -p custom -f config.yaml
 ```
 
 Scaling joins the first N hosts that are not yet members (prep plus `kubeadm join`). It retires the ones beyond N (drain, delete the Node, `kubeadm reset`). To grow past the list, add hosts to `workerIPs` first.
@@ -272,7 +277,7 @@ Removing a node group outright is not supported. Instead, drain, reset, and drop
 
 | Concern | What ships | What you add |
 |---|---|---|
-| **Ingress** | Cilium Gateway on node ports 30080/30443 | Your own LB and DNS in front of the nodes, or MetalLB |
+| **Ingress** | Cilium Gateway on the host network, :80/:443 on every node | Optionally your own LB in front of the nodes |
 | **Storage** | local-path provisioner (node-local, not replicated, no online expansion) | Longhorn, Rook/Ceph or your SAN's CSI before trusting it with data |
 | **DNS / TLS** | A self-signed certificate | Step 2 |
 | **Backups** | Velero and CNPG target object storage | An S3-compatible endpoint they can reach |
@@ -300,28 +305,32 @@ The preflight checks, before anything is installed:
 | At least one node | **fail** |
 | A default StorageClass | warn — this mode installs no provisioner |
 
-An existing Cilium is left exactly as configured. `region:` is not required and sizing keys are inert. The autoscaler refuses to act, and `--recreate` is refused.
+An existing Cilium is left as configured. `region:` is not required and sizing keys are inert. The autoscaler refuses to act, and `--recreate` is refused. One caveat when the provider key is `custom`: the current release still asks the platform to run the Gateway on the host network (:80/:443 on every node), as it does for bring-your-own hosts. Check that those ports are free, or use the key of the cloud that hosts your DNS zone.
 
 ## Tear down
 
 ```bash
-./adhar down -f config.yaml --env dev
+./adhar down -f config.yaml --env dev --name <name from cluster list>
 ```
+
+`adhar down` shows what it will delete and asks you to type `yes` (skip with `--force`). With `isolation: namespace`, every environment shares this one cluster, so tearing down `dev` removes the platform for `test` and `prod` too.
 
 On `compute`, this runs `kubeadm reset -f` and clears `/etc/cni/net.d` on every host. It does the workers first and the control plane last, so the control plane can still answer while the workers leave. Then it removes local state.
 
-Your machines, disks and firewall rules are untouched. Node-local PersistentVolume data under `/opt/adhar-local-path` survives the reset. Delete it yourself if you want the hosts clean. There is no cloud bill to check, but your own load balancer and DNS records are yours to remove.
+Your machines, disks and firewall rules are untouched. Node-local PersistentVolume data written by the local-path provisioner (by default under `/opt/local-path-provisioner`) survives the reset. Delete it yourself if you want the hosts clean. There is no cloud bill to check, but your own load balancer and DNS records are yours to remove.
 
 ## Common pitfalls
 
 | Symptom | Cause | Fix |
 |---|---|---|
 | `SSH key … is passphrase-protected` | The provider supports passphrase-less keys only | Use a dedicated key held securely |
-| `commands on host … do not run as root (got uid 1000)` | `sudo` needs a password | Configure passwordless `sudo` for `sshUser`, or use `root` |
+| `root access check failed on host … (is passwordless sudo configured …?)` | `sudo` needs a password | Configure passwordless `sudo` for `sshUser`, or use `root` |
 | Nodes `NotReady` right after create | No CNI yet — expected | Wait for the bootstrap to install Cilium |
 | Nodes still `NotReady` after Cilium installs | A leftover config in `/etc/cni/net.d`, or a kernel too old for the eBPF data path | Remove the stale config and re-run; check the Cilium agent logs |
 | `exactly one control-plane host is supported` | More than one entry in `masterIPs` | Use one; HA control planes are not implemented yet |
-| Node count does not match reality | `nodeCount` disagrees with the length of `workerIPs` | Keep them equal, or scale explicitly |
+| Node count does not match reality | Create joins every host in `workerIPs` whatever `nodeCount` says | Keep them equal, or scale explicitly |
+| `at least one control-plane host IP is required (masterIPs)` | The host list under `config:` did not reach the provider (known issue) | Report it; there is no supported workaround in this release |
+| `cluster "adhar" not found` on scale, upgrade or down | The provider lists its cluster as `on-premises-cluster` | Use the name from `adhar cluster list --file config.yaml` |
 | Node prep times out | apt or registry access slow or blocked; the ceiling is 20 minutes per host | Use a local mirror, then re-run — prep is idempotent |
 | Image pulls fail with `connection refused on 127.0.0.53` | The local resolver stub died | Node prep pins `/etc/resolv.conf` to real upstreams; re-run prep on that host |
 | Pods Pending on `volume node affinity conflict` | A node-local volume is bound to a node that changed | Install a replicated CSI for stateful workloads |

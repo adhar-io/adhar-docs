@@ -23,12 +23,11 @@ const commands = [
     ]
   },
   {
-    command: "adhar push orders-api --git-url https://github.com/acme/orders --wait",
+    command: "adhar application deploy orders --template microservice -n orders --path manifests --project default",
     output: [
-      "✓ Built with Cloud Native Buildpacks",
-      "✓ Scanned with Trivy",
-      "✓ Signed with Cosign, pushed to Harbor",
-      "✓ ArgoCD synced orders-api"
+      "✓ Scaffolded adhar/orders in Gitea",
+      "✓ Application orders created",
+      "✓ ArgoCD synced orders"
     ]
   },
   {
@@ -88,7 +87,7 @@ const TerminalDemo = () => {
   const shownTyping = reducedMotion ? Number.MAX_SAFE_INTEGER : typingIndex;
 
   return (
-    <div ref={ref} className="max-w-4xl mx-auto" role="img" aria-label="Terminal demo: adhar up brings up the platform, then a database is created, an app is pushed, status is checked and the platform is torn down.">
+    <div ref={ref} className="max-w-4xl mx-auto" role="img" aria-label="Terminal demo: adhar up brings up the platform, then a database is created, an app is deployed from a golden-path template, status is checked and the platform is torn down.">
       <div className="bg-zinc-950 rounded-2xl overflow-hidden ring-1 ring-black/10 dark:ring-white/10 shadow-[0_30px_80px_-20px_rgb(0_0_0/0.35)]">
         <TerminalHeader />
         <TerminalContent 

@@ -9,7 +9,20 @@ path: "/docs/getting-started/quick-start"
 
 One command turns your laptop into a complete Internal Developer Platform. You get GitOps delivery, identity, CI, a container registry, observability and a developer portal, all behind one gateway and one sign-on. **The interesting part is not that it is one command. It is that after the first two minutes, Git is in charge.** This page explains what each phase is doing, so you know what is happening while you wait.
 
-You need a container engine and the `adhar` CLI from [Installation](/docs/getting-started/installation). Nothing else. By the end of this page, you will:
+## Before you start
+
+You need three things, all covered in [Installation](/docs/getting-started/installation):
+
+1. A container engine (Docker, Podman, nerdctl or Finch) that is running and has at least 8 GB of memory.
+2. The `adhar` CLI on your `PATH`.
+3. A clone of the Adhar repository. **Run every command on this page from the root of that clone.** `adhar up` seeds the in-cluster Git server from its `platform/stack` directory, and `adhar stack` and `adhar upgrade` edit and push that same directory.
+
+```bash
+git clone https://github.com/adhar-io/adhar.git
+cd adhar
+```
+
+By the end of this page, you will:
 
 - have a running platform
 - know how to tell that it is healthy
@@ -19,7 +32,7 @@ You need a container engine and the `adhar` CLI from [Installation](/docs/gettin
 
 ## Ten minutes, on a laptop or a cloud
 
-**One `adhar up` brings up the whole platform, on your laptop or on any supported cloud.** Locally, that takes about ten minutes. On a cloud, the provider's machine provisioning sets the pace. DigitalOcean is serving in about 5 minutes and usable at about 13. AWS first runs take 25–40 minutes. The command has the same shape either way:
+**One `adhar up` brings up the whole platform, on your laptop or on any supported cloud.** Locally, that takes about ten minutes. On a cloud, the time depends on the provider, because its machine provisioning sets the pace. For example, on DigitalOcean (measured) the cluster is serving in about 5 minutes and the platform is usable at about 13. The command has the same shape either way:
 
 ```bash
 adhar up                                              # local: Kind, no config file
@@ -35,8 +48,8 @@ This page uses the local path, because it needs no account and no DNS. Everythin
 | **Command** | `adhar up` |
 | **Time** | About 10 minutes locally on a warm machine. The first run also pulls ~10 GB. On a cloud, provisioning sets the pace |
 | **What you get** | A Kind node named `adhar` running the curated local platform profile |
-| **Packages** | A curated core of the 100+ wired catalogue entries. `adhar stack list --enabled` prints them |
-| **Host ports** | `8443` → HTTPS, `8080` → HTTP, mapped to the Gateway's node ports `30443`/`30080` |
+| **Packages** | The local profile: a curated core of the 100+ catalogue packages. `adhar stack list --enabled` prints them |
+| **Host ports** | `8443` → HTTPS, `8080` → HTTP, mapped to the Gateway's node ports `30443`/`30080`. If a port is taken, `adhar up` uses the next free one |
 | **URLs** | `https://<service>.adhar.localtest.me:8443` |
 | **Teardown** | `adhar down` |
 
@@ -46,7 +59,7 @@ This page uses the local path, because it needs no account and no DNS. Everythin
 adhar up
 ```
 
-A nine-stage checklist streams to your terminal. The first three stages run in the CLI. From stage four on, the controller does the work, and the CLI polls the `AdharPlatform` resource to track it:
+A nine-stage checklist streams to your terminal under the heading *Provisioning Adhar platform*. The CLI does the first three stages itself. From stage four on, the platform controller does the work. Locally, that controller runs inside the `adhar up` process; the CLI tracks its progress by polling the `AdharPlatform` resource (the custom resource that describes your platform):
 
 | Stage | What it is doing |
 |---|---|
@@ -70,9 +83,9 @@ gd-adhar-up-stages
 
 Two points in that diagram are easy to miss, and both matter.
 
-**The foundation never touches the network.** Those six components ship as manifests compiled into the binary. So an upstream chart repository that is down or has moved cannot break the bootstrap.
+**The foundation does not depend on chart repositories.** Its manifests (Gateway API CRDs, Cilium, the Gateway, ArgoCD, Gitea and Crossplane) are compiled into the binary. So an upstream chart repository that is down or has moved cannot break the bootstrap. Container images are still pulled, through the local caches described below.
 
-**After step 4, Git is the source of truth.** ArgoCD reconciles continuously with self-heal on. So if you run a manual `kubectl edit` on a managed object, it is reverted within about a minute. To change the platform, you change Git. Step 5 below and [Architecture](/docs/core-concepts/architecture) cover how.
+**After step 4, Git is the source of truth.** ArgoCD reconciles continuously with self-heal on. So if you run a manual `kubectl edit` on a managed object, ArgoCD soon reverts it. To change the platform, you change Git. Step 5 below and [Architecture](/docs/core-concepts/architecture) cover how.
 
 ### How long each phase takes
 
@@ -82,17 +95,17 @@ ds-up-timeline
 
 These times were measured on one machine (Docker Desktop, 11 CPUs) with a warm image cache. The foundation completes in about **2m40s**. The GitOps sync of the curated core takes about another **6m40s**. That is roughly **ten minutes** until every application is `Synced` and `Healthy`.
 
-The first run on a cold machine is slower. It pulls roughly 90 images from eight registries. They come through per-registry pull-through caches that Adhar starts next to the node. Every later run reads them from local disk.
+The first run on a cold machine is slower. It pulls roughly 90 images (about 10 GB) from eight registries. They come through *pull-through caches*: small registry containers, one per upstream registry, that Adhar starts next to the node and that keep a copy of every image. Every later run reads the images from local disk.
 
 The CLI stops waiting after `--apps-timeout` (default **15 minutes**) and tells you so. ArgoCD keeps converging in the background either way.
 
-On a cloud, the foundation and GitOps phases take about as long as they do locally. What changes is the time before them. The checklist adds **Preflight** (credentials, quota and API access), **Cloud cluster** and **Kubeconfig & TLS** stages, and the provider's machine provisioning takes most of the time. On AWS, GCP and Azure, the catalogue keeps converging for another 30–45 minutes after the CLI returns, while the autoscaler adds workers. The provider pages have the measured numbers.
+On a cloud, the checklist replaces the first three stages with **Preflight** (credentials, quota and API access), **Cloud cluster** and **Kubeconfig & TLS**. The provider's machine provisioning takes most of the time. The production profile is also much larger than the local one: on DigitalOcean, the rest of the catalogue keeps converging for another 30–45 minutes after the CLI returns, while the autoscaler adds workers. The provider pages have the numbers measured so far.
 
 ### Useful variants
 
 | Command | Effect |
 |---|---|
-| `adhar up --port 9443` | Different HTTPS host port. HTTP derives as port − 363, here `9080` |
+| `adhar up --port 9443` | Different HTTPS host port. HTTP derives as port − 363, here `9080`. If either port is in use, the next free port is used |
 | `adhar up --recreate` | **Destructive.** Delete the existing node and rebuild from scratch |
 | `adhar up --dry-run` | Resolve everything and preview. Create nothing |
 | `adhar up --kube-version v1.36.0` | Pin a Kubernetes version (default `v1.37.0`) |
@@ -106,22 +119,26 @@ On a cloud, the foundation and GitOps phases take about as long as they do local
 When it succeeds, you see a `✓  Platform ready` panel. It lists the console URLs and three hints: `adhar get secrets`, `adhar get status`, `adhar down`. Check health at any time:
 
 ```bash
-adhar get status      # AdharPlatform conditions + core services + per-package health
-adhar get apps        # every application's sync and health state
+adhar get status          # AdharPlatform conditions + core services + per-package health
+adhar stack status        # how far the platform packages have converged
+adhar stack list --problems   # only packages that are not Synced and Healthy
 ```
 
-`adhar get status` first prints an **Overall Status** of `● Healthy`, `▲ Degraded` or `✖ Critical`, with a health score out of 100. Then it prints sections for core services, cluster resources, platform conditions, packages and access URLs. The five conditions to read are `GatewayReady`, `ArgoCDReady`, `GiteaReady`, `CrossplaneReady` and `GitOpsReady`. Also read the aggregate `Ready` condition.
+`adhar get apps` is a different command: it lists *your own* applications (the ones you deploy on the platform), not the platform's packages. It stays empty until you reach [Your First Service](/docs/getting-started/first-service).
+
+`adhar get status` first prints an **Overall Status** of `● Healthy`, `▲ Degraded` or `✖ Critical`, with a health score out of 100. Then it prints sections for core services, cluster resources, platform conditions, platform packages and access URLs. The five conditions to read are `GatewayReady`, `ArgoCDReady`, `GiteaReady`, `CrossplaneReady` and `GitOpsReady`. Also read the aggregate `Ready` condition, which is true only when the other five are.
+
+For scripts, ask for JSON:
 
 ```bash
-adhar get status -o json | jq -r '.OverallStatus'
-adhar get apps --include-system        # also show kube-system and friends
+adhar get status -o json | jq -r '.OverallStatus'     # ● Healthy
 ```
 
-> In the first few minutes, some applications sit at `Progressing` or `Degraded` while databases start up and images pull. That is normal for a first run, not a failure. Give it three to five minutes before you investigate.
+> In the first few minutes, some packages sit at `Progressing` or `Degraded` while databases start up and images pull. That is normal for a first run, not a failure. Give it three to five minutes before you investigate.
 
 ## 3. Reach the consoles
 
-Every service is a subdomain of `adhar.localtest.me`, which resolves to `127.0.0.1` from public DNS. You do not edit `/etc/hosts`, and no DNS setup is possible locally. The certificate is the platform's own self-signed one. Accept the browser warning, or trust the platform CA as shown in [Local (Kind)](/docs/providers/local-kind).
+Every service is a subdomain of `adhar.localtest.me`, which resolves to `127.0.0.1` from public DNS. You do not edit `/etc/hosts`, and you need no DNS setup locally. If you used `--port`, or `adhar up` picked another free port, replace `8443` below with that port. The certificate is the platform's own self-signed one. Accept the browser warning, or trust the platform CA as shown in [Local (Kind)](/docs/providers/local-kind).
 
 | Service | URL | What it is for |
 |---|---|---|
@@ -139,7 +156,7 @@ Every service is a subdomain of `adhar.localtest.me`, which resolves to `127.0.0
 kubectl get httproute -A -o custom-columns=NAME:.metadata.name,HOST:.spec.hostnames[*]
 ```
 
-Every UI trusts the same Keycloak realm (`adhar`), so one sign-in covers them all. [Platform Services](/docs/core-concepts/platform-services) describes what each tool does.
+Every UI trusts the same Keycloak realm (`adhar`), so one sign-in (single sign-on, SSO) covers them all. [Platform Services](/docs/core-concepts/platform-services) describes what each tool does.
 
 ## 4. Get credentials
 
@@ -153,22 +170,31 @@ adhar get secrets -p keycloak     # admin plus the seeded users
 
 `-p` accepts `argocd`, `gitea`, `keycloak`, `adhar-console`, `openbao`, `vault`, `postgres`, `redis`, `harbor`, `rustfs`. It also works for any package that labels its credential Secret for the CLI.
 
-> Gitea's day-0 login is `gitea_admin` / `r8sA8CPHD9!bt6d`. This is a published constant. Rotate it before anyone else can reach the platform. In production, enable the `credential-rotation` package.
+> Gitea's day-0 login is `gitea_admin` / `r8sA8CPHD9!bt6d`. This is a published constant. Rotate it before anyone else can reach the platform. The production profile turns on the `adhar-credential-rotation` package, which rotates the Gitea and ArgoCD bootstrap credentials; it is off locally so these documented logins keep working.
 
 ## 5. Change the platform the GitOps way
 
-Git is the source of truth, so you do not turn on a package with `kubectl apply`. Instead, you edit the stack and then run a convergence. The CLI edits two files: the profile's ApplicationSet file *and* its mirrored environment config. A parity test requires them to agree. The CLI leaves the diff for you to review. Nothing is pushed for you.
+Git is the source of truth, so you do not turn on a package with `kubectl apply`. Instead, you edit the stack in your clone and then run a convergence. Run these from the root of your Adhar clone:
+
+1. **See what is there.** `adhar stack list` shows the catalogue, with each package's enablement and live state.
+2. **Check for conflicts.** `adhar stack conflicts` lists packages that must never both be on.
+3. **Edit the stack.** `adhar stack enable <package>` edits two files: the profile's ApplicationSet file *and* its mirrored environment config (a parity test requires them to agree). Enabling a package locally also enables it in production. Nothing is committed or pushed yet.
+4. **Preview.** `adhar upgrade --diff-only` shows exactly what would change in the cluster, and changes nothing.
+5. **Converge.** `adhar upgrade` asks for confirmation, pushes the stack to the in-cluster Gitea and lets ArgoCD sync it.
+6. **Verify.** `adhar stack status <package>` shows the package's live state. Wait for `Synced` and `Healthy`.
+
+For example, to add log collection with Loki:
 
 ```bash
 adhar stack list                 # the catalogue, with enablement and live state
-adhar stack list --problems      # only what is not Synced and Healthy
 adhar stack conflicts            # packages that must never both be on
-adhar stack enable harbor        # edits the stack
+adhar stack enable loki          # edits the stack files in platform/stack
 adhar upgrade --diff-only        # preview exactly what would change
 adhar upgrade                    # converge
+adhar stack status loki          # Synced and Healthy when done
 ```
 
-> A single Kind node cannot run the full catalogue. The local profile exists because the full set OOM-kills the node (runs it out of memory). Before you enable anything heavy, check `kubectl top nodes`. Also check `adhar stack conflicts` first. A few packages claim the same cluster-scoped objects and must not both be enabled. See [Customization](/docs/operations/customization) for the full workflow.
+> A single Kind node cannot run the full catalogue. The local profile exists because the full set OOM-kills the node (runs it out of memory). Before you enable anything heavy, check `kubectl top nodes`. A few packages claim the same cluster-scoped objects and must not both be enabled, which is why step 2 matters. See [Customization](/docs/operations/customization) for the full workflow.
 
 ## 6. Ask the control plane for something
 
@@ -179,7 +205,7 @@ kubectl create namespace demo
 adhar database create --name demo-db --engine postgresql --version 16 --namespace demo
 ```
 
-On `adhar database`, `-n` means `--name`, not namespace. So spell out `--namespace` in full. Then follow the request down to what it produced:
+On `adhar database`, `-n` means `--name`, not namespace. So spell out `--namespace` in full. `--version` is required. Then follow the request down to what it produced:
 
 ```bash
 kubectl get databases.platform.adhar.io -n demo     # the request: READY turns True
@@ -193,22 +219,23 @@ Locally, the request becomes an in-cluster CloudNativePG cluster. On a cloud, th
 
 | Symptom | First move |
 |---|---|
-| `adhar up` fails immediately | Run `docker info`. Is the engine answering? Port taken? Try `adhar up --port 9443` |
+| `adhar up` fails immediately | Run `docker info`. Is the engine answering? Are you in the root of your Adhar clone? |
+| `platform stack directory not found` | You ran `adhar up` outside the Adhar clone. `cd` into it and run `adhar up` again |
 | Bootstrap stopped part-way (Ctrl-C, sleep, timeout) | Run `adhar up` again. It resumes from the pending gate |
 | ArgoCD is up but shows no applications at all | The GitOps phase never finished. Re-run `adhar up` |
-| A URL returns nothing | Run `adhar get apps`. The package must be enabled, `Healthy`, and ship an `HTTPRoute` |
+| A URL returns nothing | Run `adhar stack status <package>`. The package must be enabled, `Healthy`, and ship an `HTTPRoute` |
 | Browser TLS warning | Expected locally. Production uses cert-manager certificates |
-| Pods `Pending`, node under pressure | Give the engine more RAM, or disable packages you enabled |
+| Pods `Pending`, node under pressure | Give the engine more RAM, or disable packages you enabled (`adhar stack disable <package>`, then `adhar upgrade`) |
 | `demo-db` never turns `READY` | Run `kubectl describe databases.platform.adhar.io demo-db -n demo`. The events name the piece that is not ready |
 | Everything stuck | `adhar up --recreate`, a destructive rebuild |
 
 ### Why re-running `adhar up` is safe
 
-Every foundation manifest is applied with Server-Side Apply and force-ownership. So a re-run takes over the existing objects instead of duplicating them.
+Every foundation manifest is applied with Server-Side Apply and force-ownership (Kubernetes merges the manifest into the existing object and takes ownership of its fields). So a re-run takes over the existing objects instead of duplicating them.
 
 Each phase is gated on a status flag. Gates that are already satisfied are skipped, and the pending one runs. Without `--recreate`, the existing healthy node is reused, so repos, data and running apps survive.
 
-The exit gate is honest. A run cannot report success while the repos are unseeded or the Gateway is unprogrammed. See [Troubleshooting](/docs/reference/troubleshooting) for deeper failure signatures.
+The exit gate is strict. A run cannot report success while the repos are unseeded or the Gateway is not yet programmed (not yet serving traffic). See [Troubleshooting](/docs/reference/troubleshooting) for deeper failure signatures.
 
 ## 8. Tear it down
 
@@ -218,7 +245,7 @@ adhar down --purge-image-cache    # also drop the cached images
 adhar up --recreate               # or destroy and rebuild in one step
 ```
 
-By default, `adhar down` keeps the image cache volume, so the next `adhar up` is fast. You can fully rebuild the platform from the binary plus your config. That makes rebuilding a routine step, not a last resort.
+By default, `adhar down` keeps the image cache volume, so the next `adhar up` is fast. You can fully rebuild the platform from the binary plus your clone of the repository. That makes rebuilding a routine step, not a last resort. Anything you changed only inside the cluster (data, or commits pushed straight to the in-cluster Gitea) is lost.
 
 ## Next steps
 

@@ -118,7 +118,7 @@ Adhar is a product you run, not a service you buy. So the discipline above passe
 
 **Apache 2.0 end to end, with no proprietary tier.** No paid edition holds back the feature you eventually need. So there is no commercial lever that could stand in for the platform being truly useful. This speaks directly to the exit-cost anti-pattern: the licence is not what keeps you.
 
-**Opt-in packages.** The catalogue holds over a hundred packages. The local profile turns on only a curated fraction of them, and the production profile turns on more. `adhar stack list` prints what each profile turns on. Teams adopt features bit by bit, in the order they actually need them, instead of facing the whole platform on day one. That is how adoption works in practice.
+**Opt-in packages.** The catalogue holds over a hundred packages. The local profile turns on only a small curated fraction of them, and the production profile turns on most. `adhar stack list` prints what your current profile turns on, next to each package's live state. Teams adopt features bit by bit, in the order they actually need them, instead of facing the whole platform on day one. That is how adoption works in practice.
 
 **Standard artifacts underneath.** Workloads stay Kubernetes resources. Images stay OCI images in [Harbor](/docs/core-concepts/platform-services). Configuration stays Git-managed YAML that ArgoCD reconciles. When an abstraction misbehaves, teams can inspect the generated output, so a leaky abstraction stays survivable.
 

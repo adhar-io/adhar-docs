@@ -238,7 +238,7 @@ kubectl get namespace preview-orders-api-42                        # NotFound, o
 | Previews for fork PRs | The build cannot clone a fork's branch; push the branch into the org repository |
 | vcluster-backed previews | Previews are namespace-scoped only |
 | Network policy, TTL labels or Pod Security labels on preview namespaces | The guardrail policy stamps exactly a ResourceQuota and a LimitRange. Add further policy through your own Kyverno rules if you need it |
-| Previews for the platform's own repos | `app-ci` ignores `adhar-ui`, `adhar-kit`, `packages`, `environments`, `templates` and `adhar-templates` |
+| Previews for the platform's own repos | `app-ci` ignores `adhar`, `adhar-ui`, `adhar-kit`, `packages`, `environments`, `templates`, `adhar-templates` and `performance-tests` |
 
 ## Troubleshooting
 

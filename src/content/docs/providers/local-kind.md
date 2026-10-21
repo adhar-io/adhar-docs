@@ -9,7 +9,9 @@ path: "/docs/providers/local-kind"
 
 This page runs the entire platform on your laptop in a single **Kind** node. Kind is Kubernetes-in-Docker: each Kubernetes node is a container on your own machine. Use it to learn Adhar, develop against it, demo it, or run it in CI.
 
-This is the default `adhar up` path. It is also the only one exercised continuously by CI: `make e2e` runs a full `adhar up` → verify → `adhar down` cycle. It needs **no credentials, no cloud account, no DNS and no bill**. On a warm machine, one `adhar up` gets every app to Synced and Healthy in about ten minutes.
+> **Status: tested continuously.** This is the only path CI exercises on every push: `make e2e` runs a full `adhar up` → verify → `adhar down` cycle, on both Docker and Podman. On a warm machine, one `adhar up` gets every app to Synced and Healthy in about ten minutes.
+
+This is the default `adhar up` path. It needs **no credentials, no cloud account, no DNS and no bill**.
 
 It is also the honest one. Everything above the cluster is the same code that runs on a cloud: ArgoCD, Gitea, Crossplane, the Gateway, SSO. Only the size of the box differs. The last section covers that difference.
 
@@ -52,7 +54,7 @@ Your browser resolves `console.adhar.localtest.me` through **public DNS** to `12
 | ☐ | ~8 CPU / 16 GiB free for the curated core | Your engine's resource settings |
 | ☐ | Room for ~10 GB of images plus the registry cache volume | `docker system df` (or your engine's equivalent) |
 | ☐ | DNS egress, with no rebinding protection dropping `127.0.0.1` answers | `dig +short console.adhar.localtest.me` → `127.0.0.1` |
-| ☐ | `adhar` built from the repository | `make build` produces `./adhar` |
+| ☐ | The `adhar` CLI: `brew install adhar-io/tap/adhar`, the install script, or `make build` from a clone | `adhar version` prints a version (a source build is `./adhar` in the repository root) |
 
 ### Which engine gets used
 
@@ -81,7 +83,7 @@ Rootless Podman works. It needs the usual prerequisites: `/etc/subuid` and `/etc
 
 ## Step 2 — Bring it up
 
-No config file is needed:
+No config file is needed. The examples below use `./adhar`, as a source build leaves it. If you installed with Homebrew or the install script, drop the `./`.
 
 ```bash
 ./adhar up
@@ -173,10 +175,9 @@ You only need an explicit config if you want to name things, or keep Kind alongs
 
 ```yaml
 environments:
-  local:
+  dev:
     provider: kind
-    name: adhar-local
-    type: development
+    type: non-production      # `production` or `non-production`
 
 providers:
   kind:
@@ -188,7 +189,7 @@ providers:
       kubectlPath: kubectl    # are not on PATH
 ```
 
-Adhar reads only those two tool paths from the `kind` provider's `config:` block. The environments' `isolation` setting has no effect locally. A Kind cluster is one cluster by definition.
+Adhar reads only those two tool paths from the `kind` provider's `config:` block. Environment names are the platform's tiers: `dev`, `test` and `prod`. The environments' `isolation` setting has no effect locally. A Kind cluster is one cluster by definition.
 
 ## Tear down
 

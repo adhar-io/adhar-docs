@@ -31,21 +31,8 @@ import { Route as BlogIndexRouteImport } from './routes/blog/index'
 import { Route as AdharKitIndexRouteImport } from './routes/adhar-kit/index'
 import { Route as DocsApiReferenceRouteImport } from './routes/docs/api-reference'
 import { Route as DocsSplatRouteImport } from './routes/docs/$'
-import { Route as BlogAuthRouteImport } from './routes/blog/auth'
-import { Route as BlogAdminRouteImport } from './routes/blog/admin'
 import { Route as BlogSlugRouteImport } from './routes/blog/$slug'
 import { Route as AdharKitSplatRouteImport } from './routes/adhar-kit/$'
-import { Route as BlogComposeIndexRouteImport } from './routes/blog/compose/index'
-import { Route as ApiRolesIndexRouteImport } from './routes/api/roles/index'
-import { Route as ApiPostsIndexRouteImport } from './routes/api/posts/index'
-import { Route as BlogComposeIdRouteImport } from './routes/blog/compose/$id'
-import { Route as ApiProfilesMeRouteImport } from './routes/api/profiles/me'
-import { Route as ApiProfilesIdRouteImport } from './routes/api/profiles/$id'
-import { Route as ApiAuthSignupRouteImport } from './routes/api/auth/signup'
-import { Route as ApiAuthMeRouteImport } from './routes/api/auth/me'
-import { Route as ApiAuthLoginRouteImport } from './routes/api/auth/login'
-import { Route as ApiPostsIdIndexRouteImport } from './routes/api/posts/$id/index'
-import { Route as ApiPostsIdModerateRouteImport } from './routes/api/posts/$id/moderate'
 
 const TermsRoute = TermsRouteImport.update({
   id: '/terms',
@@ -157,16 +144,6 @@ const DocsSplatRoute = DocsSplatRouteImport.update({
   path: '/docs/$',
   getParentRoute: () => rootRouteImport,
 } as any)
-const BlogAuthRoute = BlogAuthRouteImport.update({
-  id: '/blog/auth',
-  path: '/blog/auth',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const BlogAdminRoute = BlogAdminRouteImport.update({
-  id: '/blog/admin',
-  path: '/blog/admin',
-  getParentRoute: () => rootRouteImport,
-} as any)
 const BlogSlugRoute = BlogSlugRouteImport.update({
   id: '/blog/$slug',
   path: '/blog/$slug',
@@ -175,61 +152,6 @@ const BlogSlugRoute = BlogSlugRouteImport.update({
 const AdharKitSplatRoute = AdharKitSplatRouteImport.update({
   id: '/adhar-kit/$',
   path: '/adhar-kit/$',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const BlogComposeIndexRoute = BlogComposeIndexRouteImport.update({
-  id: '/blog/compose/',
-  path: '/blog/compose/',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ApiRolesIndexRoute = ApiRolesIndexRouteImport.update({
-  id: '/api/roles/',
-  path: '/api/roles/',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ApiPostsIndexRoute = ApiPostsIndexRouteImport.update({
-  id: '/api/posts/',
-  path: '/api/posts/',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const BlogComposeIdRoute = BlogComposeIdRouteImport.update({
-  id: '/blog/compose/$id',
-  path: '/blog/compose/$id',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ApiProfilesMeRoute = ApiProfilesMeRouteImport.update({
-  id: '/api/profiles/me',
-  path: '/api/profiles/me',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ApiProfilesIdRoute = ApiProfilesIdRouteImport.update({
-  id: '/api/profiles/$id',
-  path: '/api/profiles/$id',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ApiAuthSignupRoute = ApiAuthSignupRouteImport.update({
-  id: '/api/auth/signup',
-  path: '/api/auth/signup',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ApiAuthMeRoute = ApiAuthMeRouteImport.update({
-  id: '/api/auth/me',
-  path: '/api/auth/me',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ApiAuthLoginRoute = ApiAuthLoginRouteImport.update({
-  id: '/api/auth/login',
-  path: '/api/auth/login',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ApiPostsIdIndexRoute = ApiPostsIdIndexRouteImport.update({
-  id: '/api/posts/$id/',
-  path: '/api/posts/$id/',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ApiPostsIdModerateRoute = ApiPostsIdModerateRouteImport.update({
-  id: '/api/posts/$id/moderate',
-  path: '/api/posts/$id/moderate',
   getParentRoute: () => rootRouteImport,
 } as any)
 
@@ -253,24 +175,11 @@ export interface FileRoutesByFullPath {
   '/terms': typeof TermsRoute
   '/adhar-kit/$': typeof AdharKitSplatRoute
   '/blog/$slug': typeof BlogSlugRoute
-  '/blog/admin': typeof BlogAdminRoute
-  '/blog/auth': typeof BlogAuthRoute
   '/docs/$': typeof DocsSplatRoute
   '/docs/api-reference': typeof DocsApiReferenceRoute
   '/adhar-kit/': typeof AdharKitIndexRoute
   '/blog/': typeof BlogIndexRoute
   '/docs/': typeof DocsIndexRoute
-  '/api/auth/login': typeof ApiAuthLoginRoute
-  '/api/auth/me': typeof ApiAuthMeRoute
-  '/api/auth/signup': typeof ApiAuthSignupRoute
-  '/api/profiles/$id': typeof ApiProfilesIdRoute
-  '/api/profiles/me': typeof ApiProfilesMeRoute
-  '/blog/compose/$id': typeof BlogComposeIdRoute
-  '/api/posts/': typeof ApiPostsIndexRoute
-  '/api/roles/': typeof ApiRolesIndexRoute
-  '/blog/compose/': typeof BlogComposeIndexRoute
-  '/api/posts/$id/moderate': typeof ApiPostsIdModerateRoute
-  '/api/posts/$id/': typeof ApiPostsIdIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -292,24 +201,11 @@ export interface FileRoutesByTo {
   '/terms': typeof TermsRoute
   '/adhar-kit/$': typeof AdharKitSplatRoute
   '/blog/$slug': typeof BlogSlugRoute
-  '/blog/admin': typeof BlogAdminRoute
-  '/blog/auth': typeof BlogAuthRoute
   '/docs/$': typeof DocsSplatRoute
   '/docs/api-reference': typeof DocsApiReferenceRoute
   '/adhar-kit': typeof AdharKitIndexRoute
   '/blog': typeof BlogIndexRoute
   '/docs': typeof DocsIndexRoute
-  '/api/auth/login': typeof ApiAuthLoginRoute
-  '/api/auth/me': typeof ApiAuthMeRoute
-  '/api/auth/signup': typeof ApiAuthSignupRoute
-  '/api/profiles/$id': typeof ApiProfilesIdRoute
-  '/api/profiles/me': typeof ApiProfilesMeRoute
-  '/blog/compose/$id': typeof BlogComposeIdRoute
-  '/api/posts': typeof ApiPostsIndexRoute
-  '/api/roles': typeof ApiRolesIndexRoute
-  '/blog/compose': typeof BlogComposeIndexRoute
-  '/api/posts/$id/moderate': typeof ApiPostsIdModerateRoute
-  '/api/posts/$id': typeof ApiPostsIdIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -332,24 +228,11 @@ export interface FileRoutesById {
   '/terms': typeof TermsRoute
   '/adhar-kit/$': typeof AdharKitSplatRoute
   '/blog/$slug': typeof BlogSlugRoute
-  '/blog/admin': typeof BlogAdminRoute
-  '/blog/auth': typeof BlogAuthRoute
   '/docs/$': typeof DocsSplatRoute
   '/docs/api-reference': typeof DocsApiReferenceRoute
   '/adhar-kit/': typeof AdharKitIndexRoute
   '/blog/': typeof BlogIndexRoute
   '/docs/': typeof DocsIndexRoute
-  '/api/auth/login': typeof ApiAuthLoginRoute
-  '/api/auth/me': typeof ApiAuthMeRoute
-  '/api/auth/signup': typeof ApiAuthSignupRoute
-  '/api/profiles/$id': typeof ApiProfilesIdRoute
-  '/api/profiles/me': typeof ApiProfilesMeRoute
-  '/blog/compose/$id': typeof BlogComposeIdRoute
-  '/api/posts/': typeof ApiPostsIndexRoute
-  '/api/roles/': typeof ApiRolesIndexRoute
-  '/blog/compose/': typeof BlogComposeIndexRoute
-  '/api/posts/$id/moderate': typeof ApiPostsIdModerateRoute
-  '/api/posts/$id/': typeof ApiPostsIdIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -373,24 +256,11 @@ export interface FileRouteTypes {
     | '/terms'
     | '/adhar-kit/$'
     | '/blog/$slug'
-    | '/blog/admin'
-    | '/blog/auth'
     | '/docs/$'
     | '/docs/api-reference'
     | '/adhar-kit/'
     | '/blog/'
     | '/docs/'
-    | '/api/auth/login'
-    | '/api/auth/me'
-    | '/api/auth/signup'
-    | '/api/profiles/$id'
-    | '/api/profiles/me'
-    | '/blog/compose/$id'
-    | '/api/posts/'
-    | '/api/roles/'
-    | '/blog/compose/'
-    | '/api/posts/$id/moderate'
-    | '/api/posts/$id/'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -412,24 +282,11 @@ export interface FileRouteTypes {
     | '/terms'
     | '/adhar-kit/$'
     | '/blog/$slug'
-    | '/blog/admin'
-    | '/blog/auth'
     | '/docs/$'
     | '/docs/api-reference'
     | '/adhar-kit'
     | '/blog'
     | '/docs'
-    | '/api/auth/login'
-    | '/api/auth/me'
-    | '/api/auth/signup'
-    | '/api/profiles/$id'
-    | '/api/profiles/me'
-    | '/blog/compose/$id'
-    | '/api/posts'
-    | '/api/roles'
-    | '/blog/compose'
-    | '/api/posts/$id/moderate'
-    | '/api/posts/$id'
   id:
     | '__root__'
     | '/'
@@ -451,24 +308,11 @@ export interface FileRouteTypes {
     | '/terms'
     | '/adhar-kit/$'
     | '/blog/$slug'
-    | '/blog/admin'
-    | '/blog/auth'
     | '/docs/$'
     | '/docs/api-reference'
     | '/adhar-kit/'
     | '/blog/'
     | '/docs/'
-    | '/api/auth/login'
-    | '/api/auth/me'
-    | '/api/auth/signup'
-    | '/api/profiles/$id'
-    | '/api/profiles/me'
-    | '/blog/compose/$id'
-    | '/api/posts/'
-    | '/api/roles/'
-    | '/blog/compose/'
-    | '/api/posts/$id/moderate'
-    | '/api/posts/$id/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -491,24 +335,11 @@ export interface RootRouteChildren {
   TermsRoute: typeof TermsRoute
   AdharKitSplatRoute: typeof AdharKitSplatRoute
   BlogSlugRoute: typeof BlogSlugRoute
-  BlogAdminRoute: typeof BlogAdminRoute
-  BlogAuthRoute: typeof BlogAuthRoute
   DocsSplatRoute: typeof DocsSplatRoute
   DocsApiReferenceRoute: typeof DocsApiReferenceRoute
   AdharKitIndexRoute: typeof AdharKitIndexRoute
   BlogIndexRoute: typeof BlogIndexRoute
   DocsIndexRoute: typeof DocsIndexRoute
-  ApiAuthLoginRoute: typeof ApiAuthLoginRoute
-  ApiAuthMeRoute: typeof ApiAuthMeRoute
-  ApiAuthSignupRoute: typeof ApiAuthSignupRoute
-  ApiProfilesIdRoute: typeof ApiProfilesIdRoute
-  ApiProfilesMeRoute: typeof ApiProfilesMeRoute
-  BlogComposeIdRoute: typeof BlogComposeIdRoute
-  ApiPostsIndexRoute: typeof ApiPostsIndexRoute
-  ApiRolesIndexRoute: typeof ApiRolesIndexRoute
-  BlogComposeIndexRoute: typeof BlogComposeIndexRoute
-  ApiPostsIdModerateRoute: typeof ApiPostsIdModerateRoute
-  ApiPostsIdIndexRoute: typeof ApiPostsIdIndexRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -667,20 +498,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DocsSplatRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/blog/auth': {
-      id: '/blog/auth'
-      path: '/blog/auth'
-      fullPath: '/blog/auth'
-      preLoaderRoute: typeof BlogAuthRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/blog/admin': {
-      id: '/blog/admin'
-      path: '/blog/admin'
-      fullPath: '/blog/admin'
-      preLoaderRoute: typeof BlogAdminRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/blog/$slug': {
       id: '/blog/$slug'
       path: '/blog/$slug'
@@ -693,83 +510,6 @@ declare module '@tanstack/react-router' {
       path: '/adhar-kit/$'
       fullPath: '/adhar-kit/$'
       preLoaderRoute: typeof AdharKitSplatRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/blog/compose/': {
-      id: '/blog/compose/'
-      path: '/blog/compose'
-      fullPath: '/blog/compose/'
-      preLoaderRoute: typeof BlogComposeIndexRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/api/roles/': {
-      id: '/api/roles/'
-      path: '/api/roles'
-      fullPath: '/api/roles/'
-      preLoaderRoute: typeof ApiRolesIndexRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/api/posts/': {
-      id: '/api/posts/'
-      path: '/api/posts'
-      fullPath: '/api/posts/'
-      preLoaderRoute: typeof ApiPostsIndexRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/blog/compose/$id': {
-      id: '/blog/compose/$id'
-      path: '/blog/compose/$id'
-      fullPath: '/blog/compose/$id'
-      preLoaderRoute: typeof BlogComposeIdRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/api/profiles/me': {
-      id: '/api/profiles/me'
-      path: '/api/profiles/me'
-      fullPath: '/api/profiles/me'
-      preLoaderRoute: typeof ApiProfilesMeRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/api/profiles/$id': {
-      id: '/api/profiles/$id'
-      path: '/api/profiles/$id'
-      fullPath: '/api/profiles/$id'
-      preLoaderRoute: typeof ApiProfilesIdRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/api/auth/signup': {
-      id: '/api/auth/signup'
-      path: '/api/auth/signup'
-      fullPath: '/api/auth/signup'
-      preLoaderRoute: typeof ApiAuthSignupRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/api/auth/me': {
-      id: '/api/auth/me'
-      path: '/api/auth/me'
-      fullPath: '/api/auth/me'
-      preLoaderRoute: typeof ApiAuthMeRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/api/auth/login': {
-      id: '/api/auth/login'
-      path: '/api/auth/login'
-      fullPath: '/api/auth/login'
-      preLoaderRoute: typeof ApiAuthLoginRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/api/posts/$id/': {
-      id: '/api/posts/$id/'
-      path: '/api/posts/$id'
-      fullPath: '/api/posts/$id/'
-      preLoaderRoute: typeof ApiPostsIdIndexRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/api/posts/$id/moderate': {
-      id: '/api/posts/$id/moderate'
-      path: '/api/posts/$id/moderate'
-      fullPath: '/api/posts/$id/moderate'
-      preLoaderRoute: typeof ApiPostsIdModerateRouteImport
       parentRoute: typeof rootRouteImport
     }
   }
@@ -795,24 +535,11 @@ const rootRouteChildren: RootRouteChildren = {
   TermsRoute: TermsRoute,
   AdharKitSplatRoute: AdharKitSplatRoute,
   BlogSlugRoute: BlogSlugRoute,
-  BlogAdminRoute: BlogAdminRoute,
-  BlogAuthRoute: BlogAuthRoute,
   DocsSplatRoute: DocsSplatRoute,
   DocsApiReferenceRoute: DocsApiReferenceRoute,
   AdharKitIndexRoute: AdharKitIndexRoute,
   BlogIndexRoute: BlogIndexRoute,
   DocsIndexRoute: DocsIndexRoute,
-  ApiAuthLoginRoute: ApiAuthLoginRoute,
-  ApiAuthMeRoute: ApiAuthMeRoute,
-  ApiAuthSignupRoute: ApiAuthSignupRoute,
-  ApiProfilesIdRoute: ApiProfilesIdRoute,
-  ApiProfilesMeRoute: ApiProfilesMeRoute,
-  BlogComposeIdRoute: BlogComposeIdRoute,
-  ApiPostsIndexRoute: ApiPostsIndexRoute,
-  ApiRolesIndexRoute: ApiRolesIndexRoute,
-  BlogComposeIndexRoute: BlogComposeIndexRoute,
-  ApiPostsIdModerateRoute: ApiPostsIdModerateRoute,
-  ApiPostsIdIndexRoute: ApiPostsIdIndexRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

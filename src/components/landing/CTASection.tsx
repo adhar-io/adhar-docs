@@ -50,8 +50,8 @@ const CTASection = () => {
             {/* Three steps to a running platform */}
             <ol className="mt-14 grid grid-cols-1 md:grid-cols-3 gap-px overflow-hidden rounded-2xl border border-border/60 bg-border/50 text-left">
               {[
-                { step: "1", title: "Install the CLI", body: "One binary for macOS, Linux or Windows." },
-                { step: "2", title: "Run adhar up", body: "About ten minutes later, the platform is running." },
+                { step: "1", title: "Install and clone", body: "Install the CLI, then clone adhar-io/adhar — the platform is built from it." },
+                { step: "2", title: "Run adhar up", body: "From the clone. About ten minutes later, the platform is running." },
                 { step: "3", title: "Open the console", body: "Sign in once, then create your first project." },
               ].map((s) => (
                 <li key={s.step} className="bg-card/80 backdrop-blur-sm px-5 py-6 flex gap-4">

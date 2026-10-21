@@ -7,7 +7,7 @@ path: "/docs/operations/accessing-the-platform"
 
 # Accessing the Platform
 
-You reach every Adhar service (Console, ArgoCD, Gitea, Keycloak, Harbor) the same way: **one hostname per service, derived from one base domain, served by one Gateway holding one certificate**. Nothing in the stack hardcodes a host, a port or a cloud. `adhar up` records the edge configuration on the `AdharPlatform` resource, and everything else renders from it.
+You reach every Adhar service (Console, ArgoCD, Gitea, Keycloak, Harbor) the same way: **one hostname per service, derived from one base domain, served by one Gateway holding one certificate**. You never have to hardcode your own host, port or cloud into a package. `adhar up` records the edge configuration on the `AdharPlatform` resource. When the platform seeds its Git repositories, the controller rewrites the local domain in every stack file to your host, so everything renders from that one setting.
 
 This page is for anyone who needs to reach the platform: the operator signing in on day one, a developer looking for a URL, or a script that needs a token. It explains:
 
@@ -23,7 +23,7 @@ This page is for anyone who needs to reach the platform: the operator signing in
 | **URLs** | `https://<service>.<defaultHost>` (cloud, port 443) · `https://<service>.adhar.localtest.me:8443` (local Kind) |
 | **Edge** | One Cilium Gateway, `adhar-gateway` in `adhar-system`, GatewayClass `adhar` |
 | **TLS** | Terminates at the Gateway, from `Secret/adhar-cert` |
-| **kubeconfig** | `~/.adhar/clusters/<cluster>/kubeconfig` (mode `0600`), merged as context `adhar-<cluster>` |
+| **kubeconfig** | `~/.adhar/clusters/<cluster>/kubeconfig` (mode `0600`), merged as context `adhar-<cluster>` (plain `adhar` for the default cluster name) |
 | **Credentials** | `adhar get secrets [-p <provider>]` — never scrape pods |
 | **Console login** | Keycloak SSO, realm `adhar` (no pasted secrets) |
 | **DNS / TLS automation** | external-dns publishes records; cert-manager issues the wildcard via DNS-01 |
@@ -56,7 +56,7 @@ That is also why the local Gateway has a third listener on `:8443`. From outside
 | Certificate | Self-signed; browser warning is expected | Let's Encrypt wildcard `*.<defaultHost>` via DNS-01 |
 | DNS setup | None required, and none possible | Delegate the zone **before** `adhar up` |
 
-`adhar up --port 9443` moves the HTTPS host port. The HTTP port derives as *port − 363* (so `9080`). If the port you ask for is already in use, the Kind provider picks the next free one and reports it. Check the output rather than assuming 8443.
+`adhar up --port 9443` moves the HTTPS host port (the default is `8443`). The HTTP port is derived as *port − 363*, so `9443` gives `9080`. If a port you ask for is already in use, the Kind provider scans upwards to the next free one and reports it. Check the output rather than assuming 8443.
 
 ## Your domain drives every URL
 
@@ -83,7 +83,9 @@ On cloud the port is standard, so OIDC issuer URLs such as `https://keycloak.<de
 
 ## kubeconfig is set up for you
 
-`adhar up` writes the cluster's kubeconfig to `~/.adhar/clusters/<cluster>/kubeconfig` (mode `0600`). It also merges the cluster, user and context into `~/.kube/config` as `adhar-<cluster>`, and makes it current. Re-running `adhar up` for the same cluster **replaces** those entries rather than duplicating them.
+`adhar up` writes the cluster's kubeconfig to `~/.adhar/clusters/<cluster>/kubeconfig` (mode `0600`). It also merges the cluster, user and context into `~/.kube/config` as `adhar-<cluster>`, and makes it current. The one exception is a cluster with the default name `adhar`: its context is plain `adhar`, not `adhar-adhar`.
+
+Re-running `adhar up` for the same cluster **replaces** those entries rather than duplicating them. If the same name now points at a different API server, the old entry is kept as `<name>@<host>` so you do not lose it.
 
 ```bash
 kubectl config current-context      # adhar-dev
@@ -107,21 +109,21 @@ adhar get secrets -p keycloak
 adhar get secrets --all           # every credential in the cluster
 ```
 
-`-p` is `--provider`: a credential set such as `argocd`, `gitea`, `keycloak`, `adhar-console`, `openbao`, `harbor` or `rustfs`.
+`-p` is short for `--provider`. Despite the name, it selects a *credential set*, not a cloud provider. The built-in sets are `argocd`, `gitea`, `keycloak`, `adhar-console`, `openbao`, `vault`, `postgres`, `redis`, `harbor` and `rustfs`.
 
 Packages that keep their own login publish a Secret labelled `adhar.io/cli-secret=true` with `adhar.io/package-name=<package>`. So `-p <package>` works for them, with no per-app code in the CLI.
 
 The **Console** uses Keycloak SSO. Sign in at `https://console.<defaultHost>` with your Keycloak user rather than pasting a secret.
 
-In production, enable the `credential-rotation` package to rotate the day-0 `gitea_admin` and ArgoCD `admin` passwords. It writes break-glass copies to the secrets backend at `secret/adhar/bootstrap-credentials`.
+The `adhar-credential-rotation` package rotates the day-0 `gitea_admin` and ArgoCD `admin` passwords. It is on in the production profile and off locally, so the documented local credentials keep working. It updates the in-cluster Secrets that `adhar get secrets` reads, and, when a secrets backend (OpenBao or Vault) is installed, writes break-glass copies (emergency-access copies) to it at `secret/adhar/bootstrap-credentials`. With no backend, it skips the break-glass copy.
 
-**The secrets backend is OpenBao** (`security/openbao`). The `vault` package ships disabled, and exactly one may be on.
+**In production, the secrets backend is OpenBao** (`security/openbao`), an open-source fork of HashiCorp Vault. The `vault` package ships disabled, and at most one of the two may be on, because both claim the same objects. In the local profile *both* are off: a single Kind node does not need a secrets backend, and the platform's own credential chains fall back to Kubernetes-backed stores.
 
-OpenBao is API-compatible, so nothing changed for the platform's own consumers:
+OpenBao speaks Vault's API, and the platform keeps Vault's names, so consumers do not need to know which backend runs:
 
 - the External Secrets provider is still `vault:`
 - the `ClusterSecretStore` is still named `vault`
-- the in-cluster address is still `vault.adhar-system.svc.cluster.local:8200`
+- a compatibility Service named `vault` answers on `vault.adhar-system.svc.cluster.local:8200` (the store itself points at `openbao.adhar-system.svc.cluster.local:8200`)
 
 That store serves `adhar-system` only. Application namespaces read OpenBao through their own `SecretStore`. See [Manage Secrets End to End](/docs/guides/manage-secrets).
 
@@ -153,7 +155,7 @@ do-credential-lifecycle
 
    *Verify:* the ArgoCD application list is **not** empty. An empty list after a successful SSO login is an RBAC defect (see [Troubleshooting](/docs/reference/troubleshooting)). Fix it before going further, or rotation will lock you out.
 
-4. **Rotate the bootstrap credentials.** In the production profile the `credential-rotation` package is already on. Elsewhere, enable it:
+4. **Rotate the bootstrap credentials.** In the production profile the `adhar-credential-rotation` package is already on. Elsewhere, enable it. If you want break-glass copies, enable `openbao` as well, because the local profile ships no secrets backend:
 
    ```bash
    adhar stack enable adhar-credential-rotation
@@ -166,7 +168,7 @@ do-credential-lifecycle
    kubectl -n adhar-system get secret bootstrap-credentials-rotated
    ```
 
-5. **Know where the break-glass copies are.** The rotated passwords are written to `secret/adhar/bootstrap-credentials` in the secrets backend. Tenants cannot reach it:
+5. **Know where the break-glass copies are.** The rotated passwords are written to `secret/adhar/bootstrap-credentials` in the secrets backend (OpenBao in production). Tenants cannot reach it:
 
    - `ClusterSecretStore/vault` serves only `adhar-system`.
    - A tenant's own `SecretStore` reads only `secret/tenants/<namespace>/`.
@@ -192,7 +194,7 @@ Services fronted by the platform's oauth2-proxy in bearer mode accept that token
 
 | Piece | Behaviour |
 |---|---|
-| **DNS provider** | Derived from the environment's cloud. Override with `globalSettings.dnsProvider` (`cloudflare` for on-prem, `none` to disable). The zone must be `<defaultHost>`, delegated to that provider |
+| **DNS provider** | Derived from the environment's cloud. Override with `globalSettings.dnsProvider`: one of `digitalocean`, `aws`, `gcp`, `azure`, `civo`, `cloudflare` (typical for on-prem), or `none` to disable. The zone must be `<defaultHost>`, delegated to that provider |
 | **Credentials** | Written by the CLI into the `adhar-dns-provider` Secret in `adhar-system`; never written to Git |
 | **external-dns** | Runs with `--domain-filter=<defaultHost>` and a per-cluster TXT owner id. Publishes one record per platform HTTPRoute hostname, pointing at the Gateway LB address |
 | **cert-manager** | Issues `*.<defaultHost>` through the DNS-01 `adhar-letsencrypt-dns` ClusterIssuer into `Secret/adhar-cert`. Without a DNS-01-capable provider, the Gateway keeps `adhar-selfsigned` |
@@ -220,7 +222,7 @@ kubectl get svc -n adhar-system cilium-gateway-adhar-gateway
 dig +short console.<defaultHost>                     # 4. resolves to that address
 kubectl -n adhar-system get secret adhar-cert        # 5. the certificate exists
 kubectl get httproute -A | grep console              # 6. a route claims the hostname
-curl -sI https://console.<defaultHost> | head -1     # 7. HTTP/2 200
+curl -sI https://console.<defaultHost> | head -1     # 7. an HTTP status line (200, or a redirect to sign-in)
 
 # Crossplane can actually provision (adhar get status does NOT check this):
 kubectl get clusterproviderconfigs.kubernetes.m.crossplane.io
@@ -239,7 +241,7 @@ Climb it in order. Each rung removes one layer from the picture.
    ```bash
    kubectl port-forward -n adhar-system svc/argo-cd-argocd-server 8443:443
    # https://localhost:8443
-   kubectl port-forward -n adhar-system svc/adhar-console 3000:3000
+   kubectl port-forward -n adhar-system svc/console 3000:80
    # http://localhost:3000
    ```
 
@@ -259,9 +261,9 @@ kubectl -n adhar-system get secret adhar-cert \
 |---|---|---|
 | `HTTP 000` on every URL | Gateway never Programmed | Re-run `adhar up`; see [Troubleshooting](/docs/reference/troubleshooting) |
 | Browser TLS warning locally | Self-signed platform certificate, by design | Trust the CA, or ignore it |
-| `adhar cluster list` says "No clusters found" | It queries nothing without `--file` | `adhar cluster list --file config.yaml` |
-| `adhar get secrets -p <package>` prints nothing | `-p` is `--provider`, a credential-set name | Use a name from `adhar get secrets --help`, e.g. `-p argocd` |
-| Locked out after rotation | Rotation ran before SSO worked for a non-admin | Read the break-glass copy at `secret/adhar/bootstrap-credentials` as `platform-admin` or with the root token |
+| `adhar cluster list` says "No clusters found" | Without `--file` it knows no cloud provider (only local Kind clusters are listed) | `adhar cluster list --file config.yaml` |
+| `adhar get secrets -p <name>` prints nothing | `-p` (`--provider`) takes a credential-set name, and no set or labelled package Secret has that name | Use a name from `adhar get secrets --help`, e.g. `-p argocd` |
+| Locked out after rotation | Rotation ran before SSO worked for a non-admin | Read the break-glass copy at `secret/adhar/bootstrap-credentials` as `platform-admin` or with the OpenBao root token |
 | `adhar up -f config.yaml` built everything | Without `--env`, **every** environment in the file is provisioned | Always pass `--env <name>` |
 | DNS resolves, TLS fails | No DNS-01 provider, or an expired cloud credential | Check `adhar-dns-provider` and the cert-manager logs |
 

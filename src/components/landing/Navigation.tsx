@@ -1,14 +1,14 @@
 
 import { useState, useEffect } from "react";
 import { Link } from "@tanstack/react-router";
-import { LogIn, ArrowUpRight } from "lucide-react";
+import { ArrowUpRight } from "lucide-react";
 import { useTheme } from "next-themes";
 import NavigationLogo from "./navigation/NavigationLogo";
 import DesktopNavigationMenu from "./navigation/DesktopNavigationMenu";
 import NavigationActions from "./navigation/NavigationActions";
 import MobileNavigation from "./navigation/MobileNavigation";
 import { Github } from "@/components/brand-icons";
-import { ADHAR_CONSOLE_LOGIN_URL, ADHAR_UI_URL } from "@/lib/config";
+import { ADHAR_UI_URL } from "@/lib/config";
 
 const Navigation = () => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -72,7 +72,7 @@ const Navigation = () => {
                   {item.label}
                 </Link>
               ))}
-              <a
+              {ADHAR_UI_URL && <a
                 href={ADHAR_UI_URL}
                 target="_blank"
                 rel="noopener noreferrer"
@@ -83,7 +83,7 @@ const Navigation = () => {
                 Adhar UI
                 <ArrowUpRight className="w-3.5 h-3.5 opacity-60" aria-hidden />
                 <span className="sr-only">(opens in a new tab)</span>
-              </a>
+              </a>}
 
               <div className="mt-3 pt-3 border-t border-border/60">
                 <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground px-3 mb-1">
@@ -106,16 +106,8 @@ const Navigation = () => {
                 ))}
               </div>
 
-              {/* Auth + GitHub CTAs */}
+              {/* GitHub CTA */}
               <div className="mt-4 pt-4 border-t border-border/60 flex flex-col gap-2">
-                <a
-                  href={ADHAR_CONSOLE_LOGIN_URL}
-                  onClick={closeMenu}
-                  className="btn-secondary-modern inline-flex items-center justify-center gap-2 rounded-full h-11 text-sm font-medium"
-                >
-                  <LogIn className="w-4 h-4" />
-                  Sign in
-                </a>
                 <a
                   href="https://github.com/adhar-io/adhar"
                   target="_blank"

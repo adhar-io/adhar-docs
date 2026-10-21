@@ -38,7 +38,7 @@ Identity (who is *in* the team) stays in Keycloak, because people are not infras
 | `cluster-admin`, or `platform-admin` membership | `kubectl auth can-i '*' '*'` |
 | Keycloak admin access, for the group and its members | `adhar get secrets -p keycloak` |
 | The seeded organisation | `kubectl -n adhar-system get organisations.platform.adhar.io` lists `adhar` |
-| For quotas: the `adhar-tenant-quotas` package (on in production, off locally) | `adhar stack status adhar-tenant-quotas` |
+| For quotas: the `adhar-tenant-quotas` package and cert-manager (both on in production, off locally) | `adhar stack status adhar-tenant-quotas` |
 | For promotion: Kargo (on in production, off locally) | `adhar stack status kargo` |
 
 ## How access is granted
@@ -173,7 +173,7 @@ data:
     projects: 10
 ```
 
-Then converge with `adhar upgrade`. On a local platform the package is off, so first turn it on with `adhar stack enable adhar-tenant-quotas`.
+Then converge with `adhar upgrade`. On a local platform the package is off. It also needs cert-manager, which injects the webhook's CA certificate and is off locally too. Turn both on first with `adhar stack enable cert-manager adhar-tenant-quotas`.
 
 **Verify:**
 
@@ -241,7 +241,7 @@ kubectl -n adhar-system get appprojects.argoproj.io payments
 You should see:
 
 - Four namespaces: `payments`, `payments-dev`, `payments-test` and `payments-prod`.
-- In each environment: a `<ns>-quota`, a `<ns>-limits` LimitRange and a `<ns>-default-deny` NetworkPolicy. The LimitRange gives containers default limits of 500m / 512Mi and default requests of 100m / 128Mi.
+- In each environment: a `<ns>-quota` ResourceQuota, a `<ns>-limits` LimitRange and a `<ns>-default-deny` NetworkPolicy (plus a `<ns>-allow-gateway` CiliumNetworkPolicy that lets the Gateway reach your pods). The LimitRange gives containers default limits of 500m / 512Mi and default requests of 100m / 128Mi.
 - In prod: `payments-prod-team-view` and `payments-prod-org-admin`.
 - A status listing `dev=payments-dev`, `test=payments-test`, `prod=payments-prod`.
 - The AppProject.
@@ -368,11 +368,11 @@ To stop new sign-ins entirely, disable the user in Keycloak: `adhar auth user up
 | `kubectl` returns `Unauthorized` with a valid token | API server OIDC not enabled, or `--oidc-client-id` is not `kubernetes` | Ask the platform team; the audience is `kubernetes`, not `adhar-cli` |
 | `Forbidden` for a member who should have access | The token predates their group membership | `adhar auth login … --force` for a fresh token |
 | Project denied: `exceeds the … team's tenant quota` | The team's allowance is used up | Raise the team's entry in `allowances.yaml`, or lower the project's quotas |
-| Tenant quota never denies anything | Package off, no entry for the team and no `default`, or the controller is down (fails open) | `adhar stack status adhar-tenant-quotas`; check the ConfigMap |
+| Tenant quota never denies anything | Package off, no entry for the team and no `default`, cert-manager missing (no serving certificate), or the controller is down (fails open) | `adhar stack status adhar-tenant-quotas`; `adhar stack status cert-manager`; check the ConfigMap |
 | Project `READY=False`, events name `kargo.akuity.io` kinds | Kargo is not installed (off in the local profile) | Namespaces, quotas and RBAC are still created; `adhar stack enable kargo` for promotion |
 | `ws-team` member sees nothing in ArgoCD | No ArgoCD role is mapped for team groups | Use the Console for sync and health |
 | Member cannot push to the repo in Gitea | Gitea team membership and repo grants are manual for team groups | Add the user to team `payments`; grant the repository |
-| Pods in `payments-dev` cannot reach each other's Service from another namespace | Default-deny ingress admits only the same namespace | Add a NetworkPolicy in the target namespace for that source |
+| A Service in `payments-dev` is unreachable from another team namespace | Default-deny ingress admits only the same namespace, `adhar-system` and the Gateway | Add a NetworkPolicy in the target namespace for that source |
 | ArgoCD refuses to deploy a repo into the project | The AppProject admits only `adhar/*` Gitea repos | Add the source to `allowedSourceRepos` on the Project |
 
 ## Next steps

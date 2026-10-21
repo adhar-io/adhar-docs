@@ -1,16 +1,12 @@
 import { Outlet, createRootRoute, HeadContent, Scripts } from "@tanstack/react-router";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { ThemeProvider } from "next-themes";
 import { useState, useEffect, type ReactNode } from "react";
-import { AuthProvider } from "@/hooks/useAuth";
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as SonnerToaster } from "@/components/ui/sonner";
 import RouteTransition from "@/components/RouteTransition";
 import LoadingScreen from "@/components/LoadingScreen";
 import NotFound from "@/pages/NotFound";
 import appCss from "@/index.css?url";
-
-const queryClient = new QueryClient();
 
 export const Route = createRootRoute({
   head: () => ({
@@ -31,10 +27,11 @@ export const Route = createRootRoute({
           "Streamline cloud-native application development with the best open-source tools integrated into one platform.",
       },
       { property: "og:type", content: "website" },
-      { property: "og:image", content: "/blog-social-banner.jpg" },
+      { property: "og:image", content: "https://adhar.io/blog-social-banner.jpg" },
+      { property: "og:url", content: "https://adhar.io/" },
       { name: "twitter:card", content: "summary_large_image" },
       { name: "twitter:site", content: "@adhar_platform" },
-      { name: "twitter:image", content: "/blog-social-banner.jpg" },
+      { name: "twitter:image", content: "https://adhar.io/blog-social-banner.jpg" },
     ],
     links: [
       { rel: "stylesheet", href: appCss },
@@ -72,10 +69,8 @@ function AppShell() {
   }, []);
 
   return (
-    <QueryClientProvider client={queryClient}>
-      <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
-        <AuthProvider>
-          {isLoading ? (
+    <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
+      {isLoading ? (
             <LoadingScreen />
           ) : (
             <>
@@ -88,10 +83,8 @@ function AppShell() {
               <Toaster />
               <SonnerToaster />
             </>
-          )}
-        </AuthProvider>
-      </ThemeProvider>
-    </QueryClientProvider>
+      )}
+    </ThemeProvider>
   );
 }
 

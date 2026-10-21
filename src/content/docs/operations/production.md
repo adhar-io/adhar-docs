@@ -28,9 +28,9 @@ By the end you should be able to write a production `config.yaml`, bring it up, 
 | **Topologies** | T1 local → T2 single production cluster → T3 management + workload clusters |
 | **Turn HA on** | `globalSettings.enableHAMode: true` in the config (`--ha` exists for local Kind runs) |
 | **HA does not change** | The control-plane node count, or Gitea's single replica |
-| **Binding constraint** | Per-VM volume-attach limits, usually not CPU — DigitalOcean needs ≥ 10 workers for the full catalogue |
+| **Capacity watch-out** | Per-VM block-volume attach limits (7 per droplet on DigitalOcean) for volumes that use the cloud's block storage |
 | **Edge** | Cilium Gateway + cloud LoadBalancer + `external-dns` + cert-manager (DNS-01 wildcard) |
-| **Secrets** | OpenBao; add cloud-KMS auto-unseal; enable `credential-rotation` |
+| **Secrets** | OpenBao; add cloud-KMS auto-unseal; `adhar-credential-rotation` (on in the production profile) |
 | **Backup/DR** | Velero (cluster state) + CNPG WAL archiving (database data); repoint both at off-cluster object storage |
 | **Upgrades** | `adhar upgrade --diff-only` → `adhar upgrade`, staging first |
 
@@ -112,7 +112,7 @@ do-ha-mode
 
 Be clear-eyed about these before you call the platform highly available:
 
-- **The control-plane node count.** Compute-mode (kubeadm) clusters bootstrap **one** control-plane node today. The provider code rejects more than one. An HA, multi-master control plane is the roadmap's next step. If you need a provider-run HA control plane now, use `clusterMode: managed` and rely on the provider's SLA.
+- **The control-plane node count.** Compute-mode clusters (`clusterMode: compute`, the default, where Adhar builds the cluster with kubeadm on instances it creates) bootstrap **one** control-plane node today. The provider code rejects more than one. A multi-master control plane is not implemented yet. If you need a highly available control plane now, use `clusterMode: managed` (the cloud runs the control plane) and rely on the provider's SLA, or `clusterMode: provided` to install onto a cluster you already run.
 - **Gitea's own replica count.** Gitea runs one replica behind a PodDisruptionBudget. HA mode moves its *database* onto a replicated CNPG cluster, not the Gitea process.
 - **Your workloads and most stack packages.** HA mode is about the foundation. Package replica counts come from each package's `values.yaml` (see [Customization](/docs/operations/customization)).
 
@@ -156,27 +156,29 @@ Both are covered in [Troubleshooting](/docs/reference/troubleshooting).
 | Gitea | 1 replica + PDB; database on CNPG (`gitea-db`) |
 | Gateway (Cilium Envoy) | Behind the cloud LoadBalancer |
 | Keycloak | Database on CNPG (`keycloak-db`) |
-| Observability | Mimir, Loki and Tempo on object storage; retention by policy, not disk size |
+| Observability | Mimir and Loki on object storage; Tempo ships with 24-hour local retention (see [Observability](/docs/operations/observability#retention-and-object-storage-sizing)) |
 
 ### What actually constrains the size
 
-The production profile enables most of the 100+ packages in the catalogue. (`adhar stack list` prints the live number and state.) With that profile the platform creates roughly **55–60 PersistentVolumes and ~300 pods**.
+The production profile enables most of the 100+ packages in the catalogue. (`adhar stack list` prints the live number and state.) With that profile the platform runs a few hundred pods and creates dozens of PersistentVolumes, so plan for storage as carefully as for CPU and memory.
 
-On most clouds the binding constraint is not CPU or memory. It is **how many block volumes one VM may attach**. On DigitalOcean that is 7 per droplet, so the full catalogue needs **at least 10 workers regardless of droplet size**. The scheduler reports it plainly:
+On many clouds, a hidden limit is **how many block volumes one VM may attach**. On DigitalOcean that is 7 per droplet. When pods need more cloud block volumes than the nodes can attach, the scheduler reports it plainly:
 
 ```text
 0/3 nodes are available: 3 node(s) exceed max volume count
 ```
 
-The fix is to add workers, because each one brings its own attach slots. Enlarging nodes does not help.
+The fix is to add workers, because each one brings its own attach slots. Enlarging nodes does not help. The autoscaler treats this message as a scale-up signal.
+
+On DigitalOcean compute-mode clusters, Adhar now makes a node-local StorageClass (`adhar-local`) the default and marks `do-block-storage` as non-default. So the 7-volume limit only applies to claims that explicitly ask for `do-block-storage`. Earlier releases used block storage by default, and the full catalogue then needed about 10 workers whatever their size.
 
 ### Node autoscaling
 
-Autoscaling turns the worker count into a range. A platform-native controller in `adhar-controller-manager` drives it, because the upstream cluster-autoscaler has no provider for self-managed kubeadm.
+Autoscaling turns the worker count into a range. A platform-native controller in the Adhar controller manager drives it, because the upstream cluster-autoscaler has no provider for self-managed kubeadm clusters.
 
 It is live-verified on DigitalOcean in both directions. A cluster created with 3 workers and `maxWorkers: 10` grew to 9 while the catalogue synced, then removed a node once idle.
 
-Autoscaling needs `clusterMode: compute`. That is the only mode in which the platform can add a machine itself.
+Autoscaling is built for `clusterMode: compute`: it adds capacity by creating a cloud instance and joining it with kubeadm, and removes capacity by draining a node and deleting its instance. It refuses to act on a `provided` cluster, because the platform did not create those nodes.
 
 ```yaml
 environments:
@@ -187,14 +189,19 @@ environments:
       enabled: true
       minWorkers: 3        # your HA floor — an idle night cannot drop below it
       maxWorkers: 10       # the spend ceiling; the only limit it will never cross
+      # scaleDownDelay: 10m  # minimum gap between moves (default 10m)
 ```
+
+If you leave them out, `minWorkers` defaults to 1 and `maxWorkers` to 5.
 
 Two guards refuse a scale-down. Both were observed live:
 
-- a recent move in either direction (one node per `scaleDownDelay` window)
+- a recent move in either direction (at most one node per `scaleDownDelay` window)
 - a node hosting a pod with a **ReadWriteOnce** volume, which cannot follow the pod
 
-Watch `.status.autoscaling.lastReason` on the `AdharPlatform`. If it sits at `… but maxWorkers=N reached`, the platform wanted capacity you have not allowed it to buy.
+Watch `.status.autoscaling.lastReason` on the `AdharPlatform`. If it ends in `… but maxWorkers=N reached`, the platform wanted capacity you have not allowed it to buy.
+
+The autoscaler can undo a manual `adhar cluster scale` within minutes, because pods pending for capacity are its scale-up trigger. Before scaling by hand, adjust `maxWorkers` or set `autoscaling.enabled: false`.
 
 Manual scaling uses the same code path:
 
@@ -249,14 +256,16 @@ The CLI writes DNS credentials into the `adhar-dns-provider` Secret. They never 
 "Ships with" is not "switched on". The [Security Best Practices](/docs/security/security-best-practices) page explains each control and its defaults. This list is the order to apply them in production. Later steps assume earlier ones.
 
 1. **Verify SSO for a non-admin user** in ArgoCD, Gitea, Grafana and the Console. If group mapping is broken you will lock yourself out at step 2.
-2. **Rotate the bootstrap credentials.** `credential-rotation` is on in the production profile. It replaces the `gitea_admin` and ArgoCD `admin` passwords and writes break-glass copies to `secret/adhar/bootstrap-credentials`. Confirm the marker: `kubectl -n adhar-system get secret bootstrap-credentials-rotated`.
+2. **Rotate the bootstrap credentials.** `adhar-credential-rotation` is on in the production profile. It replaces the `gitea_admin` and ArgoCD `admin` passwords and writes break-glass copies to `secret/adhar/bootstrap-credentials`. Confirm the marker: `kubectl -n adhar-system get secret bootstrap-credentials-rotated`.
 3. **Add cloud-KMS auto-unseal to OpenBao** (`seal "awskms"` / `"azurekeyvault"` / `"gcpckms"` in the package values). Until then the bootstrap Job keeps the unseal key and root token in the `openbao-keys` Secret.
 4. **Enable etcd encryption at rest**, or verify the managed provider's default.
 5. **Enable API-server OIDC as a day-2 change** — never at provisioning time — and test with a token-only kubeconfig.
 6. **Give Crossplane cloud access through workload identity** (IRSA, Workload Identity, Managed Identity), never long-lived keys in Secrets.
-7. **Author network policy.** Cilium runs with `enable-policy: default`, so a pod that no policy selects is unrestricted. Only per-tenant ingress isolation ships. Add default-deny for workload namespaces, based on Hubble flow data. Turn on WireGuard node-to-node encryption. Neither is on by default.
-8. **Run the supply-chain drill, then enforce.** `hack/verify-supply-chain.sh` proves signature enforcement on this cluster. The registry allowlist admits the platform Harbor and several public registries. Tighten it if your threat model needs Harbor-only.
-9. **Promote Pod Security policies from Audit to Enforce** one at a time, reading PolicyReports between each.
+7. **Author network policy.** Cilium runs with `enable-policy: default`, so a pod that no policy selects is unrestricted. What ships is ingress-only: per-tenant isolation for Projects, and an ingress default-deny plus allow-from-Gateway for Environments. Nothing restricts egress. Add egress policy for workload namespaces, based on Hubble flow data, and turn on WireGuard node-to-node encryption, which is also off by default.
+8. **Run the supply-chain drill, and know what is enforced.** `hack/verify-supply-chain.sh` proves signature enforcement on this cluster. Two layers apply:
+   - `verify-supply-chain-images` (from the `adhar-supply-chain` package, on in every profile) rejects unsigned images from Harbor's `library/*` project in workload namespaces. Images from other registries are not matched by it.
+   - The `adhar-supply-chain-policies` packs (audit and enforce, production profile only) add a registry allowlist, a no-`:latest` rule and signature checks for workload namespaces. The allowlist admits the platform Harbor and several public registries (`cgr.dev`, `registry.k8s.io`, `gcr.io`, `ghcr.io`, `quay.io`, `docker.io`, `public.ecr.aws`). Tighten it if your threat model needs Harbor-only.
+9. **Promote Pod Security policies from Audit to Enforce** one at a time, reading PolicyReports between each. The Pod Security Standards (Baseline) policies in `adhar-kyverno-policies` all ship in Audit mode.
 10. **Restrict API-server access** to a VPN or allowlist; keep the Gateway as the only public entry.
 
 ## Backup and disaster recovery
@@ -265,7 +274,7 @@ The full procedure, including restore drills, is in [Backup and Restore](/docs/g
 
 | Data | How it is protected | What ships |
 |---|---|---|
-| Configuration, packages, environments | Git (the in-cluster Gitea repos) | The standard Gitea manifest opts its `data` volume into Velero file backup. The HA variant does not carry that annotation: check yours, and mirror to an external forge |
+| Configuration, packages, environments | Git (the in-cluster Gitea repos) | Both Gitea manifests (standard and HA) opt the `data` volume into Velero file backup. Mirror to an external forge as well |
 | Cluster objects | Velero | `adhar-platform-daily` (02:00 UTC, `adhar-system` + cluster-scoped, 30-day TTL) and `adhar-cluster-weekly` (Sunday 03:00 UTC, all namespaces, 90-day TTL) |
 | Platform databases | CNPG WAL archiving + scheduled base backups | WAL continuous, base backups daily |
 | Other volume data | Velero node agent, **opt-in per pod** | Annotate the pod with `backup.velero.io/backup-volumes: <volume>` |
@@ -309,7 +318,7 @@ adhar upgrade --skip-foundation    # only diff and sync the stack
 adhar cluster upgrade <cluster> --version 1.37.2 -p digitalocean -f config.yaml
 ```
 
-After a platform upgrade, expect every Application to flip `OutOfSync` for about ten minutes. Each one tracks the monorepo at `HEAD`, so one push invalidates every target revision. That is normal. Investigate only what is still `Degraded` afterwards.
+After a platform upgrade, expect many Applications to flip `OutOfSync` for about ten minutes. Every platform Application tracks the `main` branch of the same in-cluster `adhar/packages` repository, so one push moves the target revision for all of them at once. That is normal. Investigate only what is still `Degraded` afterwards.
 
 ## Go-live checklist
 
@@ -324,7 +333,7 @@ Tick each item with the command beside it before the first team deploys.
 7. **Backups leave the cluster.** `velero backup get` (or `adhar backup list`) shows completed backups against an off-cluster BackupStorageLocation, and no CNPG cluster reports a `lastFailedBackup`.
 8. **A restore has been rehearsed.** At least one restore into a scratch namespace has succeeded ([Backup and Restore](/docs/guides/backup-and-restore)).
 9. **Policy posture is known.** `adhar compliance --failures-only` has been read, and `hack/verify-supply-chain.sh` prints `SUPPLY-CHAIN ENFORCEMENT DRILL PASSED`.
-10. **Alerts reach a human.** A test alert fired and was seen in the Console's Notification Center and paged through OnCall.
+10. **Alerts reach a human.** A test alert fired and was seen in the Console's Notification Center. If you page through Grafana OnCall, you have added the Alertmanager receiver for it (none ships by default) and a test page arrived.
 11. **A golden path works end to end.** One service went from push to a URL through the supply chain ([Your First Service](/docs/getting-started/first-service)).
 
 ## Day-2 operations
@@ -349,7 +358,7 @@ Tick each item with the command beside it before the first team deploys.
 | Monthly | Reconstructability drill verdict; workload-cluster rebuild test (T3); Keycloak access review |
 | Quarterly | Full DR restore into an isolated network; capacity and cost review; supply-chain enforcement drill |
 
-The monthly reconstructability drill ships as a Crossplane CronOperation (`reconstructability-drill.yaml`). The platform's Crossplane already runs with the `--enable-operations` flag it needs. The drill creates a drill `Cluster` on the 1st of each month and records time-to-Ready against the one-hour SLO. Review the verdict, then delete the drill:
+The monthly reconstructability drill ships as a Crossplane CronOperation (`platform/controlplane/configuration/operations/reconstructability-drill.yaml`). The platform's Crossplane already runs with the `--enable-operations` flag it needs. At 04:00 on the 1st of each month, the drill creates a `Cluster` named `drill-reconstructability` and records its time-to-Ready against a one-hour SLO. Review the verdict, then delete the drill cluster:
 
 ```bash
 kubectl -n adhar-system delete cluster drill-reconstructability
@@ -378,7 +387,7 @@ hubble observe --namespace <ns>                     # live flow debugging
 | Certificates stay self-signed | Zone not delegated, or no DNS-01-capable provider | Delegate `<defaultHost>`; check `adhar-dns-provider` and cert-manager logs |
 | SSO returns 503 everywhere | The in-cluster object store filled; WAL archiving stopped; Keycloak's database filled | Grow the store, set `retentionPolicy`, move backups off-cluster |
 | SSO works, ArgoCD list is empty (HA) | Empty `argocd-rbac-cm` policy | See [Troubleshooting](/docs/reference/troubleshooting) |
-| `adhar cluster list` says "No clusters found" | It loads the default config without `--file` | `adhar cluster list --file config.yaml` |
+| `adhar cluster list` says "No clusters found" | Without `--file` it knows no cloud provider (only local Kind clusters are listed) | `adhar cluster list --file config.yaml` |
 
 ## Next steps
 

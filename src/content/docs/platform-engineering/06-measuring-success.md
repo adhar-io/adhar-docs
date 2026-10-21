@@ -43,15 +43,15 @@ The DORA research programme, reported in *Accelerate* and the annual State of De
 | **Deployment frequency** | How often the organisation successfully releases to production | Batch size and friction in the release path |
 | **Lead time for changes** | Time from code committed to that code running in production | Pipeline delay, including waits and approvals |
 | **Change failure rate** | Share of production deployments that cause a problem needing a fix — rollback, hotfix or fix-forward | Whether speed is bought with instability |
-| **Time to restore service** | How long it takes to recover service after a production failure | Detection, diagnosis, cost of reversing a change |
+| **Failed deployment recovery time** (formerly *time to restore service*) | How long it takes to recover after a deployment causes a production failure | Detection, diagnosis, cost of reversing a change |
 
-Read them in pairs. Throughput (frequency, lead time) and stability (change failure rate, restore time) limit each other. A change that improves one while wrecking the other is not an improvement. The research supports the claim that the two are not fundamentally opposed. It does not say that any particular number is achievable in your context.
+Read them in pairs. Throughput (frequency, lead time) and stability (change failure rate, recovery time) limit each other. A change that improves one while wrecking the other is not an improvement. The research supports the claim that the two are not fundamentally opposed. It does not say that any particular number is achievable in your context.
 
 Two caveats matter more than the definitions.
 
 **They measure the delivery system, not people.** Lead time is driven mostly by queues, approvals, environment availability and test duration. Those are properties of the system a developer works inside, not of the developer. If you pin these metrics on individuals, you measure the system and blame the person.
 
-**They get gamed once they are tied to performance reviews.** Deployment frequency rises when one change is split into five commits. Change failure rate falls when failures get relabelled as planned maintenance. Restore time improves when the clock starts at diagnosis instead of detection. None of this needs dishonesty. It is the normal response to being measured, and it starts the moment the metric affects someone's rating.
+**They get gamed once they are tied to performance reviews.** Deployment frequency rises when one change is split into five commits. Change failure rate falls when failures get relabelled as planned maintenance. Recovery time improves when the clock starts at diagnosis instead of detection. None of this needs dishonesty. It is the normal response to being measured, and it starts the moment the metric affects someone's rating.
 
 Do not combine the four into one composite score. Squeezing them into a single number hides the trade-off between throughput and stability.
 
@@ -146,11 +146,11 @@ A useful test before adopting any metric: ask what the laziest way to improve it
 
 Adhar supplies the instrumentation. The judgement described above stays with you.
 
-**Scorecards.** The `application/adhar-scorecards` package grades every service from 0 to 100, mapped to an A–F letter grade. It reads signals inside the cluster, and a CronJob refreshes them every 30 minutes. The grade describes **the production-readiness of a service** — never the performance of the people who wrote it.
+**Scorecards.** The `application/adhar-scorecards` package (on in the production profile, off locally) grades every service from 0 to 100, mapped to an A–F letter grade. It reads signals inside the cluster, such as ArgoCD health, probes, resource requests and limits, Kyverno policy results and backups. A CronJob refreshes the grades every 30 minutes. The grade describes **the production-readiness of a service** — never the performance of the people who wrote it.
 
 Its value is that it turns "is this service ready?" from an opinion argued in a review meeting into a visible, comparable number with a stated basis. It is recomputed continuously, not at a checkpoint everyone games. Read the spread of grades across all your services as a measure of platform health. A criterion that scores weakly everywhere is a platform gap, not a collection of careless teams.
 
-**Observability without per-service setup.** The platform provisions the monitoring stack, so delivery and runtime signal exists for a service from its first deploy:
+**Observability without per-service setup.** The platform provisions the monitoring stack, so runtime signal exists for a service from its first deploy. The production profile turns on all of the following; the local profile runs only Prometheus and Grafana:
 
 - Prometheus for metrics
 - Loki for logs
@@ -160,7 +160,7 @@ Its value is that it turns "is this service ready?" from an opinion argued in a 
 
 This matters here for a specific reason. You can only capture a baseline if collection starts before the thing you want to measure. And per-service instrumentation is exactly the step teams skip under deadline. See [Observability](/docs/operations/observability) for detail.
 
-**Cost attribution.** OpenCost assigns spend to workloads and namespaces. That puts the cost side of a trade-off next to the delivery side. Without it, arguments about efficiency run on anecdote.
+**Cost attribution.** OpenCost (production profile) assigns spend to workloads and namespaces. That puts the cost side of a trade-off next to the delivery side. Without it, arguments about efficiency run on anecdote.
 
 ## See also
 

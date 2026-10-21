@@ -7,7 +7,7 @@ path: "/docs/core-concepts/platform-services"
 
 # Platform Services
 
-Adhar ships a curated catalogue of **100+ open-source packages**, with a matching number of ApplicationSet entries. **A package is the platform's unit of capability.** It is a directory of pre-rendered manifests plus a contract that a machine can check. ArgoCD delivers it, and one line in Git switches it on.
+Adhar ships a curated catalogue of **100+ open-source packages**. Each is wired as an entry in the platform's ApplicationSets (a few packages have more than one entry, such as an audit and an enforce variant). **A package is the platform's unit of capability.** It is a directory of pre-rendered manifests plus a contract that a machine can check. ArgoCD delivers it, and one line in Git switches it on.
 
 This page explains:
 
@@ -26,7 +26,7 @@ It is for anyone deciding what a platform should run. By the end, you will be ab
 |---|---|
 | **What a package is** | A directory under `platform/stack/packages/<category>/<name>/` |
 | **What delivers it** | One ArgoCD ApplicationSet, one Application per enabled package |
-| **Where it installs** | `adhar-system` (one documented exception: `buildpack` in `kpack-system`) |
+| **Where it installs** | `adhar-system`, for every package |
 | **How you enable one** | `adhar stack enable <pkg>` → review the diff → `adhar upgrade` |
 | **How you inspect one** | `adhar stack describe <pkg>` |
 | **Categories** | Nine in the contract enum; seven carry ApplicationSet entries today |
@@ -45,7 +45,7 @@ platform/stack/packages/security/cert-manager/
     └── install.yaml          # what ArgoCD syncs (generated — never hand-edit)
 ```
 
-`adhar-package.yaml` is the contract. CI validates it against `marketplace.schema.json`, and a directory without one fails the build. Beyond identity and licence, it declares what you need to know when deciding whether to turn a package on:
+`adhar-package.yaml` is the contract. CI validates every contract it finds against `marketplace.schema.json`, so a malformed contract fails the build. Beyond identity and licence, it declares what you need to know when deciding whether to turn a package on:
 
 | Field | Why you care |
 |---|---|
@@ -55,11 +55,11 @@ platform/stack/packages/security/cert-manager/
 | `verification` | What was actually *observed*: `verified`, `known-broken`, or `unverified`, with the profile and date it was last seen `Healthy` |
 | `resources` | Footprint hints, including `localSafe` — whether one Kind node can carry it |
 
-> **`stability` and `verification` are different claims.** `stability` is intent. `verification` is evidence: `adhar stack verify` writes it from live ArgoCD health. Editing it by hand defeats its only purpose.
+> **`stability` and `verification` are different claims.** `stability` is intent. `verification` is evidence: `adhar stack verify` reports it from live ArgoCD health, and `adhar stack verify --write` records it in the contract. Editing it by hand defeats its only purpose.
 
 ## How packages are delivered
 
-A single ArgoCD **ApplicationSet** turns every enabled entry into an Application. It keeps each Application reconciled from Git. Each entry is a list element, and the generator's selector filters on the `enabled` label:
+An ArgoCD **ApplicationSet** is a resource that generates one ArgoCD Application per entry in a list. The platform's ApplicationSet turns every enabled entry into an Application. It keeps each Application reconciled from Git. Each entry is a list element, and the generator's selector filters on the `enabled` label:
 
 ```yaml
 - name: "harbor"
@@ -75,7 +75,7 @@ gd-applicationset-flow
 
 Understand two consequences before you change anything:
 
-- **There is no live switch.** The controller re-applies the ApplicationSet from the stack on every reconcile. So if you `kubectl edit` it, the change is undone within the minute. To enable a package, change the *source*, then run `adhar upgrade`.
+- **There is no live switch.** The ApplicationSet is re-applied from the stack whenever `adhar up` or `adhar upgrade` runs. So a `kubectl edit` of the live object is lost at the next run. To enable a package, change the *source*, then run `adhar upgrade`.
 - **Disabling deletes running things.** Prune is on by default, so ArgoCD uninstalls the package's workloads. PersistentVolumes then follow their reclaim policy, and data can go with them.
 
 ## Enabled by default, and opt-in
@@ -89,7 +89,7 @@ ds-profiles
 | Profile | File | Applied to | Enables | Why |
 |---|---|---|---|---|
 | **local** | `adhar-appset-local.yaml` | Kind, or no provider set | A small curated core | A single Kind node cannot run the full catalogue — the complete set OOM-kills it |
-| **production** | `adhar-appset-production.yaml` | AWS, Azure, GCP, DigitalOcean, Civo, custom | Most of the catalogue | All but the documented mutual exclusions and alternatives; each disabled entry carries its reason inline |
+| **production** | `adhar-appset-production.yaml` | Any other provider: AWS, Azure, GCP, DigitalOcean, Civo, custom | Most of the catalogue | All but the documented mutual exclusions and alternatives; each disabled entry carries its reason inline |
 
 The counts change as packages are added and verified, so this page does not quote them. `adhar stack list --enabled` prints the live set for your profile.
 
@@ -97,8 +97,8 @@ Every package is *wired* in both profiles; the `enabled` flag is the only differ
 
 Two rules govern edits:
 
-1. **Each profile's ApplicationSet has a mirrored environment config that must agree with it.** The ApplicationSet is `platform/stack/adhar-appset-<profile>.yaml` and its mirror is `platform/stack/environments/<profile>/config.yaml`. A parity test enforces the match.
-2. **The local core must stay a subset of production.** Enabling a package locally also enables it in production. Disabling one in production also disables it locally.
+1. **Each profile's ApplicationSet has a mirrored environment config that must agree with it.** For `local`, that is `platform/stack/adhar-appset-local.yaml` and `platform/stack/environments/local/config.yaml`. For `production`, it is `platform/stack/adhar-appset-production.yaml` and `platform/stack/environments/prod/config.yaml`. A parity test enforces the match.
+2. **The local core must stay a subset of production.** Enabling a package locally also enables it in production. Disabling one in production also disables it locally. (The one deliberate exception is `adhar-local-budget`, a Kyverno policy enabled only in the local profile, which caps CPU requests so the platform fits on one Kind node.)
 
 `adhar stack enable` and `adhar stack disable` handle both rules. That is the main reason to use them instead of editing files by hand.
 
@@ -109,28 +109,28 @@ Every platform package installs into the one shared **`adhar-system`** namespace
 **Dependencies.** Some packages are only useful with another:
 
 - `agentgateway` fronts `adhar-ai`.
-- `adhar-supply-chain` pushes to `harbor` and signs with `cosign`.
+- `adhar-supply-chain` builds images, pushes them to `harbor` and signs them with the cosign tool (from its own pipeline Tasks, not from the retired `cosign` package).
 - `adhar-cost-governance` reads OpenCost's metrics.
 
-**Mutual exclusions.** Some pairs claim the same cluster-scoped object. When two Applications fight over one object, both report Degraded without saying why. The list of conflicts lives in `platform/stack/packages/CONFLICTS.md`. `adhar stack conflicts` checks your profile against it.
+**Mutual exclusions.** Some pairs claim the same object. When two Applications fight over one object, both report Degraded without saying why. The conflicts are documented in `platform/stack/packages/CONFLICTS.md`. `adhar stack conflicts` checks your profile against the exclusion rules built into the CLI, and `adhar stack enable` refuses to turn on the second member of an exclusive pair.
 
 | Pair | Why they collide |
 |---|---|
 | `vault` ↔ `openbao` | Both define `ClusterSecretStore/vault` and `Service/vault`. Exactly one may be enabled. Production runs OpenBao (MPL-2.0), not Vault (BUSL-1.1), and keeps every downstream name identical, so consumers never need to know which one runs |
-| `cosign` ↔ `buildpack` | Both knative-framework webhooks hardcode `Secret/webhook-certs`. So `buildpack` keeps its own `kpack-system` namespace — the one documented exception to the shared-namespace rule |
-| `vllm` ↔ `vllm-cpu` / `vllm-gpu`, `llm-d` ↔ `llm-d-cpu` / `llm-d-gpu` | Variants of the same serving stack — enable one |
+| `vllm-cpu` ↔ `vllm-gpu` | Both Deployments are named `vllm` and share one Service. Each depends on the shared `vllm` entry, so enable `vllm` plus exactly one variant |
+| `cosign` ↔ `buildpack` | Both knative-framework webhooks hardcode `Secret/webhook-certs`. Today this cannot bite: the `cosign` package is retired and disabled in both profiles, and image signatures are enforced by Kyverno instead |
 
 > **Renaming the manifest cannot fix a name that a package hardcodes in its binary.** The binary never reads the renamed object. That is why some pairs are resolved by renaming, and others are exclusive by design.
 
 ## The catalogue, by category
 
-The contract enum recognises nine categories, which match the directory layout on disk. Seven of them carry ApplicationSet entries today. `backup` and `plugins` exist as directories (Velero is wired under `core`).
+The contract enum recognises nine categories, which match the directory layout on disk. Seven of them carry ApplicationSet entries today. `backup` and `plugins` exist as directories but hold no wired package (Velero is wired under `core`).
 
 | Category | What it covers | Packages |
 |---|---|---|
 | **core** | Portal, fleet and backup | `adhar-console`, `vcluster`, `karmada`, `kamaji`, `velero` |
 | **infrastructure** | Provisioning engines and node runtimes | `crossplane`, `terraform`, `kata-containers`, `gpu-operator` |
-| **security** | Identity, secrets, policy, runtime and supply-chain security | `keycloak`, `openbao`, `vault`, `external-secrets`, `cert-manager`, `kyverno`, `adhar-kyverno-policies`, `adhar-policy-packs`, `adhar-policy-reporter`, `adhar-supply-chain-policies`, `adhar-supply-chain-policies-enforce`, `adhar-tenant-quotas`, `adhar-credential-rotation`, `falco`, `tetragon`, `trivy`, `kubescape`, `cosign` |
+| **security** | Identity, secrets, policy, runtime and supply-chain security | `keycloak`, `adhar-local-budget` (enabled locally only), `openbao`, `vault`, `external-secrets`, `cert-manager`, `kyverno`, `adhar-kyverno-policies`, `adhar-policy-packs`, `adhar-policy-reporter`, `adhar-supply-chain-policies`, `adhar-supply-chain-policies-enforce`, `adhar-tenant-quotas`, `adhar-credential-rotation`, `falco`, `tetragon`, `trivy`, `kubescape`, `cosign` |
 | **observability** | Metrics, logs, traces, profiles, flows, cost, alerting | `kube-prometheus`, `mimir`, `loki`, `tempo`, `alloy`, `faro`, `beyla`, `pyroscope`, `pixie`, `hubble`, `metrics-server`, `victoria-metrics`, `fluent-bit`, `opencost`, `adhar-cost-governance`, `oncall`, `headlamp` |
 | **application** | Delivery, supply chain, runtimes and developer tooling | `tekton`, `buildpack`, `harbor`, `nexus`, `adhar-supply-chain`, `adhar-supply-chain-kyverno`, `adhar-libraries`, `adhar-scorecards`, `adhar-preview-environments`, `adhar-preview-environments-kyverno`, `argo-events`, `argo-rollout`, `argo-workflows`, `kargo`, `keda`, `knative`, `open-function`, `dapr`, `external-dns`, `coder`, `k6`, `litmus`, `chaos-mesh`, `n8n`, `posthog`, `plane`, `penpot`, `baserow`, `strapi`, `tooljet` |
 | **data** | Databases, streaming, object storage, lakehouse, ML and BI | `cnpg`, `mongodb`, `mysql-operator`, `mariadb-operator`, `neo4j`, `valkey`, `valkey-admin`, `redis`, `rabbitmq`, `kafka-operator`, `kafka-ui`, `opensearch`, `rustfs`, `minio`, `trino`, `airbyte`, `dagster`, `prefect`, `spark-operator`, `kubeflow`, `jupyterhub`, `mlflow`, `metabase`, `open-metadata`, `libredb-studio` |
@@ -211,7 +211,7 @@ Every UI is a subdomain of the platform host on the shared Cilium Gateway:
 - Locally: `https://<name>.adhar.localtest.me:8443`
 - In the cloud: `https://<name>.<your-domain>` on 443
 
-Every UI trusts the same Keycloak realm (`adhar`), so you sign in once.
+Every UI trusts the same Keycloak realm (`adhar`), so you sign in once. A URL works only if its package is enabled in your profile; Hubble, for example, is off in the local profile.
 
 | Service | Local URL | What it is |
 |---|---|---|
@@ -229,7 +229,7 @@ For the authoritative list on your own platform, read the routes. Get credential
 ```bash
 kubectl get httproute -A -o custom-columns=NAME:.metadata.name,HOST:.spec.hostnames[*]
 adhar get secrets                 # everything the CLI knows about
-adhar get secrets -p <service>    # argocd | gitea | keycloak | harbor | vault | postgres | ...
+adhar get secrets -p <service>    # argocd | gitea | keycloak | adhar-console | openbao | vault | postgres | redis | harbor | rustfs
 ```
 
 Keycloak groups map to platform roles:
@@ -244,10 +244,12 @@ Full detail is in [Accessing the Platform](/docs/operations/accessing-the-platfo
 
 Platform services are not only dashboards. They are the runtime your applications build on:
 
-- **Secrets**: reference an `ExternalSecret`. External Secrets fetches the value from OpenBao at runtime. Nothing sensitive lives in Git.
-- **Registry**: images are pushed to Harbor and signed by Cosign. Kyverno admits only signed images.
+- **Secrets**: reference an `ExternalSecret`. External Secrets fetches the value from OpenBao at runtime. Nothing sensitive lives in Git. OpenBao is on in the production profile and off locally.
+- **Registry**: the supply chain pushes images to Harbor and signs them with cosign. Kyverno checks signatures in two layers:
+  - In **every profile**, the `verify-supply-chain-images` policy (from `adhar-supply-chain`) enforces a valid signature on Harbor `library/*` images in workload namespaces. Images from anywhere else are not checked by it, and `adhar-system` is excluded.
+  - In the **production profile only**, the `adhar-supply-chain-policies` pack adds `verify-image-signatures`, `restrict-image-registries` and `disallow-latest-tag`, each in an Audit and an Enforce variant. It is off locally.
 - **Observability**: telemetry is collected automatically. Once a package is enabled, Grafana already sees it.
-- **Policy**: Kyverno admits or rejects workloads, and the denial names the policy.
+- **Policy**: Kyverno admits or rejects workloads. When an Enforce-mode policy rejects one, the denial names the policy.
 - **Self-service infrastructure**: request databases, caches and buckets as [Control Plane](/docs/core-concepts/control-plane) resources.
 - **Readiness**: every 30 minutes, `adhar-scorecards` grades every service 0–100 from in-cluster signals. It publishes the `adhar-scorecards` ConfigMap, which the Console reads:
 

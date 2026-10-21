@@ -279,8 +279,10 @@ adhar secrets list --external -s payments-dev
 
 Pods read the Kubernetes Secret like any other. Choose how to consume it based on how the value should behave when it changes.
 
+The example below is the container section of the workload. It applies equally to a Deployment and to the Argo Rollout that the promotion overlays use. The commands in this guide assume a Deployment named `orders`; for a Rollout, see the note in Step 7.
+
 ```yaml
-# deploy/base/rollout.yaml — container section
+# deploy/base/<workload>.yaml — container section
       containers:
         - name: app
           env:
@@ -366,9 +368,11 @@ The hash differs from the one you took before rotating.
 **4. Restart the consumers.** The platform ships no reloader, and environment variables never change in a running process:
 
 ```bash
-kubectl -n payments-dev rollout restart deploy/orders      # or: kubectl argo rollouts restart … for a Rollout
+kubectl -n payments-dev rollout restart deploy/orders
 kubectl -n payments-dev rollout status deploy/orders
 ```
+
+For an Argo Rollout, use the Argo Rollouts `kubectl` plugin instead: `kubectl argo rollouts restart orders -n payments-dev`.
 
 **Verify** that the application works with the new value, using its own health check or a real request. Then revoke the old credential at its issuer. Until you revoke it, rotation has only *added* a credential.
 

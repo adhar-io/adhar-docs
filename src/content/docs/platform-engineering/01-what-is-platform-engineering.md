@@ -134,9 +134,9 @@ What makes something a platform:
 Adhar is an opinionated, open-source internal developer platform. It ships the positions above as defaults.
 
 - **Self-service infrastructure, not tickets.** Crossplane v2 exposes databases, caches, buckets, and clusters as *namespaced* Kubernetes resources. A team requests infrastructure in its own namespace, under ordinary RBAC. See [Control Plane](/docs/core-concepts/control-plane).
-- **Golden paths that ship as code.** CLI templates (`basic`, `microservice`, `frontend`, `data-pipeline`, `ml`, `argo-workflows`, `app-with-bucket`) run through `adhar application deploy --template`. There are also Backstage scaffolder templates in the Adhar Console.
-- **Guardrails built into the road.** Tekton with buildpacks builds the image, Trivy scans it, Cosign signs it, and Harbor stores it. Kyverno admits only signed images.
-- **One way in.** ArgoCD keeps the cluster in sync with an in-cluster Gitea, with self-heal turned on. So a commit is the only lasting way to change the platform.
+- **Golden paths that ship as code.** Golden paths are Backstage scaffolder templates kept in one collection, the `adhar/adhar-templates` repository that the platform mirrors into its Gitea. The CLI (`adhar application deploy --template`) and the Adhar Console's create flow read the same collection. `adhar application templates` lists what your platform offers.
+- **Guardrails built into the road.** A Tekton pipeline builds the image with Cloud Native Buildpacks, scans it, signs it with Cosign and pushes it to Harbor. Kyverno then rejects unsigned images from Harbor's `library/*` project in workload namespaces, in every profile. The production profile adds a registry allowlist and further supply-chain policies.
+- **One way in.** ArgoCD keeps the platform in sync with an in-cluster Gitea, with self-heal turned on. So a commit is the only lasting way to change what ArgoCD manages.
 
 ## Where to go next
 

@@ -21,7 +21,7 @@ cc-lifecycle-loop
 
 A framework that only renames familiar activities adds work without value. This one does two jobs.
 
-**It gives the catalogue an organising principle.** Adhar ships over a hundred packages. "Which of these do I need?" cannot be answered from a list of technologies. It can be answered from a list of outcomes. Every package serves at least one D. A D with no packages behind it is a gap in the platform, not a gap in your process.
+**It gives the catalogue an organising principle.** Adhar ships over a hundred packages. "Which of these do I need?" cannot be answered from a list of technologies. It can be answered from a list of outcomes. Each package is meant to serve at least one D. A D with no packages behind it is a gap in the platform, not a gap in your process.
 
 **It names the handoffs.** Most delivery pain is not inside a stage. It is at the boundary between two stages: a design nobody encoded, a deployment nobody can trace to a commit, a dashboard nobody reads. Adhar's position is that **every handoff should be a reviewable artifact in Git**, not a document or a conversation.
 
@@ -33,7 +33,7 @@ cc-handoff-artifacts
 
 | Phase | The question it answers | Typically owned by | Artifact it produces |
 |---|---|---|---|
-| **Define** | What are we building, and who owns it? | Product owner and tech lead | Catalog entry, `Project`, API contract |
+| **Define** | What are we building, and who owns it? | Product owner and tech lead | Catalogue entry, `Project`, API contract |
 | **Design** | How will it be built, and within which limits? | Architects with platform engineering | XRDs, Compositions, Kyverno policies, quotas |
 | **Develop** | Does the code work against the real platform? | The application team | Source, tests, and a preview environment |
 | **Deliver** | How does a commit become production, safely? | Shared — team owns the commit, platform owns the path | Signed image, ArgoCD Application, promotion |
@@ -69,8 +69,8 @@ spec:
     team: payments
     name: payments-api
     description: Payment capture and settlement service
-    tier: dev
-    cpuQuota: "4"                   # becomes the namespace's ResourceQuota
+    tier: dev                       # dev | test | prod
+    cpuQuota: "4"                   # becomes the namespaces' ResourceQuota (XRD default: 16)
     memoryQuota: 8Gi
     podQuota: 30
     createRepository: true          # a Gitea repo for the project
@@ -85,39 +85,41 @@ kubectl get projects.platform.adhar.io -n team-payments       # READY True
 kubectl get resourcequota,limitrange,networkpolicy -A | grep payments-api
 ```
 
-The CLI makes the same object with `adhar project create`. `Project` shares its short name with Kargo's `Project`, so qualify it as `projects.platform.adhar.io` on the command line.
+The CLI makes the same object with `adhar project create`. The CLI always puts the `Project` in `adhar-system`, so look for it there if you used the CLI. `Project` shares its short name with Kargo's `Project`, so qualify it as `projects.platform.adhar.io` on the command line.
 
 Applying it creates:
 
-- a guard-railed namespace (ResourceQuota, LimitRange, default-deny NetworkPolicy)
-- RBAC bound to the team's Keycloak group
-- a Gitea repository
+- a home namespace named after the project (`payments-api`), plus one namespace for each of the project's environments (by default `payments-api-dev`, `payments-api-test` and `payments-api-prod`)
+- guardrails on each: a ResourceQuota, a LimitRange and a default-deny ingress NetworkPolicy
+- RBAC that binds the team's Keycloak group (`ws-team-<team>`) to `admin` in those namespaces
+- an Argo CD AppProject and a Kargo project for promotion
+- a Gitea repository, when `createRepository` is true
 
 Ownership, limits and the source of truth are decided once and expressed in one place.
 
 **What Adhar provides:**
 
-- the Adhar Console software catalog (Backstage) for discovery and ownership
+- the Adhar Console software catalogue (Backstage) for discovery and ownership
 - the `Organisation → Team → Project → Application` hierarchy behind `adhar project create`
 - golden-path templates (`adhar application templates`), so "which shape of service is this?" becomes a choice from a curated list
-- OpenMetadata for data-asset catalog and lineage
+- OpenMetadata for a data-asset catalogue and lineage
 
-**Done when** the service has an owner, a namespace with limits, a repository, and a catalog entry.
+**Done when** the service has an owner, namespaces with limits, a repository, and a catalogue entry.
 
 ### 2. Design — how it will be built, and within which limits
 
 Design turns requirements into a shape you can build. It covers:
 
 - component architecture
-- the security model (authentication, authorization, data classification)
+- the security model (authentication, authorisation, data classification)
 - deployment topology and promotion strategy
 - integration patterns with everything outside the service
 
 Here, Adhar makes **guardrails executable**. Instead of a design review that a service passes or fails, the platform encodes the decision:
 
-- A self-service infrastructure contract is a Crossplane **XRD** (an API definition). Each implementation of it is a **Composition**. The control plane ships about forty XRDs and sixty-odd Compositions (`kubectl get xrd` lists them). See [Control Plane](/docs/core-concepts/control-plane).
-- An architectural rule is a **Kyverno** policy. `adhar-kyverno-policies` and `adhar-policy-packs` carry the baseline. A denial names the policy that rejected the workload.
-- A tenancy boundary is a quota. `adhar-tenant-quotas` caps a team's total across its projects.
+- A self-service infrastructure contract is a Crossplane **XRD** (an API definition). Each implementation of it is a **Composition**. At the time of writing, the control plane ships 39 XRDs and 62 Compositions (`kubectl get xrd` lists them on your cluster). See [Control Plane](/docs/core-concepts/control-plane).
+- An architectural rule is a **Kyverno** policy. In the production profile, `adhar-kyverno-policies` carries the baseline (the Pod Security Standards Baseline rules, in Audit mode). `adhar-policy-packs` holds further opt-in packs and is off by default. When a policy in Enforce mode denies a workload, the denial names the policy.
+- A tenancy boundary is a quota. `adhar-tenant-quotas` (production profile) caps a team's total across its projects.
 
 A guardrail written this way is an ordinary manifest. The `CompliancePolicy` API puts Kyverno guardrails, in audit or enforce mode, behind the same self-service contract as a database. Its default Composition is `compliancepolicy-local`. `examples/compliance-policy.yaml` in the platform repo is a working request. Explore the API before you write one:
 
@@ -142,7 +144,7 @@ Your code runs beside the platform's own Postgres, Kafka, object store and ident
 
 ```bash
 adhar dev api --port 8080      # working tree on the cluster, re-synced on save
-adhar push api                 # the full build → sign → deploy path, on demand
+adhar push api --git-url https://github.com/acme/api   # deploys library/api:latest; app-ci builds it (see First Service)
 ```
 
 **What Adhar provides:**
@@ -150,7 +152,7 @@ adhar push api                 # the full build → sign → deploy path, on dem
 - `adhar dev` and `adhar push`
 - Coder for hosted development environments
 - the Adhar Kit Java modules and `adhar-libraries` pipelines, which release shared Maven and npm artifacts into Nexus
-- short-lived preview environments, with quotas and limits stamped on by Kyverno (`adhar-preview-environments`)
+- short-lived preview environments, with quotas and limits stamped on by Kyverno (`adhar-preview-environments`, on in the production profile and off locally)
 - k6 for load tests expressed as Kubernetes resources
 
 **Done when** a pull request exists and the change has run against real platform dependencies.
@@ -163,7 +165,9 @@ Deliver is the outer loop. It is the stage Adhar automates most completely. The 
 cc-deliver-chain
 ```
 
-Deployment itself is declarative. `adhar application deploy --repo …` creates an `Application` (`platform.adhar.io/v1alpha1`). So does the Console's create wizard — it is the same object either way. Dev auto-syncs, and later environments are promoted through Kargo:
+Deployment itself is declarative. `adhar application deploy --repo …` creates an `Application` (`platform.adhar.io/v1alpha1`). So does the Console's create wizard — it is the same object either way.
+
+An application is deployed to every environment of its `Project`. With the multi-environment Composition (`application-multienv`, the API's default), the project's Kargo stages promote each new piece of freight automatically into `dev` and `test`. Promotion into `prod` is manual:
 
 ```yaml
 apiVersion: platform.adhar.io/v1alpha1
@@ -184,8 +188,10 @@ spec:
       targetRevision: main
     destination:
       namespace: team-payments
-    # omit `environments` for the platform default: dev auto-syncs,
-    # test and prod are promoted through Kargo
+    # Environments come from the Project, not from this object.
+    # provider: local selects application-local-argocd: one Argo CD
+    # Application, no Kargo. Omit the selector to get the default,
+    # application-multienv, which wires in Kargo promotion.
 ```
 
 A promotion is itself an object: a `Release` moves one piece of freight (a versioned set of artifacts) into one environment. So the answer to "what is in production, and how did it get there?" is a list of commits and `Release` objects, not a chat log.
@@ -209,7 +215,7 @@ Discover is observation. It covers service and dependency discovery, metrics, lo
 - OpenCost for per-namespace and per-workload spend
 - Grafana OnCall for alert routing
 - `adhar-scorecards`, which grades every service 0–100 from in-cluster signals
-- Litmus and Chaos Mesh, to deliberately provoke the failures you would rather discover on purpose
+- Litmus, to provoke deliberately the failures you would rather find on purpose (Chaos Mesh is also in the catalogue, but disabled in favour of Litmus)
 
 **Done when** you can answer "is it healthy, how fast is it, what does it cost, and who is paged" without adding instrumentation.
 
@@ -237,10 +243,10 @@ Most lifecycle models leave out Decide, yet it is the stage that closes the loop
 
 | Phase | Adhar capabilities | Packages and commands |
 |---|---|---|
-| **Define** | Catalog, ownership, tenancy, golden paths | `adhar-console`, `Project`, `open-metadata`, `adhar project create`, `adhar application templates` |
+| **Define** | Catalogue, ownership, tenancy, golden paths | `adhar-console`, `Project`, `open-metadata`, `adhar project create`, `adhar application templates` |
 | **Design** | Self-service contracts, policy, quotas | `crossplane` (XRDs + Compositions), `kyverno`, `adhar-kyverno-policies`, `adhar-policy-packs`, `adhar-tenant-quotas`, `keycloak` |
 | **Develop** | Inner loop, hosted IDEs, previews, shared libraries | `adhar dev`, `adhar push`, `coder`, `adhar-libraries`, `nexus`, `adhar-preview-environments`, `k6` |
-| **Deliver** | Build, sign, admit, deploy, promote | `tekton`, `buildpack`, `adhar-supply-chain`, `cosign`, `harbor`, `adhar-supply-chain-policies`, ArgoCD, `argo-rollout`, `kargo`, `argo-events`, `keda` |
+| **Deliver** | Build, sign, admit, deploy, promote | `tekton`, `buildpack`, `adhar-supply-chain` (signs with the cosign tool; the separate `cosign` package is retired), `harbor`, `adhar-supply-chain-policies`, ArgoCD, `argo-rollout`, `kargo`, `argo-events`, `keda` |
 | **Discover** | Metrics, logs, traces, flows, cost, readiness | `kube-prometheus`, `mimir`, `loki`, `tempo`, `alloy`, `faro`, `hubble`, `opencost`, `oncall`, `adhar-scorecards`, `headlamp`, `litmus` |
 | **Decide** | BI, product analytics, budgets, evidence | `metabase`, `posthog`, `adhar-cost-governance`, `adhar cost`, `adhar compliance export`, `trino`, `mlflow` |
 

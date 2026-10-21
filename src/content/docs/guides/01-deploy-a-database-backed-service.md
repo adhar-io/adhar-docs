@@ -36,7 +36,7 @@ ha-db-guide-steps
 | You need | Check with |
 |---|---|
 | A running platform (local Kind is fine) | `adhar get status` |
-| `kubectl` pointed at it | `kubectl config current-context` shows `adhar-<cluster>` |
+| `kubectl` pointed at it | `kubectl config current-context` shows `kind-adhar` on a laptop, or `adhar` (`adhar-<cluster>` with `--name`) on a cloud install |
 | The `cnpg` package (on in both the local and production profiles) | `adhar stack status cnpg` |
 | Gitea credentials to clone the scaffolded repo | `adhar get secrets -p gitea` |
 
@@ -157,18 +157,28 @@ kubectl -n orders describe databases.platform.adhar.io orders-db
 
 ## Step 3 — Scaffold the service
 
-Golden-path templates live in the `adhar/adhar-templates` repository in the platform's Gitea. The Console's create wizard reads the same collection. List the templates, then inspect the one you will use to see its parameters:
+Golden-path templates live in the `adhar/adhar-templates` repository in the platform's Gitea (a mirror of `github.com/adhar-io/adhar-templates`). The Console's create wizard reads the same collection. List the templates, then inspect the one you will use to see its parameters:
 
 ```bash
 adhar application templates
-adhar application templates basic
+adhar application templates microservice
 ```
 
-`basic` scaffolds a plain Deployment. It is the smallest thing that shows the database wiring clearly. Deploy it into the same namespace as the database:
+`microservice` scaffolds a hardened Go HTTP service: a Namespace, Deployment, Service, HTTPRoute and ServiceMonitor under `manifests/`. Every object is placed in a namespace **named after the application**, so an app called `orders` lands in `orders`, next to the database. Until your own CI builds an image, the Deployment runs a placeholder (`podinfo`) that answers on port 8080. Its container is named `app`.
+
+> **Pick the template carefully.** The older `basic` template hard-codes `namespace: default` in its Deployment. That overrides the destination, so the pod would run in `default`, where `orders-db-app` does not exist.
+
+Deploy it into the same namespace as the database:
 
 ```bash
-adhar application deploy orders --template basic -n orders --wait
+adhar application deploy orders --template microservice -n orders \
+  --path manifests --project default --wait
 ```
+
+Two flags need explaining:
+
+- `--path manifests` tells ArgoCD which directory of the new repository to deploy. Pass it explicitly: when a template does not declare its path in a form the CLI recognises, the CLI falls back to `deploy`, which the shipped skeletons do not have.
+- `--project default` uses ArgoCD's unrestricted `default` project. The CLI's own default, `--project adhar`, is the platform's Project, and its ArgoCD AppProject admits only that project's namespaces (`adhar`, `dev`, `test` and `prod`). A stand-alone namespace such as `orders` is not among them. In a team Project, pass the team's project instead (see [Onboard a Team](/docs/guides/onboard-a-team)).
 
 Three things happen, and the CLI reports each one:
 
@@ -193,10 +203,10 @@ spec:
         provider: local          # set by the CLI → application-local-argocd
         feature: application
   parameters:
-    project: default             # the ArgoCD project
+    project: default             # the ArgoCD project, from --project
     source:
-      repoURL: http://gitea-http.adhar-system.svc.cluster.local:3000/adhar/orders
-      path: <the template's manifest directory>
+      repoURL: <the platform Gitea URL>/adhar/orders.git
+      path: manifests
       targetRevision: main
     destination:
       namespace: orders
@@ -215,8 +225,8 @@ kubectl get applications.platform.adhar.io -n orders orders \
 You should see:
 
 - The status shows `Synced` and `Healthy`.
-- `kubectl get deploy` lists the Deployment. Note its name; `bind` and Step 4 need it.
-- The last command prints the repository directory that ArgoCD deploys from.
+- `kubectl get deploy` lists the Deployment `orders`. `bind` and Step 4 rely on that name.
+- The last command prints `manifests`, the repository directory that ArgoCD deploys from.
 
 ## Step 4 — Bind the credentials, in Git
 
@@ -237,13 +247,14 @@ git clone https://gitea.adhar.localtest.me:8443/adhar/orders.git
 cd orders
 ```
 
-In the directory that Step 3 printed, edit the Deployment's container so it reads each value it needs by key. Naming keys explicitly is clearer than `envFrom`. It also lets you rename them to what your code expects:
+In `manifests/deployment.yaml`, edit the Deployment's container so it reads each value it needs by key. Naming keys explicitly is clearer than `envFrom`. It also lets you rename them to what your code expects:
 
 ```yaml
-# <manifest-dir>/deployment.yaml  (only the container section shown)
+# manifests/deployment.yaml  (only the container section shown; keep the
+# probes, ports and securityContext the template generated)
       containers:
-        - name: app                       # whatever the template named it
-          image: <your image>
+        - name: app                       # the microservice template's container name
+          image: ghcr.io/stefanprodan/podinfo:6.7.1   # the placeholder, until CI builds yours
           env:
             - name: DATABASE_URL           # what your code reads
               valueFrom:
@@ -261,7 +272,7 @@ In the directory that Step 3 printed, edit the Deployment's container so it read
 Then move `database.yaml` from Step 2 into the same directory. Now the database is declared next to the code that needs it, and ArgoCD owns both:
 
 ```bash
-cp ../database.yaml <manifest-dir>/database.yaml
+cp ../database.yaml manifests/database.yaml
 git add -A
 git commit -m "orders: declare orders-db and read its credentials"
 git push origin main
@@ -300,10 +311,10 @@ kubectl -n orders exec orders-db-1 -c postgres -- \
 
 You get one row naming `orders` and the server version.
 
-**Check that the app sees the variables.** Use the container name from your Deployment:
+**Check that the app sees the variables.** The template's container is named `app`:
 
 ```bash
-kubectl -n orders exec deploy/orders -- sh -c 'echo "$PGHOST"; test -n "$DATABASE_URL" && echo DATABASE_URL set'
+kubectl -n orders exec deploy/orders -c app -- sh -c 'echo "$PGHOST"; test -n "$DATABASE_URL" && echo DATABASE_URL set'
 ```
 
 The output is `orders-db-rw`, then `DATABASE_URL set`. Never echo the URL itself, because it contains the password.
@@ -338,7 +349,8 @@ adhar application delete orders -n orders --force
 #    CNPG removes the Cluster, its pods, its volumes and orders-db-app with it.
 adhar database delete orders-db --namespace orders --force
 
-# 3. The namespace.
+# 3. The namespace. The template's manifests include the Namespace, so ArgoCD
+#    may already have pruned it; "not found" is fine here too.
 kubectl delete namespace orders
 ```
 
@@ -366,10 +378,12 @@ All three return nothing. The last one reports `NotFound`.
 | `READY=False`, CNPG cluster never healthy, events mention `root-creds` | Backup is on and its credential Secret is not in this namespace | Set `enableBackup: false`, or provide backup credentials deliberately |
 | CNPG pods `Pending` | Not enough memory or CPU on the node | `kubectl -n orders describe pod orders-db-1`; lower `resources` or add capacity |
 | `secret "orders-db-app" not found` | `credentialsSecret` was set, the Deployment is in another namespace, or the cluster is not ready yet | Unset `credentialsSecret`; check `metadata.namespace`; wait for `READY=True` |
-| `adhar application bind` says the deployment was not found | `bind` looks for a Deployment named after the app, in `-n` (default `default`) | Pass `-n orders`; check `kubectl -n orders get deploy` |
+| ArgoCD reports the destination namespace `orders` is not permitted in project `adhar` | The deploy used the CLI's default `--project adhar`, whose AppProject admits only the platform project's namespaces | Redeploy with `--project default`, or deploy into a namespace of your own Project |
+| `adhar application bind` says the deployment was not found | `bind` looks for a Deployment named after the app, in `-n` (default `dev`) | Pass `-n orders`; check `kubectl -n orders get deploy` |
 | `bind` worked but the variable is missing | `bind` injects into the **first** container only | Use explicit `secretKeyRef` in the container that needs it |
 | App connects, then authentication fails after a restore or credential change | The app cached the old password | `kubectl -n orders rollout restart deploy/orders` |
-| `scaffold` refuses: repository not empty | The Gitea repo from a previous run still exists | Delete `adhar/orders` in Gitea, or choose another name |
+| `repository adhar/orders already exists and is not empty` | The Gitea repo from a previous run still exists | Delete `adhar/orders` in Gitea, or choose another name |
+| ArgoCD reports `app path does not exist` | The Application points at a directory the repo does not have (the CLI's fallback is `deploy`) | Redeploy with `--path manifests`, or fix `spec.parameters.source.path` |
 | Edits with `kubectl edit` disappear | ArgoCD self-heal reverts changes to objects it manages | Commit the change instead |
 
 ## Next steps

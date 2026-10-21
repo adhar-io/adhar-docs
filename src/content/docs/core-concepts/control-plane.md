@@ -51,7 +51,7 @@ ds-composition-fanout
 
 ### Kinds are named after the thing
 
-Every self-service kind lives in `platform.adhar.io/v1alpha1` and is named for what you get: `Database`, `Bucket`, `Application` — **not** `CompositeDatabase`. The `Composite*` names were retired on 2026-10-07. They are **rejected, not aliased**, and a test in the repo (`TestNoXRDKindCarriesTheCompositePrefix`) keeps it that way. If you have an older manifest, change the `kind`. `adhar application deploy --file` will tell you to.
+Every self-service kind lives in `platform.adhar.io/v1alpha1` and is named for what you get: `Database`, `Bucket`, `Application` — **not** `CompositeDatabase`. The `Composite*` names were retired on 2026-10-07. They are **rejected, not aliased**, and a test in the repo (`TestNoXRDKindCarriesTheCompositePrefix`) keeps it that way. If you have an older manifest, change the `kind`. For `CompositeApplication`, `adhar application deploy --file` tells you so; other old kinds simply fail with `no matches for kind`.
 
 The plain names have one cost: several share a short name with another API group.
 
@@ -80,7 +80,7 @@ Adhar runs Crossplane **v2.4.2** (core) and uses its namespaced model everywhere
 | `spec.compositionSelector` on the XR | Crossplane reads **`spec.crossplane.compositionSelector`** — a reserved stanza it injects into every XR. Never declare `spec.crossplane` in an XRD |
 | Patch-and-transform `Resources` mode | **Pipeline mode only.** Compositions are function pipelines; `Composition` itself stays `apiextensions.crossplane.io/v1` (only the XRD moved to `/v2`) |
 | Cluster-scoped MRs (`rds.aws.upbound.io`) | **Namespaced MRs** in `.m` groups — `rds.aws.m.upbound.io/v1beta1`, `kubernetes.m.crossplane.io/v1alpha1`, `helm.m.crossplane.io/v1beta1` |
-| A `ProviderConfig` per namespace | One shared **`ClusterProviderConfig`**: `default` for each cloud family, `kubernetes-provider` and `helm-provider` for the in-cluster providers |
+| A `ProviderConfig` per namespace | One shared **`ClusterProviderConfig`**: `default` for each cloud family, `kubernetes-provider` and `helm-provider` for the in-cluster providers. Civo is the exception: its provider still uses a legacy `ProviderConfig` named `civo` |
 | `spec.deletionPolicy: Orphan` on an MR | **Not in the schema** — the apply fails with "field not declared in schema". Retention is `managementPolicies` without `Delete` |
 | `connectionSecretKeys` and automatic propagation | **Removed.** A Composition that surfaces credentials writes a `Secret` explicitly |
 
@@ -214,7 +214,7 @@ Five functions are installed with the control plane (`configuration/functions/fu
 
 ## Every self-service API the platform ships
 
-The control plane ships about **forty XRDs and sixty-odd Compositions**. To see the live list on your cluster, run `kubectl get xrd` and `kubectl get compositions --show-labels`. Every kind below has a working example under `examples/` in the platform repo. A test fails if one loses its example.
+At the time of writing, the control plane ships **39 XRDs and 62 Compositions**. The numbers grow, so to see the live list on your cluster, run `kubectl get xrd` and `kubectl get compositions --show-labels`. Every kind below has a working example under `examples/` in the platform repo. A test fails if one loses its example.
 
 ### Tenancy and delivery
 
@@ -266,6 +266,12 @@ Kinds with no default (`Storage`, `Secret`, `Service`, `Restore` and a few other
 ## A worked request: PostgreSQL for a team
 
 This walk-through runs on a local platform from [Quick Start](/docs/getting-started/quick-start). On a cloud, change one label and the same steps produce RDS or Cloud SQL.
+
+**Before you start**, you need:
+
+- a running platform whose `AdharPlatform` reports `CrossplaneReady` (see [Debugging and verification](#debugging-and-verification))
+- `kubectl` pointed at it, with rights to create namespaces
+- the `adhar` CLI, if you want to follow the CLI variants
 
 ### 1. Have a namespace to request into
 
@@ -362,7 +368,8 @@ Crossplane v2 removed native connection-detail propagation from XRs. So **each C
 | `Database`, local PostgreSQL | `<name>-app` | The CNPG operator, from the composed `Cluster` | CNPG's standard set, including `uri`, `host`, `port`, `username`, `password` |
 | `Database`, local Valkey (what `adhar cache create` makes) | `<name>-app` | The Composition, as a composed `Secret` | `uri`, `host`, `port`, `engine` |
 | `Database` on AWS, GCP or Azure | `<name>-db` (override with `spec.writeConnectionSecretToRef.name`) | The managed resource, via `writeConnectionSecretToRef` | The provider's connection details |
-| `Bucket` (local RustFS) | Shown by `adhar bucket credentials <name>` | The Composition, as a composed `Secret` | `endpoint`, `bucket`, `region`, and `credentialsSecret` naming the store's credential Secret — referenced, not copied |
+| `Cache` (local Valkey, the `Cache` kind) | `<name>-cache` | The Composition, as a composed `Secret` | `host`, `port`, `engine`, `uri`; with auth on, also `passwordSecret` and `passwordKey` naming the operator's own Secret |
+| `Bucket` (local RustFS) | `<name>-bucket` (`adhar bucket credentials <name>` prints the name and keys) | The Composition, as a composed `Secret` | `endpoint`, `bucket`, `region` (always `us-east-1`), and `credentialsSecret` naming the store's credential Secret (`root-creds`) — referenced, not copied |
 
 Bind a Secret into an application with the CLI. It adds the Secret as `envFrom` on the app's first container and rolls the Deployment:
 
@@ -370,7 +377,11 @@ Bind a Secret into an application with the CLI. It adds the Secret as `envFrom` 
 adhar application bind payments-api payments-db --namespace team-payments
 # on a cloud, the Secret is <name>-db — say so explicitly:
 adhar application bind payments-api payments-db --secret payments-db-db --namespace team-payments
+# a bucket's Secret is <name>-bucket, so a bucket always needs --secret:
+adhar application bind payments-api payments-files --secret payments-files-bucket --namespace team-payments
 ```
+
+Without `--secret`, `bind` looks for `<name>-app`. That is right for a local PostgreSQL or Valkey `Database`, and wrong for everything else in the table above.
 
 > **Do not set `credentialsSecret` on a database whose consumers read `<name>-app`.** If you give CNPG a bootstrap Secret, it stops publishing the generated one. Everything that mounts `<name>-app` then loses it. The XRD's own description warns about exactly this.
 
@@ -382,8 +393,8 @@ Deleting an XR deletes what it composed. What happens to the *external* resource
 |---|---|---|
 | Cloud `Database` with `deletionPolicy: Delete` (the default) | Every MR carries `managementPolicies: ["*"]`; the cloud database is deleted. RDS takes a final snapshot unless `skipFinalSnapshot: true` | Set `deletionPolicy: Orphan` **before** deleting |
 | Cloud `Database` with `deletionPolicy: Orphan` | MRs carry `["Observe","Create","Update","LateInitialize"]` — no `Delete` — so the MR goes and the cloud database stays | Re-adopt it later, or delete it in the provider console |
-| `Cluster` on AWS | The EKS Composition always withholds `Delete` on the cluster's MRs | Clean up deliberately in the cloud account |
-| Local `Database` (CNPG) | The CNPG `Cluster` is deleted with the XR. The Composition does **not** read `deletionPolicy` | Base backups and WAL go to `s3://adhar-backups/cnpg/<name>` on the platform object store, kept for `backupRetentionDays` (default 7) — restore with `adhar database restore` |
+| `Cluster` on AWS | The EKS Composition follows `deletionPolicy` too. With `Delete` (the default) the cluster is deleted; with `Orphan` its MRs carry no `Delete` and the EKS cluster stays | Set `deletionPolicy: Orphan` before deleting, then clean up deliberately in the cloud account |
+| Local `Database` (CNPG) | The CNPG `Cluster` is deleted with the XR. The Composition does **not** read `deletionPolicy` | Base backups and WAL go to `s3://adhar-backups/cnpg/<name>` on the platform object store, kept for `backupRetentionDays` (default 7) — restore with `adhar database restore`, which restores into a new cluster (by default `<name>-restored`) |
 
 `managementPolicies` is the v2 mechanism for all of this. It is more expressive than the old boolean:
 
@@ -469,7 +480,7 @@ Crossplane v2 adds `Operation`, `CronOperation` and `WatchOperation` (`ops.cross
 | Operation | Kind | Schedule | What it does |
 |---|---|---|---|
 | `adhar-daily-backup` | CronOperation | `0 2 * * *` | Emits a timestamped Velero `Backup` of `adhar-system` |
-| `adhar-weekly-secret-rotation` | CronOperation | `0 3 * * 0` | Stamps the `force-sync` annotation on ExternalSecrets so they re-pull |
+| `adhar-weekly-secret-rotation` | CronOperation | `0 3 * * 0` | Stamps the `force-sync` annotation on one ExternalSecret, `adhar-system/adhar-platform-secrets`, so it re-pulls. Edit the operation to target others |
 | `adhar-configmap-drift` | WatchOperation | On change | Records an observation whenever a ConfigMap labelled `adhar.io/managed=true` in `adhar-system` changes |
 | `adhar-reconstructability-drill` (+ observer) | CronOperation + WatchOperation | `0 4 1 * *` | Creates a small Kind-backed drill `Cluster` and measures it against the one-hour rebuild target |
 | `adhar-lakehouse-maintenance` | CronOperation | `0 3 * * *` | Asks the Iceberg catalog to plan and run table maintenance |

@@ -18,7 +18,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import CompanyDropdown from './CompanyDropdown';
-import { ADHAR_CONSOLE_LOGIN_URL, ADHAR_UI_URL } from '@/lib/config';
+import { ADHAR_UI_URL } from '@/lib/config';
 
 interface PlatformItem {
   to: string;
@@ -134,6 +134,7 @@ const DesktopNavigationMenu = () => {
           </NavigationMenuLink>
         </NavigationMenuItem>
 
+        {ADHAR_UI_URL && (
         <NavigationMenuItem>
           <NavigationMenuLink asChild className={linkClasses}>
             <a href={ADHAR_UI_URL} target="_blank" rel="noopener noreferrer" title="Opens in a new tab" className="inline-flex items-center gap-1">
@@ -143,6 +144,7 @@ const DesktopNavigationMenu = () => {
             </a>
           </NavigationMenuLink>
         </NavigationMenuItem>
+        )}
 
         <NavigationMenuItem>
           <NavigationMenuLink asChild className={linkClasses}>

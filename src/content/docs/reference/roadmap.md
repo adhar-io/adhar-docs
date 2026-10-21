@@ -28,7 +28,7 @@ Adhar uses a deliberately strict definition of "done", because a green ArgoCD Ap
 
 Two rules decide when an item moves up a status:
 
-- **A status only advances after a live run.** Phase items graduate once a real cloud provisioning or multi-cluster exercise has happened, not when the code merges.
+- **A status only advances after a live run.** Phase 1 and 2 items graduate only once a real cloud provisioning *and* a multi-cluster exercise have happened, not when the code merges.
 - **Verification means exercising the capability.** Reading a status field does not count.
 
 ## Phases
@@ -97,11 +97,11 @@ The follow-ups recorded in the repository are not platform gaps:
 - a containerd restart on nodes provisioned before a node-prep change
 - the next tagged release exercising the Cosign/SBOM path
 
-Self-hosted inference is verified through the in-cluster `llm-d` → vLLM path. For the `vllm-gpu` profile, what remains is a run on real GPU nodes.
+Self-hosted inference is verified through the in-cluster `llm-d` → vLLM path. For the `vllm-gpu` profile, what remains is a run on real GPU nodes. The other open Phase 3 item is enabling Kubernetes API server OIDC as a day-2 step (the `oidcAuth` provisioning option was removed and is now rejected).
 
 ### Security and supply chain
 
-Signature verification, no-`:latest` and the registry allowlist ship as two identical policy packs. Audit runs everywhere, and enforce is a one-line flip. So audit findings predict exactly what enforcement would block. The enforce pack is live in the production profile. See [Security Best Practices](/docs/security/security-best-practices).
+Signature verification, no-`:latest` and the registry allowlist ship as two identical policy packs: `adhar-supply-chain-policies` (Audit) and `adhar-supply-chain-policies-enforce` (Enforce). Both are on in the production profile and off locally. Because the rules are identical, audit findings predict exactly what enforcement would block. In every profile, including local, the `adhar-supply-chain` package's `verify-supply-chain-images` policy rejects unsigned Harbor `library/*` images. See [Security Best Practices](/docs/security/security-best-practices).
 
 ### Data and intelligence
 
@@ -136,7 +136,7 @@ Most of the in-progress items are usable today. "Needs live verification" means 
 # Fleet upgrades: plan the canary waves without touching anything
 adhar fleet list
 adhar fleet drift
-adhar fleet upgrade --to-version v1.37.2 --canary 1 --dry-run
+adhar fleet upgrade --to-version v1.37.2 --canary 1 --dry-run   # add --rollback-on-failure for a real run; it is off by default
 
 # Compliance evidence: the auditor artifact, from live PolicyReports
 adhar compliance --failures-only
@@ -158,7 +158,7 @@ The project holds itself to these rules. They explain why some things take longe
 - **Every feature ships with docs.** The docs set is part of the definition of done.
 - **APIs graduate deliberately.** An API moves from `v1alpha1` to `v1beta1` only once the controllers run in-cluster and are covered by end-to-end tests.
 - **Provider parity is measured, not assumed.** A provider row only turns green after a bring-up on that cloud.
-- **Local engines are a CI matrix.** The e2e bootstrap runs on Docker *and* Podman on every push. A change that breaks one engine fails the build.
+- **Local engines are a CI matrix.** The e2e bootstrap runs on Docker *and* Podman on every push. Today only the Docker run gates the build; the Podman run is reported but allowed to fail.
 - **A green Application is not a working feature.** Verification happens at the reader, with a query that must return the data. Reading a status field does not count.
 
 ## Check what your build has

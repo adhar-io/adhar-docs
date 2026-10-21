@@ -21,7 +21,6 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { Link } from "@tanstack/react-router";
-import { ADHAR_CONSOLE_LOGIN_URL } from "@/lib/config";
 
 interface Capability {
   icon: LucideIcon;
@@ -240,12 +239,10 @@ const Capabilities = () => {
               with unprecedented velocity, quality, and security.
             </p>
             <div className="mt-8 flex flex-col sm:flex-row gap-3 justify-center">
-              <a href={ADHAR_CONSOLE_LOGIN_URL} className="w-full sm:w-auto">
-                <button type="button" className="btn-primary-modern group w-full sm:w-auto inline-flex items-center justify-center gap-2 rounded-full px-6 h-11 text-[15px] font-medium">
-                  <span>Get started</span>
-                  <ArrowRight className="w-4 h-4 transition-transform group-hover:translate-x-0.5" />
-                </button>
-              </a>
+              <Link to="/docs/$" params={{ _splat: "getting-started/quick-start" }} className="btn-primary-modern group w-full sm:w-auto inline-flex items-center justify-center gap-2 rounded-full px-6 h-11 text-[15px] font-medium">
+                <span>Get started</span>
+                <ArrowRight className="w-4 h-4 transition-transform group-hover:translate-x-0.5" />
+              </Link>
               <Link to="/architecture" className="w-full sm:w-auto">
                 <button type="button" className="btn-secondary-modern w-full sm:w-auto inline-flex items-center justify-center gap-2 rounded-full px-6 h-11 text-[15px] font-medium">
                   <Database className="w-4 h-4 text-muted-foreground" />

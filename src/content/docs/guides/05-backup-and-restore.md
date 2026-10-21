@@ -194,7 +194,7 @@ spec:
     name: payments-db
 ```
 
-**6b. Write a marker, note the time, then change the data.** The marker tells you exactly which moment you recovered to.
+**6b. Write a marker, note the time, then change the data.** The marker tells you exactly which moment you recovered to. The commands assume the `Database` was created with `databaseName: payments`; if you left the default, the database is called `app`.
 
 ```bash
 kubectl -n team-payments exec payments-db-1 -c postgres -- \
@@ -255,7 +255,7 @@ A one-off drill goes stale quickly. Make these checks routine:
 | Continuously | Alert on any CNPG cluster with a `lastFailedBackup` and on object-store PVC usage above 80% | kube-prometheus ships a Velero dashboard; see [Observability](/docs/operations/observability) |
 | Daily, in CI | Fail the pipeline if last night's platform backup did not complete | `adhar backup list --detailed --limit 5` then `adhar backup verify <name>` |
 | Monthly | Namespace drill (Steps 3–5) and a PITR drill (Step 6) on non-production | — |
-| Monthly | Reconstructability drill: the platform creates a drill `Cluster` on the 1st and records time-to-Ready against a 1-hour SLO | requires Crossplane's `--enable-operations`; review the verdict, then `kubectl -n adhar-system delete cluster drill-reconstructability` |
+| Monthly | Reconstructability drill: the platform creates a drill `Cluster` on the 1st and records time-to-Ready against a 1-hour SLO | requires Crossplane's `--enable-operations`; review the verdict, then `kubectl -n adhar-system delete clusters.platform.adhar.io drill-reconstructability` |
 | Quarterly | Full management-cluster restore into an isolated VPC | runbook in [Production](/docs/operations/production) |
 
 To trigger the reconstructability drill now instead of waiting for the 1st, run the CronOperation's template once:

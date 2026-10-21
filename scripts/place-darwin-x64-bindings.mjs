@@ -1,9 +1,10 @@
 /**
- * Workaround for this dev machine: `node` is a universal binary and Vite/Start
- * builds run under Rosetta (x86_64), so native addons resolve their darwin-x64
- * variants at build time. But `npm install` (seeing arm64 hardware) installs
- * only the darwin-arm64 variants. This script fetches + places the matching
- * darwin-x64 binaries alongside the arm64 ones so the build works either way.
+ * Workaround for this dev machine: `node` is a universal binary, so npm and the
+ * Vite/Start build can end up running as different architectures (x86_64 under
+ * Rosetta, or arm64). npm only installs the native addons for the arch *it* runs
+ * as, and the build then fails to find the other one. This script fetches and
+ * places BOTH the darwin-x64 and darwin-arm64 variants so the build works
+ * whichever way it runs.
  *
  * It is macOS-only and idempotent; on Linux/Windows/CI it no-ops.
  * Wired as `postinstall` so it survives `npm install`.
@@ -20,11 +21,11 @@ if (process.platform !== 'darwin') {
 const root = process.cwd();
 const nm = join(root, 'node_modules');
 
-// base package (to read the version) -> the darwin-x64 sibling to ensure
+// base package (to read the version) -> the darwin bindings to ensure
 const targets = [
-  { base: 'rolldown', x64: '@rolldown/binding-darwin-x64' },
-  { base: 'lightningcss', x64: 'lightningcss-darwin-x64' },
-  { base: '@tailwindcss/oxide', x64: '@tailwindcss/oxide-darwin-x64' },
+  { base: 'rolldown', bindings: ['@rolldown/binding-darwin-x64', '@rolldown/binding-darwin-arm64'] },
+  { base: 'lightningcss', bindings: ['lightningcss-darwin-x64', 'lightningcss-darwin-arm64'] },
+  { base: '@tailwindcss/oxide', bindings: ['@tailwindcss/oxide-darwin-x64', '@tailwindcss/oxide-darwin-arm64'] },
 ];
 
 function versionOf(pkg) {
@@ -35,7 +36,7 @@ function versionOf(pkg) {
   }
 }
 
-for (const { base, x64 } of targets) {
+for (const { base, bindings } of targets) for (const x64 of bindings) {
   const dest = join(nm, x64);
   const version = versionOf(base);
   if (!version) continue; // base not installed → nothing to do
