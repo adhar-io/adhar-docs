@@ -1,7 +1,7 @@
 ---
 title: "Integrations & Ecosystem"
 section: "Core Concepts"
-order: 5
+order: 6
 path: "/integrations"
 badge: "interactive"
 ---

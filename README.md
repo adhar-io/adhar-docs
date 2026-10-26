@@ -9,7 +9,6 @@
 <h1>Adhar Docs - Website, documentation and tech blogs</h1>
 
 [![Website](https://img.shields.io/badge/website-adhar.io-4f46e5?style=flat-square)](https://adhar.io)
-[![Docs](https://img.shields.io/badge/docs-adhar.io%2Fdocs-4f46e5?style=flat-square)](https://adhar.io/docs)
 [![Deploy](https://img.shields.io/github/actions/workflow/status/adhar-io/adhar-docs/deploy.yml?branch=main&label=deploy&style=flat-square&logo=netlify&logoColor=white)](https://github.com/adhar-io/adhar-docs/actions/workflows/deploy.yml)
 [![Slack](https://img.shields.io/badge/slack-join_community-4A154B?style=flat-square&logo=slack)](https://join.slack.com/t/adharworkspace/shared_invite/zt-26586j9sx-QGrIejNigvzGJrnyH~IXww)
 [![React](https://img.shields.io/badge/React-19-61DAFB?style=flat-square&logo=react&logoColor=white)](https://react.dev)
@@ -220,8 +219,3 @@ adhar-docs/
 
 Questions? Join the [Slack community](https://join.slack.com/t/adharworkspace/shared_invite/zt-26586j9sx-QGrIejNigvzGJrnyH~IXww) or [open an issue](https://github.com/adhar-io/adhar-docs/issues).
 
----
-
-## 📄 License
-
-Proprietary — © ADHAR. All rights reserved.

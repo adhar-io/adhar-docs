@@ -416,8 +416,11 @@
     from { opacity: 0; transform: translate3d(0, 8px, 0); }
     to   { opacity: 1; transform: translate3d(0, 0, 0); }
   }
+  /* `backwards`, not `both`: a transform left on the wrapper after the
+     animation makes it the containing block for the fixed nav, which then
+     scrolls away with the page. */
   .route-fade-in {
-    animation: routeFadeIn 0.32s cubic-bezier(0.16, 1, 0.3, 1) both;
+    animation: routeFadeIn 0.32s cubic-bezier(0.16, 1, 0.3, 1) backwards;
   }
 
   /* Scroll-reveal — elements start hidden and animate in when in view.

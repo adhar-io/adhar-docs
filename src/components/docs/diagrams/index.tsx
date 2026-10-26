@@ -9,6 +9,7 @@ import { howto_b } from "./howto-b";
 import { deep_start } from "./deep-start";
 import { deep_providers } from "./deep-providers";
 import { deep_ops } from "./deep-ops";
+import { functions } from "./functions";
 
 /**
  * Every docs diagram, keyed by the name a ```diagram fence uses.
@@ -25,4 +26,5 @@ export const DIAGRAMS: Record<string, ComponentType> = {
   ...deep_start,
   ...deep_providers,
   ...deep_ops,
+  ...functions,
 };

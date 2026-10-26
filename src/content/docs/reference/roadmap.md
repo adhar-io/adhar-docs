@@ -97,6 +97,8 @@ The follow-ups recorded in the repository are not platform gaps:
 - a containerd restart on nodes provisioned before a node-prep change
 - the next tagged release exercising the Cosign/SBOM path
 
+**Functions** are designed, not yet built. The five function templates (Node.js, Go, Python, Java, Deno) and the `Function` manifest they generate exist. The `functions.platform.adhar.io` XRD and its composition, the Knative Serving and Eventing install, and the trigger wiring do not. The `knative` package must also stop conflicting with `tekton` before it can be enabled. See [Functions](/docs/core-concepts/functions).
+
 Self-hosted inference is verified through the in-cluster `llm-d` → vLLM path. For the `vllm-gpu` profile, what remains is a run on real GPU nodes. The other open Phase 3 item is enabling Kubernetes API server OIDC as a day-2 step (the `oidcAuth` provisioning option was removed and is now rejected).
 
 ### Security and supply chain

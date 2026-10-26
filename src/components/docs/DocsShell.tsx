@@ -1,5 +1,5 @@
-import { useMemo, useState, useEffect, useCallback } from "react";
-import { Link, useLocation } from "@tanstack/react-router";
+import { useMemo, useState, useEffect, useCallback, useRef } from "react";
+import { Link, useLocation, useRouter } from "@tanstack/react-router";
 import {
   Search, ChevronRight, BookOpen, Rocket, Package, Coffee, Layers,
   GraduationCap, Code2, Shield, Settings, Sparkles, ArrowRight, Hash, Compass,
@@ -95,36 +95,85 @@ const DocsShell = ({ registry, brand, versionSource, searchLabel }: DocsShellPro
 
   const entry = useMemo(() => findEntry(registry, pathname), [registry, pathname]);
   const toc = useMemo(() => entry ? extractToc(entry.body) : [], [entry]);
+  // TOC scroll tracking: the active section is the last heading that has
+  // scrolled above the reading line, so the highlight follows every scroll —
+  // including jumps — rather than only when a heading crosses a narrow band.
   const [activeId, setActiveId] = useState<string>("");
-
   useEffect(() => {
     if (!toc.length) return;
-    const obs = new IntersectionObserver(
-      (entries) => {
-        const visible = entries
-          .filter((e) => e.isIntersecting)
-          .sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top);
-        if (visible[0]) setActiveId(visible[0].target.id);
-      },
-      { rootMargin: "-96px 0px -70% 0px", threshold: [0, 1] }
-    );
-    toc.forEach((h) => {
-      const el = document.getElementById(h.id);
-      if (el) obs.observe(el);
-    });
-    return () => obs.disconnect();
-  }, [toc, entry?.path]);
+    let frame = 0;
+    const update = () => {
+      frame = 0;
+      const line = 120;
+      let current = toc[0].id;
+      for (const h of toc) {
+        const el = document.getElementById(h.id);
+        if (el && el.getBoundingClientRect().top <= line) current = h.id;
+      }
+      // At the very bottom, the last section is the one being read.
+      const doc = document.documentElement;
+      if (doc.scrollTop + doc.clientHeight >= doc.scrollHeight - 4) current = toc[toc.length - 1].id;
+      setActiveId(current);
+    };
+    const onScroll = () => {
+      if (!frame) frame = requestAnimationFrame(update);
+    };
+    update();
+    window.addEventListener("scroll", onScroll, { passive: true });
+    window.addEventListener("resize", onScroll);
+    return () => {
+      if (frame) cancelAnimationFrame(frame);
+      window.removeEventListener("scroll", onScroll);
+      window.removeEventListener("resize", onScroll);
+    };
+  }, [toc]);
 
-  // On navigation: go to the #section a search result (or a shared link)
-  // points at, otherwise to the top. The content renders after the route
-  // changes, so wait a frame for the heading to exist.
+  // Keep the active entry visible inside the TOC's own scroll area.
+  const tocRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
-    if (!hash) { window.scrollTo({ top: 0 }); return; }
+    const box = tocRef.current;
+    const item = box?.querySelector<HTMLElement>(`[data-toc="${CSS.escape(activeId)}"]`);
+    if (!box || !item) return;
+    const top = item.getBoundingClientRect().top - box.getBoundingClientRect().top + box.scrollTop;
+    if (top < box.scrollTop + 24 || top > box.scrollTop + box.clientHeight - 48) {
+      box.scrollTo({ top: top - box.clientHeight / 3, behavior: "smooth" });
+    }
+  }, [activeId]);
+
+  // Keep the current page's link visible in the sidebar. The router carries
+  // the sidebar's scroll offset across navigations, so this only moves it
+  // when the link is out of view — e.g. a deep link or a search result.
+  // The router re-applies that offset after each render, so check again then.
+  const router = useRouter();
+  const sidebarRef = useRef<HTMLElement>(null);
+  useEffect(() => {
+    const reveal = () => {
+      const box = sidebarRef.current;
+      const link = box?.querySelector<HTMLElement>('#docs-page-list a[data-status="active"]');
+      if (!box || !link || box.scrollHeight <= box.clientHeight) return;
+      const top = link.getBoundingClientRect().top - box.getBoundingClientRect().top + box.scrollTop;
+      if (top < box.scrollTop || top > box.scrollTop + box.clientHeight - 40) {
+        box.scrollTo({ top: top - box.clientHeight / 3, behavior: "instant" });
+      }
+    };
+    reveal();
+    return router.subscribe("onRendered", reveal);
+  }, [router]);
+
+  // The router resets the page to the top (or restores it on back/forward).
+  // A #section link from search or a shared URL is sought here once per page:
+  // on first load the content mounts after the intro splash, so the router's
+  // own hash scroll finds nothing. Same-page #anchors scroll natively.
+  const seekedPath = useRef<string | null>(null);
+  useEffect(() => {
+    if (seekedPath.current === pathname) return;
+    seekedPath.current = pathname;
+    if (!hash) return;
     let tries = 0;
     let raf = 0;
     const seek = () => {
       const el = document.getElementById(decodeURIComponent(hash.replace(/^#/, "")));
-      if (el) el.scrollIntoView({ block: "start" });
+      if (el) el.scrollIntoView({ block: "start", behavior: "instant" });
       else if (tries++ < 30) raf = requestAnimationFrame(seek);
     };
     raf = requestAnimationFrame(seek);
@@ -186,7 +235,7 @@ const DocsShell = ({ registry, brand, versionSource, searchLabel }: DocsShellPro
 
           <div className="grid grid-cols-1 lg:grid-cols-[260px_minmax(0,1fr)_200px] gap-10">
             {/* ── Sidebar ── */}
-            <aside className="lg:sticky lg:top-24 lg:self-start lg:max-h-[calc(100vh-7rem)] lg:overflow-y-auto pr-2 scrollbar-hide">
+            <aside ref={sidebarRef} className="lg:sticky lg:top-24 lg:self-start lg:max-h-[calc(100vh-7rem)] lg:overflow-y-auto pr-2 scrollbar-hide">
               <Link to={brand.homeHref} className="flex items-center gap-3 mb-6 group">
                 <div className="relative w-10 h-10 rounded-xl bg-gradient-to-br from-primary to-accent flex items-center justify-center shadow-lg shadow-primary/30 group-hover:shadow-primary/50 transition-shadow">
                   <Package className="w-5 h-5 text-white" />
@@ -359,7 +408,7 @@ const DocsShell = ({ registry, brand, versionSource, searchLabel }: DocsShellPro
             {/* ── Right TOC ── */}
             <aside className="hidden lg:block">
               {toc.length > 0 && (
-                <div className="sticky top-24 max-h-[calc(100vh-7rem)] overflow-y-auto pr-2 scrollbar-hide">
+                <div ref={tocRef} className="sticky top-24 max-h-[calc(100vh-7rem)] overflow-y-auto pr-2 scrollbar-hide">
                   <div className="flex items-center gap-2 mb-3 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
                     <Hash className="w-3 h-3 text-primary/70" />
                     On this page
@@ -369,6 +418,7 @@ const DocsShell = ({ registry, brand, versionSource, searchLabel }: DocsShellPro
                       <li key={h.id} style={{ paddingLeft: h.level === 3 ? 16 : 0 }}>
                         <a
                           href={`#${h.id}`}
+                          data-toc={h.id}
                           className={`block py-0.5 pl-3 -ml-px border-l-2 transition-colors ${
                             activeId === h.id
                               ? "border-primary text-foreground font-medium"
