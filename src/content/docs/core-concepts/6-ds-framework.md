@@ -91,7 +91,7 @@ Applying it creates:
 
 - a home namespace named after the project (`payments-api`), plus one namespace for each of the project's environments (by default `payments-api-dev`, `payments-api-test` and `payments-api-prod`)
 - guardrails on each: a ResourceQuota, a LimitRange and a default-deny ingress NetworkPolicy
-- RBAC that binds the team's Keycloak group (`ws-team-<team>`) to `admin` in those namespaces
+- RBAC that binds the team's Keycloak group (`ws-team-<organisation>.<team>`) to `admin` in those namespaces (`view` in prod), and the organisation's admin group `org-<organisation>-admin` to `admin`
 - an Argo CD AppProject and a Kargo project for promotion
 - a Gitea repository, when `createRepository` is true
 

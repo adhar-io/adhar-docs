@@ -144,7 +144,7 @@ Each environment namespace has its own path, so a development namespace can neve
 
 **People, through the UI.** Open `https://openbao.<host>`, choose OIDC, and sign in with Keycloak. A member of `platform-developer` or `platform-admin` can create `tenants/payments-dev/orders/config` under the `secret` engine. They then add the keys `api-key` and `webhook-secret`.
 
-Developers may write anywhere under `secret/` except the platform paths `adhar/`, `adhar-ai/` and `vllm/`. Members of application-team groups (`ws-team-*`) get only OpenBao's `default` policy, which reads and writes no secrets. So with the shipped configuration, the platform team writes secrets. The alternative is to add a policy and group mapping for the team yourself.
+Developers may write anywhere under `secret/` except the platform paths `adhar/`, `adhar-ai/` and `vllm/`. Members of application-team groups (`ws-team-<organisation>.<team>`) get only OpenBao's `default` policy, which reads and writes no secrets. So with the shipped configuration, the platform team writes secrets. The alternative is to add a policy and group mapping for the team yourself.
 
 **From the CLI.** Signed in as a developer, run:
 
@@ -447,7 +447,7 @@ Nothing is returned.
 | An ExternalSecret with a missing path stalls an ArgoCD sync wave | It reports Degraded and the wave never advances | Seed the path first, or move the ExternalSecret to a later wave |
 | Value changed in OpenBao, app still uses the old one | Env vars are read at start; or refresh has not run | Force-sync, then `rollout restart` |
 | Value reverted after `adhar secrets rotate` | External Secrets overwrote the rotated Secret from OpenBao | Rotate in OpenBao instead |
-| Team member cannot see the secret in the OpenBao UI | `ws-team-*` groups map only to the `default` policy | Platform team writes it, or adds a team policy |
+| Team member cannot see the secret in the OpenBao UI | Team groups (`ws-team-<organisation>.<team>`) map only to the `default` policy | Platform team writes it, or adds a team policy |
 | Both `vault` and `openbao` enabled; stores flap | They claim the same `ClusterSecretStore` and `Service` | Disable one: `adhar stack disable vault` |
 | CI fails at the gitleaks stage | A credential is in the source tree | Remove it, rotate it at the issuer (it is already exposed), and reference it through an ExternalSecret |
 

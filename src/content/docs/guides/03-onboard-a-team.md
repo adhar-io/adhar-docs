@@ -45,7 +45,9 @@ Identity (who is *in* the team) stays in Keycloak, because people are not infras
 
 Read this before you run anything. It explains every verify step below.
 
-**The team is a Keycloak group named `ws-team-<team>`.** Members get this group in the `groups` claim of every token the realm issues. The Kubernetes API server is configured with `--oidc-groups-claim=groups` and `--oidc-groups-prefix=oidc:`. So a member of `ws-team-payments` arrives at the API server as group `oidc:ws-team-payments`. The prefix stops OIDC identities from colliding with built-in `system:` groups.
+**The organisation is two Keycloak groups, and the team is a third.** Everyone in organisation `adhar` is in `org-adhar`; its admins are also in `org-adhar-admin`. The team is the group `ws-team-<organisation>.<team>` — here `ws-team-adhar.payments`. The organisation is part of the name because two organisations can each have a team called `payments`; the `.` cannot occur in a slug, so the name can only mean one pair. A team member must also be a member of the organisation.
+
+Members get these groups in the `groups` claim of every token the realm issues. The Kubernetes API server is configured with `--oidc-groups-claim=groups` and `--oidc-groups-prefix=oidc:`. So a member of `ws-team-adhar.payments` arrives at the API server as group `oidc:ws-team-adhar.payments`. The prefix stops OIDC identities from colliding with built-in `system:` groups.
 
 **The Project and its Environments bind that group, one namespace at a time.** An application team gets no cluster-wide grant:
 
@@ -55,6 +57,7 @@ ha-team-access
 
 | Namespace | Composed by | Team role | Also bound |
 |---|---|---|---|
+| `adhar` (organisation home) | Organisation | — | `oidc:org-adhar-admin` → `admin`, `oidc:org-adhar` → `view` |
 | `payments` (project home, Kargo project) | Project | `admin` | `oidc:org-adhar-admin` → `admin` |
 | `payments-dev` | Environment | `admin` | `oidc:org-adhar-admin` → `admin` |
 | `payments-test` | Environment | `admin` | `oidc:org-adhar-admin` → `admin` |
@@ -72,30 +75,35 @@ Self-registered users land in `base-user`, which grants nothing. Do not put appl
 
 ## Step 1 — Create the team's Keycloak group and add people
 
-Normally, the Adhar Console creates the group and manages its membership when you create a team there. To do it from the CLI, you need a token that may manage the `adhar` realm. Use your logged-in session if your user holds realm-management rights. Otherwise, pass a Keycloak admin token with `--admin-token`.
+**In the Console** (the usual way): an organisation admin adds people in **Settings → Members** — an existing Keycloak account, or a new one that Keycloak emails a set-password link (this needs an SMTP server on the realm). **Settings → Teams** creates the team, which creates its group `ws-team-adhar.payments`, and adds organisation members to it. The Console writes only to Keycloak; it keeps no member list of its own.
+
+**From the CLI**, you need a token that may manage the `adhar` realm. Use your logged-in session if your user holds realm-management rights. Otherwise, pass a Keycloak admin token with `--admin-token`.
 
 ```bash
 # Locally the defaults point at https://keycloak.adhar.localtest.me:8443;
 # on a cloud, add --issuer https://keycloak.<host>/realms/adhar --admin-url https://keycloak.<host>
-adhar auth group create ws-team-payments -d "Payments team"
+adhar auth group create ws-team-adhar.payments -d "Payments team"
 
-# The realm uses the email address as the username.
-adhar auth user create alice@example.com --email alice@example.com --group ws-team-payments
+# The realm uses the email address as the username. A team member is a member
+# of the organisation too.
+adhar auth user create alice@example.com --email alice@example.com --group org-adhar
+adhar auth group add-member ws-team-adhar.payments alice@example.com
 adhar auth user reset-pwd alice@example.com --prompt --temporary
 
 # An existing user:
-adhar auth group add-member ws-team-payments bob@example.com
+adhar auth group add-member org-adhar bob@example.com
+adhar auth group add-member ws-team-adhar.payments bob@example.com
 ```
 
 **Verify:**
 
 ```bash
-adhar auth group get ws-team-payments
+adhar auth group get ws-team-adhar.payments
 ```
 
-The output names the group (path `/ws-team-payments`). It lists `alice@example.com` and `bob@example.com` as members.
+The output names the group (path `/ws-team-adhar.payments`). It lists `alice@example.com` and `bob@example.com` as members.
 
-> **Spell the group exactly.** The compositions build the subject as `oidc:ws-team-<team>` from the Team's name. A group called `payments` or `ws-team-Payments` signs in fine but matches no RoleBinding. The user signs in and sees nothing.
+> **Spell the group exactly.** The compositions build the subject as `oidc:ws-team-<organisation>.<team>` from the Team's parameters. A group called `payments`, `ws-team-payments` or `ws-team-adhar.Payments` signs in fine but matches no RoleBinding. The user signs in and sees nothing.
 
 ## Step 2 — Declare the Team
 
@@ -112,7 +120,7 @@ spec:
       matchLabels:
         provider: local
   parameters:
-    name: payments           # the Keycloak group is ws-team-payments; the Gitea team is payments
+    name: payments           # the Keycloak group is ws-team-adhar.payments; the Gitea team is payments
     organisation: adhar      # the seeded organisation; its Gitea org holds the team's repos
     displayName: Payments
     description: Payment capture, settlement and reconciliation
@@ -132,7 +140,7 @@ kubectl -n adhar-system get teams.platform.adhar.io payments \
   -o jsonpath='{.status.group}{"  "}{.status.giteaTeam}{"  "}{.status.phase}{"\n"}'
 ```
 
-The output is `ws-team-payments  adhar/payments  Provisioned`.
+The output is `ws-team-adhar.payments  adhar/payments  Provisioned`.
 
 ## Step 3 — Set the team's quota ceiling
 
@@ -202,7 +210,7 @@ spec:
         provider: local
   parameters:
     organisation: adhar       # must match where the team's repos live in Gitea
-    team: payments            # → RoleBindings for oidc:ws-team-payments; counted by the tenant quota
+    team: payments            # → RoleBindings for oidc:ws-team-adhar.payments; counted by the tenant quota
     name: payments            # the home namespace, the AppProject and the Kargo project
     description: Payment capture and settlement
     cpuQuota: "4"             # per namespace, unless an environment overrides it
@@ -267,7 +275,7 @@ The response is a denial: `project exceeds the "payments" team's tenant quota �
 Check the grants by impersonating a team member, not by reading YAML. For group bindings the username does not matter; the group does:
 
 ```bash
-AS="--as=oidc:alice@example.com --as-group=oidc:ws-team-payments"
+AS="--as=oidc:alice@example.com --as-group=oidc:ws-team-adhar.payments"
 
 kubectl auth can-i create deployments -n payments-dev  $AS   # yes
 kubectl auth can-i create deployments -n payments-test $AS   # yes
@@ -286,7 +294,7 @@ Every line should answer as its comment says. If a "yes" comes back "no", the gr
 
 **Gitea** (`https://gitea.<host>`) offers Keycloak sign-in, and creates the account on first login. Two things are not automatic for application teams:
 
-- The `keycloak` package ships a Keycloak → Gitea team mapping that covers only the platform groups: `platform-admin` → `Owners`, `platform-developer` → `developers`, `platform-viewer` → `viewers`, in organisation `adhar`. Membership of `ws-team-payments` is **not** synced into the Gitea team `payments`. After each engineer has signed in once, add them in Gitea: organisation `adhar` → Teams → `payments` → Add member.
+- The `keycloak` package ships a Keycloak → Gitea team mapping that covers only the platform groups: `platform-admin` → `Owners`, `platform-developer` → `developers`, `platform-viewer` → `viewers`, in organisation `adhar`. Membership of `ws-team-adhar.payments` is **not** synced into the Gitea team `payments`. After each engineer has signed in once, add them in Gitea: organisation `adhar` → Teams → `payments` → Add member.
 - The Gitea team is created with `includes_all_repositories: false`, so grant it repositories one by one. Grant at least `adhar/payments` and each application repo the team owns.
 
 **ArgoCD** maps groups to roles in `argocd-rbac-cm`:
@@ -296,7 +304,7 @@ Every line should answer as its comment says. If a "yes" comes back "no", the gr
 - `platform-viewer` → `role:readonly`
 - `policy.default` is empty.
 
-**No ArgoCD role is composed for `ws-team-*` groups.** A team member who signs in to ArgoCD sees no applications. This is not available out of the box. For application teams, the Console is the supported view of sync and health. Adding team roles means changing the platform's ArgoCD configuration; a Project does not do it.
+**No ArgoCD role is composed for `ws-team-<organisation>.<team>` groups.** A team member who signs in to ArgoCD sees no applications. This is not available out of the box. For application teams, the Console is the supported view of sync and health. Adding team roles means changing the platform's ArgoCD configuration; a Project does not do it.
 
 **OpenBao** holds the production secrets. It maps only `platform-admin`, `platform-developer` and `platform-viewer` to policies. Team members who sign in get the `default` policy, which reads no secrets.
 
@@ -326,7 +334,7 @@ adhar auth whoami
 adhar auth token --show
 ```
 
-`--show` prints who the token is for, its groups and when it expires. You should see `ws-team-payments` among the groups.
+`--show` prints who the token is for, its groups and when it expires. You should see `org-adhar` and `ws-team-adhar.payments` among the groups.
 
 **Point kubectl at the cluster** with your identity. Get the API server address and its CA certificate from your platform team; both are in any admin kubeconfig. Then pass the token on each call. `adhar auth token` refreshes the token when it has expired, which a token pasted into a kubeconfig would not do:
 
@@ -346,14 +354,16 @@ kubectl --token "$(adhar auth token)" auth whoami
 kubectl --token "$(adhar auth token)" auth can-i create deployments -n payments-dev
 ```
 
-The first command reports username `oidc:alice@example.com` with group `oidc:ws-team-payments`. The second answers `yes`.
+The first command reports username `oidc:alice@example.com` with groups `oidc:org-adhar` and `oidc:ws-team-adhar.payments`. The second answers `yes`.
 
 ## Offboarding
 
-Remove the person from the group. This one change covers every service that reads the claim:
+Remove the person in the Console (**Settings → Members → Remove** takes them out of the organisation's groups and every team group of it), or from the group directly. This one change covers every service that reads the claim:
 
 ```bash
-adhar auth group remove-member ws-team-payments alice@example.com
+adhar auth group remove-member ws-team-adhar.payments alice@example.com
+# Out of the organisation altogether:
+adhar auth group remove-member org-adhar alice@example.com
 ```
 
 Their next token carries no team group, so Kubernetes, the Console and every SSO service stop granting team access. A token already issued stays valid until it expires.
@@ -364,13 +374,13 @@ To stop new sign-ins entirely, disable the user in Keycloak: `adhar auth user up
 
 | Symptom | Cause | Fix |
 |---|---|---|
-| User signs in everywhere but sees no namespaces | Keycloak group name does not match `ws-team-<team>` | Rename the group; check `adhar auth token --show` |
+| User signs in everywhere but sees no namespaces | Keycloak group name does not match `ws-team-<organisation>.<team>` (e.g. an old `ws-team-payments`) | Add them to the qualified group (Settings → Teams); check `adhar auth token --show` |
 | `kubectl` returns `Unauthorized` with a valid token | API server OIDC not enabled, or `--oidc-client-id` is not `kubernetes` | Ask the platform team; the audience is `kubernetes`, not `adhar-cli` |
 | `Forbidden` for a member who should have access | The token predates their group membership | `adhar auth login … --force` for a fresh token |
 | Project denied: `exceeds the … team's tenant quota` | The team's allowance is used up | Raise the team's entry in `allowances.yaml`, or lower the project's quotas |
 | Tenant quota never denies anything | Package off, no entry for the team and no `default`, cert-manager missing (no serving certificate), or the controller is down (fails open) | `adhar stack status adhar-tenant-quotas`; `adhar stack status cert-manager`; check the ConfigMap |
 | Project `READY=False`, events name `kargo.akuity.io` kinds | Kargo is not installed (off in the local profile) | Namespaces, quotas and RBAC are still created; `adhar stack enable kargo` for promotion |
-| `ws-team` member sees nothing in ArgoCD | No ArgoCD role is mapped for team groups | Use the Console for sync and health |
+| Team member sees nothing in ArgoCD | No ArgoCD role is mapped for team groups | Use the Console for sync and health |
 | Member cannot push to the repo in Gitea | Gitea team membership and repo grants are manual for team groups | Add the user to team `payments`; grant the repository |
 | A Service in `payments-dev` is unreachable from another team namespace | Default-deny ingress admits only the same namespace, `adhar-system` and the Gateway | Add a NetworkPolicy in the target namespace for that source |
 | ArgoCD refuses to deploy a repo into the project | The AppProject admits only `adhar/*` Gitea repos | Add the source to `allowedSourceRepos` on the Project |

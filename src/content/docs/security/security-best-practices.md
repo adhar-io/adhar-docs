@@ -87,7 +87,9 @@ Managed control planes cannot take apiserver flags this way. They must use the c
 | `platform-admin`, `platform-engineer` | `cluster-admin`, cluster-wide |
 | `platform-developer` | `edit`, cluster-wide |
 | `platform-viewer` | `view`, cluster-wide |
-| `ws-team-<team>`, `org-<org>-admin` | `admin`, **that team's namespace only** |
+| `ws-team-<org>.<team>` (e.g. `ws-team-acme.payments`) | `admin` in **that team's project namespaces only** (`view` in prod) |
+| `org-<org>-admin` | `admin` in **that organisation's namespaces only** |
+| `org-<org>` | `view` in the organisation's home namespace — and membership of the organisation in the Console |
 | `base-user` | Nothing — the default group for self-registration |
 
 > **Read this twice.** On current Kubernetes the built-in `edit` role **grants get/list/watch on Secrets**. Only `view` excludes them, so `platform-developer` can read Secrets in any namespace. If that is not what you intend, bind a custom role instead of `edit`.
@@ -96,9 +98,9 @@ Application-team authority comes from `Project`, per namespace, never cluster-wi
 
 ```bash
 kubectl auth can-i get secrets -n team-payments \
-  --as=alice@example.com --as-group=oidc:ws-team-payments   # yes
+  --as=alice@example.com --as-group=oidc:ws-team-acme.payments   # yes
 kubectl auth can-i get secrets -n team-search \
-  --as=alice@example.com --as-group=oidc:ws-team-payments   # no
+  --as=alice@example.com --as-group=oidc:ws-team-acme.payments   # no
 ```
 
 Give Crossplane cloud access via IRSA / Workload Identity / Managed Identity. Never use long-lived keys.
@@ -137,7 +139,7 @@ Two hardening steps the shipped config does **not** do for you:
 1. **Auto-unseal.** The bootstrap Job runs `operator init` with one key share. It stores the unseal key *and* root token in the `openbao-keys` Secret. That is acceptable for a disposable platform and unacceptable in production. Add a `seal "awskms"` / `"azurekeyvault"` / `"gcpckms"` stanza to the package `values.yaml`, then re-run `generate-manifests.sh` (the manifests are pre-rendered), so no unseal material stays in-cluster.
 2. **etcd encryption at rest.** Without it, a disk or snapshot yields every Secret in plaintext. On managed offerings, verify the provider default rather than assuming it.
 
-**The platform's stores serve the platform only. Treat the boundary as namespace names and labels.** External Secrets' RBAC aggregates `create` on `ExternalSecret` and `SecretStore` into the built-in `edit` and `admin` roles. So every `ws-team-<team>` admin can write one in their own namespace. A `ClusterSecretStore` with no `conditions` would serve that ExternalSecret whatever it pointed at. That is why the shipped stores are restricted:
+**The platform's stores serve the platform only. Treat the boundary as namespace names and labels.** External Secrets' RBAC aggregates `create` on `ExternalSecret` and `SecretStore` into the built-in `edit` and `admin` roles. So every member of a `ws-team-<org>.<team>` group can write one in their team's namespaces. A `ClusterSecretStore` with no `conditions` would serve that ExternalSecret whatever it pointed at. That is why the shipped stores are restricted:
 
 | ClusterSecretStore | Can reach | Serves |
 |---|---|---|
@@ -184,7 +186,7 @@ Check what a tenant can do in its namespace, and that the platform store refuses
 
 ```bash
 kubectl auth can-i create externalsecrets.external-secrets.io -n team-payments \
-  --as=alice@example.com --as-group=oidc:ws-team-payments     # yes
+  --as=alice@example.com --as-group=oidc:ws-team-acme.payments     # yes
 kubectl get clustersecretstore vault -o jsonpath='{.spec.conditions}{"\n"}'
 # [{"namespaces":["adhar-system"]}]
 ```

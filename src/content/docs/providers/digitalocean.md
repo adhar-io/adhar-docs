@@ -316,7 +316,7 @@ Keycloak groups map to Kubernetes roles like this:
 | `platform-developer` | `edit` |
 | `platform-viewer` | `view` |
 
-Application teams get no cluster-wide role. Onboarding a team grants its `oidc:ws-team-<team>` group `admin` in that team's own namespace only.
+Application teams get no cluster-wide role. Onboarding a team grants its `oidc:ws-team-<organisation>.<team>` group `admin` in that team's own namespaces only.
 
 ## Node sizing
 

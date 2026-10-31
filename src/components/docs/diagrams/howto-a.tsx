@@ -101,7 +101,7 @@ const TeamObjects = () => (
     caption="You create the Team and the Project. The environments are composed for you, one per entry."
     layers={[
       { id: "Org", name: "Organisation adhar", items: "seeded by adhar up · Gitea organisation adhar" },
-      { id: "Team", name: "Team payments", items: "Keycloak group ws-team-payments · Gitea team payments", tone: "primary" },
+      { id: "Team", name: "Team payments", items: "Keycloak group ws-team-adhar.payments · Gitea team payments", tone: "primary" },
       { id: "Proj", name: "Project payments", items: "namespace payments · AppProject · Kargo Project · quota", tone: "primary" },
       { id: "Env", name: "payments-dev · payments-test · payments-prod", items: "admin · admin · view   (ResourceQuota, LimitRange, default-deny ingress)", tone: "accent" },
     ]}
@@ -112,9 +112,9 @@ const TeamAccess = () => (
   <Frame
     width={760}
     height={300}
-    label="How a person gets access: membership of the Keycloak group ws-team-payments puts groups in their token; the API server prefixes it to oidc:ws-team-payments; RoleBindings composed by the Project and its Environments grant admin in payments, payments-dev and payments-test, and view in payments-prod."
+    label="How a person gets access: membership of the Keycloak group ws-team-adhar.payments puts groups in their token; the API server prefixes it to oidc:ws-team-adhar.payments; RoleBindings composed by the Project and its Environments grant admin in payments, payments-dev and payments-test, and view in payments-prod."
   >
-    <Box x={8} y={40} w={150} h={58} title="Keycloak" lines={["ws-team-payments"]} tone="primary" />
+    <Box x={8} y={40} w={150} h={58} title="Keycloak" lines={["ws-team-adhar.payments"]} tone="primary" />
     <Box x={218} y={40} w={150} h={58} title="token" lines={["groups claim"]} />
     <Box x={428} y={40} w={150} h={58} title="kube-apiserver" lines={["prefix oidc:"]} />
 
@@ -125,7 +125,7 @@ const TeamAccess = () => (
       markerEnd="url(#dk-arrow)" />
     <Caption x={395} y={60} anchor="middle">bearer</Caption>
 
-    <GroupBox x={8} y={140} w={744} h={120} label="RoleBindings composed by Project + Environments (subject: Group oidc:ws-team-payments)" />
+    <GroupBox x={8} y={140} w={744} h={120} label="RoleBindings composed by Project + Environments (subject: Group oidc:ws-team-adhar.payments)" />
     <Box x={24} y={172} w={168} h={58} title="payments" lines={["admin"]} />
     <Box x={204} y={172} w={168} h={58} title="payments-dev" lines={["admin"]} />
     <Box x={384} y={172} w={168} h={58} title="payments-test" lines={["admin"]} />
