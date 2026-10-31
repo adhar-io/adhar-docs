@@ -14,11 +14,12 @@ const ArchitectureSection = () => (
       <SectionHeader
         id="architecture-heading"
         eyebrow="Architecture"
-        title="One platform, in layers,"
-        titleMuted="from team to cloud."
+        title="Startup or enterprise,"
+        titleMuted="the architecture scales with you."
       >
-        Teams work through the console, the CLI or Adhar AI. Underneath, a control plane and 100+ curated packages run
-        on Kubernetes — the same layers on a laptop or on any supported cloud.
+        Start with dev, test and prod on one cluster and one bill. As you grow, give prod its own cluster and switch on
+        HA. Either way, teams use the console, the CLI or Adhar AI, on the same control plane and 100+ curated packages
+        on Kubernetes — on a laptop or any supported cloud.
       </SectionHeader>
 
       <ModernArchitectureDiagram />

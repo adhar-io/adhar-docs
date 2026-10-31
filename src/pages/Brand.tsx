@@ -61,7 +61,7 @@ const BOILERPLATE_SHORT =
 const BOILERPLATE_LONG = `${BOILERPLATE_SHORT} Adhar is licensed under Apache 2.0 and developed in the open at github.com/adhar-io/adhar. Learn more at adhar.io.`;
 
 const PRESS_EMAIL = "press@adhar.io";
-const SLACK = "https://join.slack.com/t/adharworkspace/shared_invite/zt-26586j9sx-QGrIejNigvzGJrnyH~IXww";
+const SLACK = "https://join.slack.com/t/adhar-io/shared_invite/zt-4e93jrspf-HpEo6FRHwi1LA05TEJUCVg";
 
 const BRAND_TXT = `ADHAR BRAND & PRESS KIT
 https://adhar.io/brand

@@ -34,7 +34,7 @@ do-cli-map
 
 | Persona | Commands | Typical first command |
 |---|---|---|
-| **Develop** — build, ship and self-serve | `ai` `application` `bucket` `cache` `database` `environment` `gitops` `pipeline` `project` `routes` `storage` | `adhar application deploy` |
+| **Develop** — build, ship and self-serve | `ai` `application` `bucket` `cache` `database` `environment` `function` `gitops` `pipeline` `project` `routes` `storage` | `adhar application deploy` |
 | **Observe** — health, logs, metrics, traces | `events` `get` `health` `logs` `metrics` `network` `traces` | `adhar get status` |
 | **Operate** — day-2 operations | `backup` `cluster` `restore` `scale` `upgrade` | `adhar upgrade --diff-only` |
 | **Administer** — lifecycle and governance | `auth` `compliance` `config` `controller` `cost` `down` `fleet` `policy` `secrets` `security` `stack` `up` `webhook` | `adhar up` |
@@ -300,6 +300,17 @@ adhar storage list -s payments
 
 adhar application bind my-app orders      # inject the connection Secret
 ```
+
+**Functions.** `adhar function` (aliases `fn`, `functions`) runs an existing image as a scale-to-zero [Function](/docs/core-concepts/functions). It creates no repository, build or promotion. For a function delivered dev → test → prod, create it from a function template in the Console. Its `-n/--namespace` defaults to `adhar-system`. Pass an environment namespace such as `dev` instead, so the function is placed in that environment and isolated by its network policy.
+
+```bash
+adhar function create echo -n dev --image <image> --min-scale 0 --max-scale 5 --timeout 60
+adhar fn list -n dev                      # NAME, READY, RUNTIME, SCALE, URL, AGE
+adhar fn status echo -n dev               # readiness, URL and every condition
+adhar fn delete echo -n dev
+```
+
+`create` takes `--image` (required), `--runtime` (`node20`, `python312`, `go122` or `custom`), `--trigger`, `--event-source`, `--port`, `--min-scale`, `--max-scale`, `--target-concurrency` and `--timeout`. Triggers lists, visibility, hostnames, `env` and Dapr have no flags; write the YAML and `kubectl apply` it. The [Function API reference](/docs/reference/function-api#adhar-function) has every field.
 
 **Environments and GitOps:**
 

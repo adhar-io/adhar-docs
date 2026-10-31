@@ -33,6 +33,8 @@
 }
 .docs-prose a { color: hsl(var(--primary)); text-decoration: none; border-bottom: 1px dashed hsl(var(--primary) / 0.4); }
 .docs-prose a:hover { border-bottom-color: hsl(var(--primary)); }
+/* The status summary's rows and items are links, styled as UI rather than prose links. */
+.docs-prose .status-summary a { color: inherit; border-bottom: 0; }
 .docs-prose h1, .docs-prose h2, .docs-prose h3, .docs-prose h4 { scroll-margin-top: 6rem; }
 .docs-prose .anchor-link { opacity: 0; margin-left: 0.4rem; color: hsl(var(--primary)); transition: opacity 0.15s; }
 .docs-prose h2:hover .anchor-link, .docs-prose h3:hover .anchor-link, .docs-prose h4:hover .anchor-link { opacity: 1; }

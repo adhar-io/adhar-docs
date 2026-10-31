@@ -151,6 +151,6 @@ Each guide walks you through a task end to end, with a check after every stage.
 
 ## Getting help
 
-- **Slack** — [join the community](https://join.slack.com/t/adharworkspace/shared_invite/zt-26586j9sx-QGrIejNigvzGJrnyH~IXww)
+- **Slack** — [join the community](https://join.slack.com/t/adhar-io/shared_invite/zt-4e93jrspf-HpEo6FRHwi1LA05TEJUCVg)
 - **GitHub** — [issues](https://github.com/adhar-io/adhar/issues) · [discussions](https://github.com/adhar-io/adhar/discussions)
 - **Licence** — Apache 2.0, 100% open source

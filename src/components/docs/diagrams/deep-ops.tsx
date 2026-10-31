@@ -140,7 +140,7 @@ const PERSONAS: Persona[] = [
   {
     name: "Develop", blurb: "build, ship, self-serve",
     cmds: ["ai", "application", "bucket", "cache", "database", "environment",
-      "gitops", "pipeline", "project", "routes", "storage"],
+      "function", "gitops", "pipeline", "project", "routes", "storage"],
     key: ["application", "database"],
   },
   {
@@ -318,21 +318,21 @@ const BootstrapFailures = () => (
 );
 
 /* ------------------------------------------------------------------ *
- * Roadmap — the phases and their status, as docs/ROADMAP.md states it.
+ * Roadmap — the phases and their status.
  * ------------------------------------------------------------------ */
 
 const RoadmapPhases = () => (
   <Pipeline
     colW={150}
-    label="Roadmap phases and status. Phase 0 local excellence: complete. Phase 1 single-cluster production: verified on DigitalOcean. Phase 2 multi-cluster platform: live-verified. Phase 3 developer experience and ecosystem: 11 of 11 verified on DigitalOcean. Phase 4 data and intelligence: 5 of 5 verified on DigitalOcean. Phase 5 enterprise readiness and scale: built, verifying."
-    caption="Statuses as docs/ROADMAP.md states them. Each phase builds on the topology before it: T1 → T2 → T3."
+    label="Roadmap phases and status. Phase 0 local excellence: complete. Phase 1 single-cluster production: complete. Phase 2 multi-cluster platform: complete. Phase 3 developer experience and ecosystem: complete. Phase 4 data and intelligence: complete. Phase 5 enterprise readiness and scale: in progress."
+    caption="Each phase builds on the topology before it: T1 → T2 → T3."
     stages={[
       { name: "Phase 0", detail: "Local excellence", guarantee: "complete\nT1", tone: "primary" },
-      { name: "Phase 1", detail: "Single-cluster prod", guarantee: "verified on\nDigitalOcean · T2", tone: "primary" },
-      { name: "Phase 2", detail: "Multi-cluster", guarantee: "live-verified\nT3", tone: "primary" },
-      { name: "Phase 3", detail: "DevEx & ecosystem", guarantee: "11 of 11 verified\non DigitalOcean", tone: "primary" },
-      { name: "Phase 4", detail: "Data & intelligence", guarantee: "5 of 5 verified\non DigitalOcean", tone: "primary" },
-      { name: "Phase 5", detail: "Enterprise & scale", guarantee: "built, verifying\n(two items designed)", tone: "accent" },
+      { name: "Phase 1", detail: "Single-cluster prod", guarantee: "complete\nT2", tone: "primary" },
+      { name: "Phase 2", detail: "Multi-cluster", guarantee: "complete\nT3", tone: "primary" },
+      { name: "Phase 3", detail: "DevEx & ecosystem", guarantee: "complete", tone: "primary" },
+      { name: "Phase 4", detail: "Data & intelligence", guarantee: "complete", tone: "primary" },
+      { name: "Phase 5", detail: "Enterprise & scale", guarantee: "in progress", tone: "accent" },
     ]}
   />
 );

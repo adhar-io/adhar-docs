@@ -2,341 +2,378 @@
 title: "Functions"
 section: "Core Concepts"
 order: 5
-badge: "planned"
 path: "/docs/core-concepts/functions"
 ---
 
 # Functions
 
-A **Function** is the smallest thing you can run on Adhar: one HTTP handler, packaged as a container image. When nobody calls it, the platform scales it to zero. When traffic or an event arrives, the platform scales it back up. You write the handler and a short `Function` resource. The platform builds, signs, deploys, routes and scales it.
+A **Function** is the smallest thing you can run on Adhar: one HTTP handler in a container image. When nobody calls it, the platform scales it to zero. When a request, a schedule or an event arrives, the platform scales it back up. Each environment serves it at its own HTTPS URL.
 
-This page explains the Function model from end to end: the resource, the runtimes, the handler contract, triggers, scaling, delivery, security and observability. It is for application developers deciding between a Function and a long-running service. It is also for platform engineers who enable and operate the engine behind it.
+You write the handler. A template gives you everything else: the repository, the tests, the `Function` resource, the build, and the promotion from dev to test to prod.
 
-> **Status: planned.** This page describes how Functions are designed to work. The five function templates, and the `Function` manifest they generate, exist today. The `Function` definition (XRD), its composition, the Knative Serving install and the trigger wiring have not shipped. [What exists today](#what-exists-today) lists every piece and its status. Read it before you build on Functions.
+This page explains how Functions work and why they behave as they do:
+
+- the resource, and where a function runs
+- how a request reaches your code
+- triggers and scaling
+- delivery, the Console, security and observability
+
+It is for developers deciding whether a Function fits their workload, and for platform engineers who run the engine behind it. [Deploy a Function](/docs/guides/deploy-a-function) walks through the same ground hands-on. The [Function API reference](/docs/reference/function-api) lists every field, condition and command.
 
 ## At a glance
 
 | | |
 |---|---|
-| **The resource** | `Function` in `platform.adhar.io/v1alpha1`, a namespaced Crossplane composite resource |
-| **What runs it** | Knative Serving, installed by the `knative` package (Knative Operator v1.22.2) |
-| **Runtimes** | Node.js 20, Go 1.25, Python 3.12, Java 21, Deno 2, with one template each |
-| **Triggers** | `http`, `cloudevent`, `topic`, `bucket`, `cron` |
-| **Scaling** | From `minScale` (default `0`) to `maxScale` (default `10`); scales to zero when idle |
-| **Timeout** | `timeoutSeconds`: default `30`, maximum `300` |
-| **How you create one** | `adhar application deploy <name> --template function-<lang>-service --path deploy`, or the Console's Create wizard |
-| **Where the image comes from** | The paved-road `app-ci` pipeline: buildpacks, then scan, sign and push to Harbor |
-| **Where you see it** | Console → Platform → Functions, or `kubectl get functions.platform.adhar.io -n <namespace>` |
+| **The resource** | `Function` in `platform.adhar.io/v1alpha1`: a namespaced Crossplane composite resource, rendered by the composition `function-local-knative` |
+| **What runs it** | Knative Serving and Eventing, from the `knative` package (Knative Operator v1.23.1), with Kourier as the in-cluster ingress behind the platform Gateway. Dapr handles topic triggers |
+| **Templates** | Go, Node.js, Python, Java and Deno, each a tested, runnable repository with an OpenAPI contract |
+| **Invoked by** | HTTP, always; plus schedules (`cron`), CloudEvents (`cloudevent`) and pub/sub topics (`topic`) |
+| **Scaling** | From `minScale` (default `0`, so scale-to-zero) to `maxScale`, at a target of 100 in-flight requests per pod |
+| **Request timeout** | `timeoutSeconds`: default `30`, maximum `600` |
+| **URL** | `https://<name>.<environment>.<platform domain>`, or in-cluster only with `visibility: cluster` |
+| **Delivery** | An `Application` of type `function`: `app-ci` builds and signs it, Kargo promotes it dev → test → prod, Argo CD syncs it |
+| **Where you manage it** | Console → **Develop → Functions**; `kubectl get functions.platform.adhar.io`; `adhar function` |
+| **Profiles** | On in `production`. Off in `local`; see [Enable the engine](#enable-the-engine) |
 
 ## When to use a Function
 
-A Function and an `Application` both run your container from Git. They differ in what the platform assumes about traffic.
+A Function and a service template both run your container from Git, through the same build and promotion chain. They differ in what the platform assumes about traffic.
 
-| Choose a **Function** when | Choose an **Application** ([Your First Service](/docs/getting-started/first-service)) when |
+| Choose a **Function** when | Choose a **service** ([Your First Service](/docs/getting-started/first-service)) when |
 |---|---|
-| Traffic is bursty, rare or event-driven: webhooks, queue consumers, scheduled jobs, file processing | Traffic is steady, or the service must answer instantly at all times |
-| Each request finishes within five minutes | Requests stream, hold long connections or run for longer |
-| The handler is stateless, and state lives in a database, cache or bucket | The workload keeps state in memory or needs a persistent volume |
-| A cold start on the first request after idle is acceptable | Every request has a tight latency target (or set `minScale: 1`, see [Cold starts](#cold-starts)) |
-| You want one small handler per event type | You want the golden path's dev/test/prod overlays, PDBs, HPAs and alerts |
+| Traffic is bursty, rare or event-driven: webhooks, scheduled jobs, event and queue consumers | Traffic is steady, or every request must be answered instantly |
+| Each request finishes within ten minutes | Requests stream, hold long connections or run for longer |
+| The handler is stateless; state lives in a database, cache or bucket | The workload keeps state in memory or needs a persistent volume |
+| A cold start on the first request after idle is acceptable | Latency targets rule out cold starts (or set `minScale: 1`; see [Cold starts](#cold-starts)) |
+| The defaults (100m CPU, 128Mi requested; 500m, 512Mi limit) are enough | You need to size CPU and memory, mount volumes or run as a specific service account |
 
-**A Function is not a lighter Application.** The function templates get less of the paved road than the service templates do (see [What exists today](#what-exists-today)). Use a Function where scale-to-zero pays for itself.
+**Idle functions cost nothing.** A function at zero runs no pods. Knative's activator is shared by every function and waits for its next request.
 
 ## The model
 
-You declare a `Function`. Crossplane expands it through the composition labelled `feature: function`. The result is a Knative Service, plus the object that delivers events to it when the trigger is not `http`. Knative turns every change into an immutable Revision and scales that Revision's pods:
+You declare a `Function`. The composition `function-local-knative` renders it into Kubernetes objects, and Knative runs the result:
 
 ```diagram
 fn-model
 ```
 
-This is the pattern every platform API follows: a `Database` becomes a CloudNativePG cluster, and an `Application` becomes an Argo CD Application. [Control Plane](/docs/core-concepts/control-plane) explains how claims, XRDs and compositions fit together.
+The composition creates these objects:
 
-Following platform convention, the XRD is named `functions.platform.adhar.io`. The kind has no `Composite` prefix, and its plural is `functions`.
+| Object | Purpose | When |
+|---|---|---|
+| Knative `Service` `<name>` | Runs the function. Always `cluster-local`: Knative publishes nothing outside the cluster itself | Always |
+| `NetworkPolicy` `<name>-from-knative` | Lets Knative's activator and event sources reach the pods. Environment namespaces deny all other ingress by default | In an environment namespace |
+| `ClusterDomainClaim`, `DomainMapping`, `HTTPRoute`, `ReferenceGrant` | Publish the function on the platform Gateway at its hostname | `visibility: public`, once the platform domain is known |
+| `PingSource`, `Trigger` and `Broker`, or Dapr `Subscription` | One event source per trigger | Per trigger |
 
-> **Two different kinds of "function".** Crossplane has *composition functions* (`pkg.crossplane.io/v1` `Function`, such as `function-kcl`), which the control plane uses to render compositions. They have nothing to do with the workloads on this page. On a platform cluster, plain `kubectl get functions` is ambiguous, so always write `kubectl get functions.platform.adhar.io`.
+Every change to the Function's image or configuration creates a new **Revision**, an immutable snapshot. Knative routes traffic to the newest Revision only once it is Ready. Until then, the previous one keeps answering.
 
-## The Function resource
+The composition writes the outcome back to the Function. `status.url`, `status.readyRevision` and `status.triggers` tell you what is serving. The conditions `ServiceReady`, `EdgeReady`, `TriggersReady` and `Placement` tell you why something is not. They are listed in the [reference](/docs/reference/function-api#conditions).
 
-Every template generates `deploy/function.yaml`. Here is the Go template's, rendered for a function called `thumbnails`:
+> **Two kinds of "function".** Crossplane also has *composition functions* (`pkg.crossplane.io/v1` `Function`, such as `function-go-templating`), which the control plane uses to render compositions. They are unrelated to this page. On a platform cluster, plain `kubectl get functions` is ambiguous, so always write `kubectl get functions.platform.adhar.io`.
 
-```yaml
-apiVersion: platform.adhar.io/v1alpha1
-kind: Function
-metadata:
-  name: thumbnails
-  labels:
-    app.kubernetes.io/name: thumbnails
-spec:
-  crossplane:
-    compositionSelector:
-      matchLabels:
-        feature: function
-  parameters:
-    runtime: go122
-    image: harbor-core.adhar-system.svc.cluster.local/library/thumbnails:latest
-    trigger: http
-    eventSource: ""
-    minScale: 0
-    maxScale: 10
-    timeoutSeconds: 30
+## Where a function runs
+
+**A function's namespace decides where it runs, not its parameters.** A Project creates one namespace per environment, labelled with its organisation, team, project and environment. A Function in that namespace takes those four values from the labels, and they override anything in `spec.parameters`. The `Placement` condition reports when a parameter disagreed and was ignored.
+
+This is why one `deploy/base/function.yaml` serves every environment: each overlay places it in a different namespace. For the default project `adhar`, those namespaces are `dev`, `test` and `prod`.
+
+A Function outside an environment namespace runs too. In that case it uses the `organisation`, `team`, `project` and `environment` parameters, which default to `adhar`, `platform`, no project and `dev`. It gets no NetworkPolicy, because only environment namespaces deny ingress by default.
+
+## How a request reaches your code
+
+```diagram
+fn-request-path
 ```
 
-**`metadata.name`** must be DNS-friendly. Use lowercase letters, digits and hyphens, start with a letter, and keep it to 40 characters or fewer (`^[a-z]([-a-z0-9]*[a-z0-9])?$`). The name is used for the Function, the Knative Service, the Gitea repository and the Harbor image, and all four must stay equal. The CI write-back only rewrites an image whose name matches the repository.
+1. The platform **Gateway** (`adhar-system/adhar-gateway`) terminates TLS for `<name>.<environment>.<platform domain>`, a host it already holds a certificate for.
+2. The function's **HTTPRoute** sends the request to **Kourier**, Knative's ingress, which listens only inside the cluster. The route's timeout is the function's `timeoutSeconds` plus 15 seconds, so Knative, not the Gateway, decides when a request has run too long.
+3. Kourier resolves the **DomainMapping** for the host to the function's Knative Service.
+4. If the function is **scaled to zero**, Knative's **activator** holds the request, asks the autoscaler for a pod, and forwards the request once the pod is ready.
+5. The **queue-proxy** sidecar in the pod counts the request for the autoscaler, enforces the timeout and any concurrency limit, and hands the request to your process on `$PORT`.
 
-**`spec.crossplane.compositionSelector`** picks the composition. Leave it as `feature: function`.
+### URLs and visibility
 
-**`spec.parameters`:**
+| `visibility` | URL (`status.url`) | Reachable from |
+|---|---|---|
+| `public` (default) | `https://<name>.<environment>.<platform domain>` | Anything that can reach the platform Gateway |
+| `cluster` | `http://<name>.<namespace>.svc.cluster.local` | Inside the cluster only, including the function's event sources |
 
-| Field | Type | Default | Allowed | Meaning |
-|---|---|---|---|---|
-| `runtime` | string | set by the template | `node20`, `go122`, `python312`, `custom` | The language of the handler. It is recorded on the Function and passed to the handler as `FUNCTION_RUNTIME`. It does not choose the builder: buildpacks detect the language from the source |
-| `image` | string | `harbor-core.adhar-system.svc.cluster.local/library/<name>:latest` | — | The container image to run. `app-ci` rewrites the tag to the commit SHA after every build |
-| `trigger` | string | `http` | `http`, `cloudevent`, `topic`, `bucket`, `cron` | What invokes the function. See [Triggers](#triggers) |
-| `eventSource` | string | `""` | depends on `trigger` | Where events come from, for non-HTTP triggers. Empty for `http` |
-| `minScale` | integer | `0` | 0–20 | Pods kept running when idle. `0` turns on scale-to-zero |
-| `maxScale` | integer | `10` | 1–200 | The most pods the autoscaler may run. It caps cost, and the load the function can put on the systems it calls |
-| `timeoutSeconds` | integer | `30` | 1–300 | The longest a single request may run before Knative ends it |
+On a local platform, the public URL carries the Gateway's port: `https://<name>.dev.adhar.localtest.me:8443`. When the domain's first label is the environment name itself, the host becomes `<name>-<environment>.<domain>`, so that the environment does not appear twice.
 
-The composition maps these fields onto standard Knative settings, so Knative's own documentation applies:
+**Custom hostnames.** Set `spec.parameters.hostname` to serve the function somewhere else, such as `api.example.org`. You also need DNS that points at the Gateway, and a certificate the Gateway serves for that name.
 
-| Function field | Knative setting |
-|---|---|
-| `image` | `spec.template.spec.containers[0].image` on the Knative Service |
-| `minScale` | the `autoscaling.knative.dev/min-scale` annotation on the Revision template |
-| `maxScale` | the `autoscaling.knative.dev/max-scale` annotation |
-| `timeoutSeconds` | `spec.template.spec.timeoutSeconds` |
-| `metadata.name`, `trigger`, `runtime` | the `FUNCTION_NAME`, `FUNCTION_TRIGGER` and `FUNCTION_RUNTIME` environment variables |
-
-v1alpha1 has no fields for environment variables, secrets, resource requests, concurrency or a service account.
-
-## Runtimes and templates
-
-There is one template per language. They are served from the `adhar/adhar-templates` repository in the platform's Gitea, which mirrors `github.com/adhar-io/adhar-templates`. Each template generates a complete repository that runs as it is:
-
-| Template | Language | Handler | `runtime` | Run it locally |
-|---|---|---|---|---|
-| `function-nodejs-service` | Node.js 20 | `index.js`, using Node's `http` module | `node20` | `npm install && npm run dev` |
-| `function-go-service` | Go 1.25 | `main.go`, using `net/http` | `go122` | `go run .` |
-| `function-python-service` | Python 3.12 with Flask | `app.py`, served by gunicorn (see `Procfile`) | `python312` | `pip install -r requirements.txt && python app.py` |
-| `function-java-service` | Java 21 | `src/main/java/App.java`, using the JDK's `com.sun.net.httpserver` | `custom` | `mvn -q exec:java` |
-| `function-deno-service` | Deno 2 | `src/main.ts`, using `Deno.serve` | `custom` | `deno task dev` |
-
-Every generated repository has the same shape:
-
-```text
-<name>/
-├── index.js | main.go | app.py | src/…   # the handler
-├── project.toml                           # buildpack metadata (Paketo builder-jammy-base)
-├── deploy/
-│   ├── kustomization.yaml                 # lists function.yaml
-│   └── function.yaml                      # the Function resource
-├── catalog-info.yaml                      # catalog Component, lifecycle: experimental
-├── docs/index.md, mkdocs.yml              # TechDocs
-└── README.md
-```
-
-To list the templates on your platform, and the parameters each one accepts:
-
-```bash
-adhar application templates | grep function
-adhar application templates function-go-service
-```
+**A hostname belongs to one namespace.** The first namespace to claim a host keeps it: the composition creates the `ClusterDomainClaim` but never updates or deletes it. A Function in another namespace that asks for the same host gets `EdgeReady=False` with reason `HostClaimed`, and serves only inside the cluster.
 
 ## The handler contract
 
-The platform does not wrap your code in a framework. A function is any HTTP server that follows four rules:
+The platform does not wrap your code in a framework. A function is any HTTP server that follows these rules:
 
-1. **Listen on `$PORT`.** Knative sets it, to 8080 by default. Do not hard-code a port.
-2. **Answer `GET /healthz` with 200** once the process is ready to serve.
-3. **Finish every request within `timeoutSeconds`.**
-4. **Keep no state between requests.** Any pod can serve any request, and pods disappear when the function scales down.
+1. **Listen on `$PORT`.** Knative sets it from `spec.parameters.port`, which defaults to 8080. Knative's queue-proxy reserves ports 8008, 8012, 8013, 8022, 9090 and 9091.
+2. **Answer `GET /healthz`** once the process can serve.
+3. **Treat every other request as an invocation.** Events arrive as `POST` requests to the trigger's `path`, which defaults to `/`.
+4. **Finish each request within `timeoutSeconds`.**
+5. **Exit cleanly on `SIGTERM`.** Knative sends it before removing a pod. Finish the requests in flight, then exit. The templates allow 25 seconds.
+6. **Keep no state between requests.** Any pod can serve any request, and pods disappear when the function scales down.
 
-The platform sets these environment variables:
+The platform injects these environment variables. Your own `spec.parameters.env` entries are applied after them and override them:
 
 | Variable | Value |
 |---|---|
-| `PORT` | The port to listen on |
-| `FUNCTION_NAME` | `metadata.name` |
-| `FUNCTION_TRIGGER` | `spec.parameters.trigger` |
+| `FUNCTION_NAME`, `APP_ID` | The Function's name |
 | `FUNCTION_RUNTIME` | `spec.parameters.runtime` |
-
-The Go template's handler, abridged:
-
-```go
-func main() {
-	port := os.Getenv("PORT")
-	if port == "" {
-		port = "8080"
-	}
-
-	http.HandleFunc("/healthz", func(w http.ResponseWriter, _ *http.Request) {
-		writeJSON(w, http.StatusOK, payload{"ok": true, "at": time.Now().UTC().Format(time.RFC3339)})
-	})
-
-	http.HandleFunc("/", func(w http.ResponseWriter, _ *http.Request) {
-		writeJSON(w, http.StatusOK, payload{
-			"ok":       true,
-			"function": os.Getenv("FUNCTION_NAME"),
-			"runtime":  "go122",
-			"trigger":  os.Getenv("FUNCTION_TRIGGER"),
-			"at":       time.Now().UTC().Format(time.RFC3339),
-		})
-	})
-
-	log.Fatal(http.ListenAndServe(":"+port, nil))
-}
-```
-
-The other four templates implement the same two routes in their own language.
+| `FUNCTION_TRIGGER` | The trigger types, comma-separated (for example `cron,cloudevent`), or `http` when there are none |
+| `ADHAR_ENVIRONMENT` | `dev`, `test` or `prod` |
+| `OTEL_EXPORTER_OTLP_ENDPOINT` | `http://alloy.adhar-system.svc.cluster.local:4318` |
+| `OTEL_SERVICE_NAME` | The Function's name |
+| `OTEL_RESOURCE_ATTRIBUTES` | `deployment.environment.name=<env>,deployment.environment=<env>,service.namespace=<namespace>` |
+| `PORT`, `K_SERVICE`, `K_REVISION`, `K_CONFIGURATION` | Set by Knative. `env` may not override them |
+| `BPL_JVM_THREAD_COUNT`, `JAVA_TOOL_OPTIONS` | Java runtimes only: `50` and `-XX:ReservedCodeCacheSize=64M`, so the JVM fits the default 512Mi limit |
 
 ### Receiving events
 
-Every non-HTTP trigger delivers its events the same way: as a **CloudEvent in an HTTP `POST` to `/`**. Knative uses CloudEvents *binary* mode. The event's attributes arrive as `ce-` headers, and its data is the request body:
+A `cron` or `cloudevent` trigger delivers a CloudEvent in *binary* mode. The event's attributes arrive as `ce-` headers, and its data is the request body:
 
 ```http
 POST / HTTP/1.1
 ce-specversion: 1.0
-ce-type: io.adhar.platform.component.ready
-ce-source: <producer>
-ce-id: <unique event id>
+ce-type: com.acme.order.created
+ce-source: shop
+ce-id: 6f0c2b5e-…
 content-type: application/json
 
-{ …event data… }
+{"order": 1042}
 ```
 
-Return a 2xx status to acknowledge an event. A non-2xx status, or a request that runs past `timeoutSeconds`, counts as a failed delivery and is retried with backoff. **Delivery is at least once, so make handlers idempotent.** Use `ce-id` to recognise an event you have already handled.
+A `topic` trigger delivers through Dapr, which sends the message as a CloudEvent in *structured* mode: the body is `application/cloudevents+json`, and the message is its `data` field.
+
+Return a 2xx status to acknowledge an event. What happens after a failure depends on the trigger. See [Triggers](#triggers).
+
+## Templates
+
+Each template generates a complete repository. It runs and passes its tests as soon as it is created:
+
+| Template | Language | Handler | `runtime` | Run and test locally |
+|---|---|---|---|---|
+| `function-go-service` | Go 1.26, standard library only | `handler.go`, `main.go` | `go125` | `go run .` · `go test ./...` |
+| `function-nodejs-service` | Node.js 24, no dependencies | `index.js` (`node:http`) | `node24` | `npm start` · `npm test` |
+| `function-python-service` | Python 3.13, Flask, served by gunicorn | `app.py` | `python313` | `flask --app app run --port 8080` · `python -m pytest` |
+| `function-java-service` | Java 25, JDK `HttpServer` on virtual threads | `src/main/java/io/adhar/function/App.java` | `java25` | `mvn -q package && java -jar target/<name>-0.1.0.jar` · `mvn verify` |
+| `function-deno-service` | TypeScript written for Deno (`Deno.serve`) | `src/main.ts` | `node24` | The builder has no Deno buildpack, so the image runs the source on Node.js 24 |
+
+Every template produces the same layout. The Go template's:
+
+```text
+<name>/
+├── handler.go, main.go, handler_test.go   # the function and its tests
+├── project.toml                           # buildpack builder and runtime version
+├── api/openapi.yaml                       # the HTTP contract, published to the catalog as <name>-api
+├── deploy/
+│   ├── base/
+│   │   ├── function.yaml                  # the Function: one definition for every environment
+│   │   ├── kustomization.yaml
+│   │   └── kustomizeconfig.yaml           # tells kustomize where a Function keeps its image
+│   └── envs/
+│       ├── dev/kustomization.yaml         # namespace, environment and image pin, per environment
+│       ├── test/kustomization.yaml
+│       └── prod/kustomization.yaml
+├── catalog-info.yaml                      # Component (type: function) and API entities
+├── docs/                                  # index, architecture, operations (TechDocs)
+└── README.md
+```
+
+The Create form asks for three groups of values, besides the repository:
+
+- **Function:** name, description and owner.
+- **Runtime:** trigger, event source, visibility, timeout, and minimum and maximum instances.
+- **Operations:** lifecycle, tier, documentation URL, runbook URL, on-call, and availability SLO.
+
+The Operations values land in `catalog-info.yaml`, so the function starts with a scorecard score rather than earning one later. Everything in Runtime lands in `deploy/base/function.yaml`, where you can change it later.
 
 ## Triggers
 
-`trigger` says what invokes the function. `eventSource` says where its events come from:
+**Every function answers HTTP.** Triggers add event sources that invoke it as well:
 
 ```diagram
 fn-triggers
 ```
 
-| `trigger` | `eventSource` format | Example | What invokes the handler |
+Declare triggers as a list. One function can have up to 16:
+
+```yaml
+spec:
+  parameters:
+    triggers:
+      - type: cron
+        name: nightly
+        schedule: "0 3 * * *"
+        timezone: Europe/Berlin
+        data: '{"sweep": true}'
+      - type: cloudevent
+        filter:
+          type: com.acme.media.uploaded
+          source: media
+        path: /events
+      - type: topic
+        topic: media.resized
+        deadLetterTopic: media.dead
+```
+
+| Type | Composed into | Delivery | After a failed delivery |
 |---|---|---|---|
-| `http` | empty | `""` | HTTP requests to the function's URL |
-| `cloudevent` | a CloudEvent `type` from the platform event bus | `io.adhar.platform.component.ready` | Every event of that type on the bus |
-| `topic` | `kafka://<topic>` for a Kafka topic, or `topic://<name>` for a platform `Topic` in the same namespace | `kafka://orders-events` | Every record on the topic |
-| `bucket` | `bucket://<bucket>/<key prefix>*` | `bucket://web-assets/uploads/*` | Every object created under the prefix |
-| `cron` | a five-field cron expression, evaluated in UTC | `"*/15 * * * *"` | Each tick of the schedule |
+| `cron` | Knative `PingSource` | A CloudEvent on each tick of `schedule` (crontab syntax, in `timezone`, default UTC). Each tick carries `data` | Not retried. The next tick runs as scheduled |
+| `cloudevent` | Knative `Trigger` on a `Broker` in the namespace (`default` unless you name one) | Every event whose attributes exactly match `filter` | Not retried. The Broker is in-memory: an event in flight is lost if the dispatcher restarts |
+| `topic` | Dapr `Subscription` | Every message on `topic` of the pub/sub component (`pubsub` unless you name one) | Retried with exponential backoff, up to 15 seconds apart and 10 times (about a minute), then sent to `deadLetterTopic` if set |
+| `bucket` | Nothing | Accepted but **not implemented**: `TriggersReady` reports `Unsupported`, and the function is served over HTTP only | — |
 
-**HTTP URLs.** An `http` function gets an external URL, `https://<name>.<namespace>.<platform domain>`. On a local platform that is `https://<name>.<namespace>.adhar.localtest.me:8443`. A function with any other trigger is **cluster-local**: it has no external route, and only its event source calls it.
+**Topic triggers keep one pod warm.** Dapr delivers topic messages through a sidecar in the function's own pod, and a function at zero has no sidecar. A topic trigger therefore raises `minScale` to 1.
 
-**The platform event bus.** `cloudevent` functions subscribe to the bus the platform itself publishes to: CloudEvents 1.0 on Kafka, written through the Strimzi KafkaBridge. Event types follow the pattern `io.adhar.<domain>.<object>.<verb>`, with the verb in the past tense, for example `io.adhar.cluster.node.added` or `io.adhar.platform.component.failed`. Publishing is advisory: the platform drops an event rather than block a reconcile. **Never make a `cloudevent` function the only record of something important.**
+Every environment namespace has a Dapr `pubsub` component. It is backed by Kafka when the `kafka-operator` package runs, and by Redis streams otherwise.
+
+**Make handlers idempotent.** Topic deliveries are at least once, so the same message can arrive twice. Use the CloudEvent `id` to recognise one you have already handled.
+
+The older one-trigger shorthand, `trigger` plus `eventSource`, still works. The `triggers` list replaces it when both are set. See the [reference](/docs/reference/function-api#the-one-trigger-shorthand).
 
 ## Scaling
 
-Knative's autoscaler scales each Revision on the number of requests in flight:
+Knative's autoscaler scales each Revision on the requests in flight:
 
-- **Up** as concurrent requests grow, to at most `maxScale` pods.
-- **Down** as traffic falls, to `minScale`. With `minScale: 0`, the last pod is removed once the Revision has had no traffic for the stable window (60 seconds by default) plus the scale-to-zero grace period (30 seconds).
+| Parameter | Default | What it does |
+|---|---|---|
+| `minScale` | `0` | Pods kept when idle. `0` is scale-to-zero. A `topic` trigger raises it to 1 |
+| `maxScale` | `20` (templates set `10`) | The most pods the autoscaler may run. It caps cost, and the load the function can put on what it calls |
+| `targetConcurrency` | `100` | The **soft** target of in-flight requests per pod. The autoscaler adds pods to stay near it |
+| `containerConcurrency` | `0` (unlimited) | The **hard** limit per pod. Requests above it queue in the queue-proxy. Set it only for handlers that cannot run requests in parallel |
+| `timeoutSeconds` | `30` | The longest one request may run, at most 600. Knative ends the request after that |
 
-While a Revision is at zero, Knative's **activator** receives its requests. It holds each request, asks the autoscaler for a pod, and forwards the request once the pod is ready. Nothing is dropped.
+The platform sets no autoscaler overrides, so Knative's own defaults apply. A Revision with `minScale: 0` loses its last pod after 60 seconds without traffic (the stable window) plus a 30-second grace period.
 
-For event triggers, events wait in their source (the Broker or the Kafka topic) while the function is at zero. They are delivered once a pod starts.
+**Choosing `maxScale`.** It is a safety limit as much as a capacity setting. At peak, a function that writes to a database can open `maxScale` × (connections per pod) connections. Size it to what the systems it calls can take.
+
+**CPU and memory.** A Function has no resource fields. In an environment namespace, the namespace's LimitRange gives each container a request of 100m CPU and 128Mi, and a limit of 500m and 512Mi. So `maxScale` × 500m must fit in the namespace's quota. Java runtimes get JVM settings that leave at least 256M of heap within 512Mi.
 
 ### Cold starts
 
-The first request after idle pays a **cold start**. The pod is scheduled, the image is pulled if the node does not already have it, and your process starts. This takes from under a second (Go, image already on the node) to several seconds (Java, image not yet pulled).
+The first request after idle pays a **cold start**. The pod is scheduled, the image is pulled if the node does not have it, and your process starts. This ranges from well under a second (Go or Node.js, image already on the node) to several seconds (Java, image not yet pulled). The activator holds the request meanwhile; it is not dropped.
 
 | Lever | Effect |
 |---|---|
-| `minScale: 1` | Keeps one warm pod. Use it for user-facing paths with tight latency targets; it costs one pod around the clock |
-| A small image that boots fast | Go and Deno start fastest. Avoid heavy work at start-up |
+| `minScale: 1` | Keeps one warm pod. Use it for user-facing paths with tight latency targets. It costs one pod around the clock |
+| A small image that boots fast | Go and Node.js start fastest. Do no heavy work at start-up |
 | A high enough `maxScale` | Stops a burst from queueing behind too few pods |
 
-### Choosing maxScale
+## Delivery
 
-`maxScale` is a safety limit as much as a capacity setting. At peak, a function that writes to a database can open `maxScale` × (connections per pod) connections. Size `maxScale` to what the systems it calls can take, not only to the traffic you expect. Function pods also count against the namespace's ResourceQuota like any other pod, so `maxScale` × per-pod requests must fit inside it.
-
-## Build and delivery
-
-Functions use the same paved road as every service. There is no separate function builder:
+A function travels the same road as every application on the platform. The Console's Create flow registers it as an **`Application` of type `function`**. That Application gives the function a pipeline, a Kargo Warehouse, and one Argo CD Application per environment of its project:
 
 ```diagram
 fn-delivery
 ```
 
-1. **Scaffold.** The template creates the Gitea repository `adhar/<name>`, an Argo CD Application that syncs `deploy/`, and a catalog entry.
-2. **Build.** Every push runs the `app-ci` Tekton pipeline. It builds the image with Cloud Native Buildpacks, which detect Java, Go, Node.js and Python from the source. Then it runs the tests, gitleaks, Trivy and an SBOM step, signs the image with cosign, and pushes `library/<name>:<sha>` and `library/<name>:latest` to Harbor.
-3. **Write back.** `app-ci` rewrites the image tag in `deploy/function.yaml` to the commit SHA and commits the change. Git then always records exactly which build is running.
-4. **Deploy.** Argo CD syncs the Function, and Crossplane updates the Knative Service. Knative creates a new Revision and moves traffic to it once it is Ready.
+1. **Build.** Every push to `main` runs `app-ci`. It builds the image with Cloud Native Buildpacks, runs the tests, gitleaks, Trivy and an SBOM step, signs the image with cosign, and pushes `library/<name>:<sha>` to Harbor. Kargo records the signed build as **Freight**.
+2. **Promote to dev.** Kargo pins the image **digest** in `deploy/envs/dev`, renders that overlay, and commits it to the branch `stage/dev`. Argo CD syncs `stage/dev` into the `dev` namespace.
+3. **Verify.** Kargo checks the function using what Knative reports, not a Rollout:
+   - Argo CD's health for the Function is not Degraded
+   - its Revision pods are ready
+   - nothing restarts
+   - the activator's 5xx rate stays under the threshold
+4. **Promote to test.** A build verified in dev moves to test automatically and is verified again.
+5. **Promote to prod.** Production only takes a build verified in test, and only through a **Release**, which is a manual approval. See [Promote Across Environments](/docs/guides/promote-across-environments#step-4--promote-to-prod-with-a-release).
 
-**Roll back with Git.** Revert the commit you want to undo, and the write-back of the build it triggers puts the earlier image back. Knative keeps earlier Revisions (scaled to zero), so the old image is usually still on the node.
+**The same digest runs everywhere.** Nothing is rebuilt between environments, so what you verified in test is byte for byte what reaches prod.
 
-## Enabling the engine
+**Configuration changes ride with promotions.** Argo CD syncs `stage/<env>`, not `main`. A change you commit to `deploy/base` or `deploy/envs/prod` reaches prod with the next promotion into prod. In dev it arrives within minutes, because the same push also builds a new image.
 
-This section is for platform engineers. Functions depend on these packages:
+**Missing overlays are reported.** If the repository lacks an environment's overlay, the Application's `Overlays` condition says `OverlayMissing` and names the overlay. It does not crash-loop.
 
-| Package | Why Functions need it | `local` | `production` |
-|---|---|---|---|
-| `knative` | The Knative Operator. The platform creates the KnativeServing and KnativeEventing instances from it | off | off |
-| `tekton`, `adhar-supply-chain` | The `app-ci` pipeline that builds function images | on | on |
-| `harbor` | The registry function images are pushed to | on | on |
-| `kafka-operator` | Kafka and the KafkaBridge, for `cloudevent` and `topic` triggers | off | on |
-| `rustfs` | The object store behind `bucket` triggers | on | on |
+## In the Console
 
-Turn the engine on the GitOps way:
+**Develop → Functions** lists every function across environments. It shows one row per function and one column per environment, with tiles for Ready, Deploying, Failing and Scaled to zero. Open a function to see these tabs:
 
-```bash
-adhar stack describe knative       # contract, stability (alpha), footprint
-adhar stack enable knative         # edits the appset and environment config; review the diff
-adhar upgrade
-kubectl get xrd functions.platform.adhar.io
-```
+| Tab | What it shows or does |
+|---|---|
+| **Overview** | URL, runtime, triggers, scale, concurrency, timeout, image digest, ready revision, ownership, and conditions |
+| **Revisions & traffic** | Every Revision with its image, and how traffic is split between them |
+| **Scale** | Pods running now, pods the autoscaler wants, bounds and target |
+| **Pods & logs** | Pod list and a live log stream from `user-container` |
+| **Metrics** | Requests, 5xx errors, p95 latency, CPU and memory over 1, 6 or 24 hours |
+| **Events**, **Builds**, **Delivery** | Kubernetes events, `app-ci` runs, and what each environment runs and how it was verified |
+| **Invoke** | Send a request to the function and see the response (see below) |
+| **Configuration** | Parameters and environment variables. **Change scale, timeout or env…** opens a pull request against `deploy/envs/<env>` |
+| **Delete** | Deletes the owning Application, and the repository too if you tick the box |
 
-> **Knative and Tekton conflict today.** Knative ships ConfigMaps with fixed upstream names, `config-logging` and `config-observability`. When both packages install into `adhar-system`, these collide with Tekton's copies, and Tekton runs `app-ci`, which builds every function. `adhar stack enable knative` does not refuse, but the two packages overwrite each other on every sync. kpack's copies of the same ConfigMaps were renamed to resolve the identical clash. Knative needs the same fix before Functions can ship. See `platform/stack/packages/CONFLICTS.md` in the platform repository.
+**Invoke from the Console.** The request goes from the Console server, as you, to the function's own URL; it never comes from your browser. The body can be up to 64 KiB, the response is cut at 256 KiB, and the call times out after 15 seconds. Only the function's own hosts are allowed as targets. Every call is audited as `function.invoke`.
 
-The `open-function` package is a different, older engine. Functions do not use it, and it conflicts with Tekton too, so leave it off.
+**Edits go through Git.** Argo CD self-heals, so a change made to the live Function would be reverted. The Configuration tab therefore writes a merge patch, `deploy/envs/<env>/function-<name>.patch.yaml`, and opens a pull request. Nothing changes until the pull request merges and the next promotion carries it.
+
+**Deliver → Functions** opens the same view on the Delivery tab. **Adhar Resources → Functions** lists the raw `Function` objects.
 
 ## Security
 
-- **Signed images only.** In every profile, the Kyverno policy `verify-supply-chain-images` rejects a Pod that runs an unsigned `library/*` image from Harbor. `app-ci` signs function images. An image you build and push by hand is unsigned and will not run.
-- **No `:latest` in production.** The production profile's `adhar-supply-chain-policies-enforce` pack rejects `:latest` tags. The template's `function.yaml` starts at `:latest`, so a function becomes admissible in production only after the first `app-ci` write-back has replaced the tag with a SHA.
-- **HTTP functions have no SSO in front of them.** Platform UIs sit behind Keycloak, but a function URL is reachable by anyone who can reach the platform's ingress. Authenticate requests in the handler, for example by validating a bearer token or a webhook signature.
-- **No Kubernetes API access.** v1alpha1 has no service-account field, so a function runs as its namespace's `default` service account. Do not grant that account any permissions.
+- **TLS ends at the Gateway.** Kourier listens only inside the cluster, and every Knative Service is `cluster-local`. The HTTPRoute is the only public path, and `visibility: cluster` removes it.
+- **Function URLs have no SSO.** Platform UIs sit behind Keycloak, but a public function answers anyone who can reach the Gateway. Authenticate requests in the handler, for example by checking a bearer token or a webhook signature. For internal-only functions, use `visibility: cluster`.
+- **Network isolation.** Environment namespaces deny ingress by default. A function's NetworkPolicy admits only Knative's own namespaces, for the activator and event delivery.
+- **Signed images only.** Kyverno's `verify-supply-chain-images` policy rejects unsigned `library/*` images from Harbor in every profile. `app-ci` signs every build, and Kargo deploys it by digest.
+- **No secrets in `env`.** Values in `spec.parameters.env` sit in Git in plain text, and the Console warns you of this. With Dapr on (`dapr.enabled: true`), read secrets through the namespace's Dapr `secretstore` component.
+- **Who can change functions.** The ClusterRole `adhar-platform-function-edit` grants full rights on `functions.platform.adhar.io`. It is bound to the OIDC group `platform-developer`. Creating a function from the Console needs `create applications.console.adhar.io`.
+- **Service account.** A function runs as its namespace's `default` service account. Grant that account nothing.
 
 ## Observability
 
-Function pods are ordinary pods, with your code in the `user-container` container:
+- **Logs.** Write JSON to stdout, as the templates do. Read logs in the Console's Pods & logs tab, or with `kubectl -n <namespace> logs -l serving.knative.dev/service=<name> -c user-container`. In the production profile, Alloy ships them to Loki.
+- **Metrics.** The platform scrapes Knative's activator, autoscaler and controller, so request counts and 5xx rates for every function are available, and Kargo's verification uses them. Per-pod request metrics come from each pod's queue-proxy, which needs a PodMonitor. The Console's Metrics tab notes when they are missing.
+- **Dashboards.** Each function gets the per-application Grafana dashboard `app-<name>`, matched to its Knative Revision pods. The catalog links to it.
+- **Traces.** The OpenTelemetry variables point at Alloy. Add the OpenTelemetry SDK for your language, and spans flow with no further configuration.
+- **Argo CD health.** Argo CD reports a Function as Degraded when it fails to reconcile, when `ServiceReady` is False, or when its hostname is claimed elsewhere. It reports Healthy once the Function is Ready.
 
-- **Logs.** Write to stdout and stderr. Read them with `kubectl logs -n <namespace> -l serving.knative.dev/service=<name> -c user-container`. In the production profile, Alloy ships them to Loki.
-- **Request metrics.** Knative's `queue-proxy` sidecar runs in every function pod. It measures request count, latency and concurrency per Revision, and the autoscaler scales on these numbers.
-- **Traces.** The function templates do not include OpenTelemetry. Add the SDK for your language and export OTLP to Alloy, as described in [Observability](/docs/operations/observability).
-- **Console.** Platform → Functions lists every Function with its readiness and the resources it composed.
+## Enable the engine
+
+This section is for platform engineers. Functions need these packages:
+
+| Package | Why | `local` | `production` |
+|---|---|---|---|
+| `knative` | Knative Operator, Serving and Eventing | off | on |
+| `dapr` | `topic` triggers and the optional Dapr sidecar | off | on |
+| `kafka-operator` | Kafka as the Dapr pub/sub backend. Without it, Redis streams are used | off | on |
+| `kargo`, `cert-manager`, `argo-rollout` | Promotion across environments | off | on |
+| `tekton`, `adhar-supply-chain`, `harbor` | `app-ci` and the registry | on | on |
+
+On a laptop, turn the engine on and apply the change:
 
 ```bash
-kubectl get functions.platform.adhar.io -n dev
-kubectl get ksvc,revisions -n dev
-kubectl get pods -n dev -l serving.knative.dev/service=thumbnails -w
+adhar stack enable knative dapr cert-manager kargo argo-rollout
+adhar upgrade
+kubectl -n knative-serving get knativeserving knative-serving   # READY True
+kubectl get xrd functions.platform.adhar.io                      # ESTABLISHED True
 ```
 
-## What exists today
+The `knative` package is marked `localSafe: false` because of its footprint. Run it on a Kind node with room to spare.
 
-| Piece | Status |
+**How the package is laid out:**
+
+- **Where it runs.** The operator runs in `adhar-system`. Serving and Eventing run in their own namespaces, `knative-serving` and `knative-eventing`, which is an exception to the shared-namespace rule.
+- **No ConfigMap clash with Tekton.** That namespace isolation is what removed the old clash with Tekton over `config-logging` and `config-observability`.
+- **Ingress.** Kourier is the ingress, as a ClusterIP service, and is reached only through the platform Gateway.
+- **Domain and DNS.** Knative's domain is rewritten to the platform host when the stack is seeded. Domain claims are created automatically.
+- **Eventing scope.** Eventing installs the in-memory Broker, PingSource, ApiServerSource, ContainerSource and SinkBinding. KafkaSource and the Kafka-backed Broker are not installed; topics go through Dapr instead.
+
+## Limits
+
+| Not provided | What to do instead |
 |---|---|
-| The five function templates and the `Function` manifest they generate | **Exists**, in `adhar-templates` since 2026-10-25 |
-| `adhar application deploy --template function-*` and the Console Create wizard | **Exists**, through the generic template path |
-| Build, scan, sign and write-back through `app-ci` | **Exists** for Node.js, Go, Python and Java. Deno is not in the buildpacks' auto-detect list, so the Deno template is unverified |
-| The `knative` package (Knative Operator v1.22.2) | **Exists, off** in both profiles because it conflicts with `tekton` |
-| KnativeServing and KnativeEventing instances | **Designed**. The package installs only the operator |
-| The `functions.platform.adhar.io` XRD and the `feature: function` composition | **Designed**. Until they land, a synced `Function` has no CRD to apply to, and its Argo CD Application fails to sync |
-| Trigger wiring: Broker Triggers, KafkaSource, bucket notifications, PingSource | **Designed** |
-| Function URLs | **Designed** |
-| Console → Platform → Functions | **Exists**, but it looks for an XRD with the plural `compositefunctions`, so it will not list `functions.platform.adhar.io` until one side changes |
-| An `adhar function` CLI subcommand | **Not planned**. Use `adhar application` |
-| Spec fields for environment variables, secrets, resources, concurrency and a service account | **Not in v1alpha1** |
-| Promotion overlays (dev/test/prod), HPA, PDB, alerts and OpenTelemetry | **Not in the function templates**. The service templates have them |
-
-Track progress on the [Roadmap](/docs/reference/roadmap).
+| `bucket` triggers | Publish an event from whatever writes the object, and use a `cloudevent` or `topic` trigger |
+| Durable or retried delivery for `cron` and `cloudevent` | Use a `topic` trigger when an event must not be lost |
+| CPU, memory, volumes or a service account per function | Use a service template |
+| Secret references in `env` | Dapr's `secretstore`, or a service template |
+| Authentication on function URLs | Check tokens in the handler, or use `visibility: cluster` |
+| Autoscaler class, metric or window per function | Knative's defaults apply |
+| Traffic splitting between Revisions | Knative sends 100% to the latest Ready Revision. Roll back through Git |
+| The test-tier resilience gate | Functions are verified by their health, readiness, restart and error-rate checks |
 
 ## Next steps
 
-- **[Deploy a Function](/docs/guides/deploy-a-function)** — scaffold, deploy, invoke and scale a function, step by step
-- **[Your First Service](/docs/getting-started/first-service)** — the long-running alternative
-- **[Control Plane](/docs/core-concepts/control-plane)** — how claims, XRDs and compositions work
-- **[Platform Services](/docs/core-concepts/platform-services)** — enable `knative` and the packages it depends on
-- **[Observability](/docs/operations/observability)** — logs, metrics and traces for function pods
+- **[Deploy a Function](/docs/guides/deploy-a-function)** — create, call, scale, trigger and promote a function, step by step
+- **[Function API reference](/docs/reference/function-api)** — every field, condition, composed object and `adhar function` flag
+- **[Promote Across Environments](/docs/guides/promote-across-environments)** — Freight, Stages and Releases in depth
+- **[Your First Service](/docs/getting-started/first-service)** — when a long-running service fits better
+- **[Observability](/docs/operations/observability)** — logs, metrics and traces

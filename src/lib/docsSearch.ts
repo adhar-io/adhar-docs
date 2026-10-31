@@ -1,5 +1,6 @@
 import GithubSlugger from "github-slugger";
 import type { DocEntry } from "@/lib/docsRegistry";
+import { statusTokensToText } from "@/lib/docsStatus";
 
 /**
  * Client-side full-text search over a docs registry.
@@ -45,7 +46,7 @@ export function headingText(raw: string): string {
 }
 
 function plain(md: string): string {
-  return md
+  return statusTokensToText(md)
     .replace(/\[([^\]]+)\]\([^)]*\)/g, "$1") // links → text
     .replace(/[`*_>#|]/g, " ") // inline markup, tables, quotes
     .replace(/^\s*[-+]\s+/gm, " ")
@@ -82,12 +83,13 @@ export function buildIndex(entries: DocEntry[]): SearchChunk[] {
     for (const line of e.body.split("\n")) {
       const f = /^```(\S*)/.exec(line);
       if (f) {
-        // Open/close a fence. Diagram fences hold registry keys, not content.
+        // Open/close a fence. Diagram and status-summary fences hold a key or
+        // a title, not content.
         fence = fence === null ? f[1] || "text" : null;
         continue;
       }
       if (fence !== null) {
-        if (fence !== "diagram") current.lines.push(line);
+        if (fence !== "diagram" && fence !== "status-summary") current.lines.push(line);
         continue;
       }
       const h = /^(#{1,6})\s+(.+?)\s*#*\s*$/.exec(line);

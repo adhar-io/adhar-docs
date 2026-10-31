@@ -10,7 +10,7 @@
 
 [![Website](https://img.shields.io/badge/website-adhar.io-4f46e5?style=flat-square)](https://adhar.io)
 [![Deploy](https://img.shields.io/github/actions/workflow/status/adhar-io/adhar-docs/deploy.yml?branch=main&label=deploy&style=flat-square&logo=netlify&logoColor=white)](https://github.com/adhar-io/adhar-docs/actions/workflows/deploy.yml)
-[![Slack](https://img.shields.io/badge/slack-join_community-4A154B?style=flat-square&logo=slack)](https://join.slack.com/t/adharworkspace/shared_invite/zt-26586j9sx-QGrIejNigvzGJrnyH~IXww)
+[![Slack](https://img.shields.io/badge/slack-join_community-4A154B?style=flat-square&logo=slack)](https://join.slack.com/t/adhar-io/shared_invite/zt-4e93jrspf-HpEo6FRHwi1LA05TEJUCVg)
 [![React](https://img.shields.io/badge/React-19-61DAFB?style=flat-square&logo=react&logoColor=white)](https://react.dev)
 [![TanStack Start](https://img.shields.io/badge/TanStack_Start-SPA-FF4154?style=flat-square)](https://tanstack.com/start)
 [![Vite](https://img.shields.io/badge/Vite-8-646CFF?style=flat-square&logo=vite&logoColor=white)](https://vitejs.dev)
@@ -217,5 +217,5 @@ adhar-docs/
 3. Run the quality checks above.
 4. Open a pull request — you'll get a preview URL to review the rendered page.
 
-Questions? Join the [Slack community](https://join.slack.com/t/adharworkspace/shared_invite/zt-26586j9sx-QGrIejNigvzGJrnyH~IXww) or [open an issue](https://github.com/adhar-io/adhar-docs/issues).
+Questions? Join the [Slack community](https://join.slack.com/t/adhar-io/shared_invite/zt-4e93jrspf-HpEo6FRHwi1LA05TEJUCVg) or [open an issue](https://github.com/adhar-io/adhar-docs/issues).
 

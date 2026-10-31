@@ -5,8 +5,11 @@ import rehypeHighlight from "rehype-highlight";
 import rehypeSlug from "rehype-slug";
 import { Check, Copy, Link as LinkIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { parseStatus } from "@/lib/docsStatus";
 import { DIAGRAMS } from "@/components/docs/diagrams/index";
 import Terminal from "@/components/docs/Terminal";
+import StatusPill from "@/components/docs/StatusPill";
+import StatusSummary from "@/components/docs/StatusSummary";
 
 interface MarkdownRendererProps {
   content: string;
@@ -181,10 +184,18 @@ const MarkdownRenderer = ({ content, className }: MarkdownRendererProps) => {
             if (/\blanguage-terminal\b/.test(codeClassName || "")) {
               return <Terminal content={nodeToText(codeChildren)} />;
             }
+            // A ```status-summary fence holds the page title; it renders the
+            // logo, the title and a summary of the page's status tables.
+            if (/\blanguage-status-summary\b/.test(codeClassName || "")) {
+              return <StatusSummary title={nodeToText(codeChildren).trim()} markdown={content} />;
+            }
             return <CodeBlock className={codeClassName}>{codeChildren}</CodeBlock>;
           },
           code: ({ className, children }) => {
-            // Inline only — block code is intercepted by `pre`
+            // Inline only — block code is intercepted by `pre`.
+            // `status:<key>` is a status pill, not code.
+            const status = typeof children === "string" ? parseStatus(children) : null;
+            if (status) return <StatusPill status={status} />;
             return <code className={className}>{children}</code>;
           },
           // Screenshots and figures. `title` (the quoted part of a markdown

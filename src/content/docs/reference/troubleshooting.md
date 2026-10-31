@@ -1,7 +1,7 @@
 ---
 title: "Troubleshooting"
 section: "Reference"
-order: 2
+order: 3
 path: "/docs/reference/troubleshooting"
 ---
 
@@ -369,7 +369,7 @@ cilium status && hubble observe --since 5m --namespace <ns>   # needs the cilium
 | `adhar get apps` is empty | It lists your own applications, not platform packages | `adhar stack list --problems` |
 | Two packages flap `Degraded` forever | A mutual exclusion (for example `vault` and `openbao`) is violated | `adhar stack conflicts`, disable one, `adhar upgrade` |
 
-Still stuck? Ask on [Slack](https://join.slack.com/t/adharworkspace/shared_invite/zt-26586j9sx-QGrIejNigvzGJrnyH~IXww) or open a [GitHub issue](https://github.com/adhar-io/adhar/issues).
+Still stuck? Ask on [Slack](https://join.slack.com/t/adhar-io/shared_invite/zt-4e93jrspf-HpEo6FRHwi1LA05TEJUCVg) or open a [GitHub issue](https://github.com/adhar-io/adhar/issues).
 
 ## See also
 
