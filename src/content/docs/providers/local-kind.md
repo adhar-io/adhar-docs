@@ -94,20 +94,19 @@ No config file is needed. The examples below use `./adhar`, as a source build le
 ```terminal
 $ ./adhar up
 
-Provisioning Adhar platform
-
-  ✓ Kind cluster                   local node · Cilium CNI · ports 8443/8080
-  ✓ Platform CRDs                  AdharPlatform · GitRepository · CustomPackage
-  ✓ Networking                     CoreDNS rewrite · self-signed TLS
-  ✓ Cilium & Gateway               eBPF CNI + Cilium Gateway API
-  ✓ ArgoCD                         GitOps engine
-  ✓ Gitea                          in-cluster Git server
-  ✓ GitOps repos                   seed packages · environments · templates into Gitea
-  ✓ Crossplane                     control plane + providers
-  ◌ GitOps sync - platform stack   curated platform apps via ArgoCD
+  Provisioning Adhar platform  4m12s
+  ✓  Kind cluster  38s
+  ✓  Platform CRDs  2s
+  ✓  Networking  4s
+  ✓  Cilium & Gateway  41s
+  ✓  ArgoCD  34s
+  ✓  Gitea  27s
+  ✓  GitOps repos  12s
+  ✓  Crossplane  23s
+  ⠋  GitOps sync - platform stack  9/20 apps Synced + Healthy
 ```
 
-`◌` means progressing, `✓` ready, `✖` failed. The last stage reports `n/m` apps as ArgoCD drives them to Synced + Healthy. `--apps-timeout` (default 15m) limits how long the CLI waits. Either way, ArgoCD keeps going afterwards.
+The spinner marks the running stage and what it is doing, `✓` a finished stage and how long it took, `○` one still waiting, and `✖` a failure. The last stage reports `n/m` apps as ArgoCD drives them to Synced + Healthy. `--apps-timeout` (default 15m) limits how long the CLI waits. Either way, ArgoCD keeps going afterwards.
 
 Useful variations:
 

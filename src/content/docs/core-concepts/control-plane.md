@@ -7,7 +7,7 @@ path: "/docs/core-concepts/control-plane"
 
 # Control Plane
 
-Adhar's control plane turns "my team needs a database / cache / bucket / cluster" from a ticket into a **Kubernetes API call**. It is built on **Crossplane v2**, in its namespaced form. It works like this:
+Adhar's control plane turns "my team needs a database / cache / bucket / cluster" from a ticket into a **Kubernetes API call**. It is built on **Crossplane**, in its namespaced form. It works like this:
 
 1. A developer creates an ordinary object in their own namespace. Kubernetes RBAC governs who may do this.
 2. The platform composes (builds) the real infrastructure behind that object. On a laptop, that is an in-cluster operator. In production, it is a managed cloud service.
@@ -70,11 +70,11 @@ kubectl get databases.postgresql.cnpg.io -n team-payments    # CNPG's logical da
 kubectl explain databases.platform.adhar.io.spec.parameters  # the full request schema
 ```
 
-## What Crossplane v2 changes
+## What changed from Crossplane v1
 
 Adhar runs Crossplane **v2.4.2** (core) and uses its namespaced model everywhere. If you know Crossplane v1, these are the differences that matter. The control-plane conventions in `platform/controlplane/CONVENTIONS.md` enforce every one of them:
 
-| v1 habit | v2 as Adhar uses it |
+| v1 habit | How Adhar uses it |
 |---|---|
 | Cluster-scoped XRs plus namespaced **Claims** | **XRs are namespaced** (`scope: Namespaced`) and created directly. There is no claim kind |
 | `spec.compositionSelector` on the XR | Crossplane reads **`spec.crossplane.compositionSelector`** — a reserved stanza it injects into every XR. Never declare `spec.crossplane` in an XRD |
@@ -91,7 +91,7 @@ Team XRs and their composed resources live in the **team's namespace**. So ordin
 An XRD is an OpenAPI schema with a name. This excerpt is from the real `database.xrd.yaml`, trimmed to the fields that explain the design:
 
 ```yaml
-apiVersion: apiextensions.crossplane.io/v2      # XRDs moved to /v2 in Crossplane v2
+apiVersion: apiextensions.crossplane.io/v2      # XRDs use the /v2 API
 kind: CompositeResourceDefinition
 metadata:
   name: databases.platform.adhar.io             # must be <plural>.<group>
@@ -148,7 +148,7 @@ The real file's comments record two lessons. Learn both before you write an XRD 
 A Composition does three things. It names the XRD it implements, carries the labels a request selects on, and runs a pipeline of functions. This is the start of `database-local-cnpg`, the Composition a local `Database` uses:
 
 ```yaml
-apiVersion: apiextensions.crossplane.io/v1     # Composition stays v1 in Crossplane v2
+apiVersion: apiextensions.crossplane.io/v1     # Composition is still /v1
 kind: Composition
 metadata:
   name: database-local-cnpg
@@ -292,7 +292,7 @@ metadata:
   name: payments-db
   namespace: team-payments
 spec:
-  crossplane:                       # Crossplane v2's reserved stanza
+  crossplane:                       # Crossplane's reserved stanza
     compositionSelector:
       matchLabels:
         provider: local             # aws | gcp on a cloud — nothing else changes
@@ -361,7 +361,7 @@ Success looks like `READY True` on the XR and a CNPG `Cluster` that reports its 
 
 ## Connection Secrets
 
-Crossplane v2 removed native connection-detail propagation from XRs. So **each Composition decides where credentials land**, and they do not all choose the same name. When you wire up an application, this is the most useful table on the page:
+Crossplane no longer propagates connection details from XRs. So **each Composition decides where credentials land**, and they do not all choose the same name. When you wire up an application, this is the most useful table on the page:
 
 | Request | Secret | Written by | Keys |
 |---|---|---|---|
@@ -409,7 +409,7 @@ Adhar deliberately keeps two paths that complement each other. The imperative pa
 | Path | Surface | Used for |
 |---|---|---|
 | **Imperative** | A Go provider interface (`aws`, `azure`, `gcp`, `digitalocean`, `civo`, `kind`, `custom`) | Day-0 cluster creation and day-2 cluster ops from the CLI |
-| **Declarative** | The Crossplane v2 control plane | Self-service infrastructure requested as ordinary Kubernetes objects |
+| **Declarative** | The Crossplane control plane | Self-service infrastructure requested as ordinary Kubernetes objects |
 
 The imperative path exists because a control plane cannot create the cluster it runs on. Once that cluster exists, everything else — including further clusters, through the `Cluster` API — is declarative.
 
@@ -475,7 +475,7 @@ See [Customization](/docs/operations/customization#extend-the-infrastructure-api
 
 ## Day-2 operations
 
-Crossplane v2 adds `Operation`, `CronOperation` and `WatchOperation` (`ops.crossplane.io/v1alpha1`). They handle work that does not fit the "reconcile a desired state" model. They need the core flag `--enable-operations`, which the platform sets. Five ship in `configuration/operations/`, and all of them run `function-python`:
+Crossplane also provides `Operation`, `CronOperation` and `WatchOperation` (`ops.crossplane.io/v1alpha1`). They handle work that does not fit the "reconcile a desired state" model. They need the core flag `--enable-operations`, which the platform sets. Five ship in `configuration/operations/`, and all of them run `function-python`:
 
 | Operation | Kind | Schedule | What it does |
 |---|---|---|---|

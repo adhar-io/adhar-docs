@@ -2,6 +2,7 @@ import { useLocation, Link } from "@tanstack/react-router";
 import { useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { ArrowLeft, Home } from 'lucide-react';
+import HeroArt from "@/components/illustrations/scenes";
 
 const NotFound = () => {
   const location = useLocation();
@@ -18,6 +19,7 @@ const NotFound = () => {
       </div>
 
       <div className="relative text-center max-w-md">
+        <HeroArt name="lost" className="mx-auto mb-6 w-full max-w-90" />
         <p className="text-[10px] font-mono uppercase tracking-[0.4em] text-muted-foreground mb-4">
           Error 404
         </p>

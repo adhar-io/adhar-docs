@@ -6,6 +6,7 @@ import { Shield, GitPullRequest, BookOpen, ArrowRight } from "lucide-react";
 import { Github } from "@/components/brand-icons";
 import PricingPlans from '@/components/landing/PricingPlans';
 import { btnPrimary, btnSecondary } from '@/components/landing/styles';
+import HeroArt from "@/components/illustrations/scenes";
 
 const GITHUB = "https://github.com/adhar-io/adhar";
 
@@ -63,6 +64,7 @@ const Pricing = () => {
           <div className="absolute inset-0 bg-mesh opacity-80 pointer-events-none" />
           <div className="absolute inset-0 bg-grid bg-grid-fade opacity-40 dark:opacity-25 pointer-events-none" />
           <div className="max-width-content relative text-center">
+            <HeroArt name="two-paths" />
             <span className="eyebrow mb-5">Pricing</span>
             <h1 className="section-heading mt-5 text-foreground">
               Run it yourself, or let us.

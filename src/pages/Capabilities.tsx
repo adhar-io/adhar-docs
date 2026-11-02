@@ -21,6 +21,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { Link } from "@tanstack/react-router";
+import HeroArt from "@/components/illustrations/scenes";
 
 interface Capability {
   icon: LucideIcon;
@@ -228,6 +229,7 @@ const Capabilities = () => {
           <div className="absolute inset-0 bg-mesh opacity-80 pointer-events-none" />
           <div className="absolute inset-0 bg-grid bg-grid-fade opacity-40 dark:opacity-25 pointer-events-none" />
           <div className="max-width-content relative text-center">
+            <HeroArt name="gitops" />
             <span className="eyebrow mb-5"><Zap className="w-3 h-3 mr-1" />Capabilities</span>
             <h1 className="section-heading mt-5 text-foreground">
               An intelligent platform

@@ -7,7 +7,7 @@ path: "/docs/getting-started/installation"
 
 # Installation
 
-This page installs the Adhar CLI on your machine and checks that your environment can run a platform. **The `adhar` binary is the only program you install.** It creates the cluster, installs the foundation, seeds Git and hands off to GitOps. You do not need to set up Kubernetes by hand first. You also need a clone of the Adhar repository, because the platform's package definitions (the *stack*) are read from it.
+This page installs the Adhar CLI on your machine and checks that your environment can run a platform. **The `adhar` binary is the only program you install.** It creates the cluster, installs the foundation, seeds Git and hands off to GitOps. You do not need to set up Kubernetes by hand first. You also need a clone of the Adhar repository. The platform's package definitions (the *stack*) live in its `platform/stack` directory, and the CLI reads them from there; they are not built into the binary.
 
 **One `adhar up` brings up the whole platform, on your laptop or on any supported cloud.** Locally, that takes about ten minutes. On a cloud, the time depends on the provider, because its machine provisioning sets the pace. On DigitalOcean (measured), the cluster is serving in about 5 minutes and the platform is usable at about 13. What differs is the preparation, and that is what this page covers.
 
@@ -184,7 +184,14 @@ cd adhar
 ls platform/stack            # adhar-appset-local.yaml, packages/, environments/, …
 ```
 
-If you built from source, you already have it. If you run `adhar up` anywhere else, it fails at the GitOps stage with `platform stack directory not found`. Check out a release tag that matches your CLI version (`git checkout v<version>`) to keep the binary and the stack in step.
+If you built from source, you already have it. Check out a release tag that matches your CLI version (`git checkout v<version>`) to keep the binary and the stack in step.
+
+Run `adhar up` anywhere else and it stops, because the stack is not where it looks:
+
+- **Locally**, it refuses to start, before any cluster is created: `failed to validate path …/platform/stack`.
+- **On a cloud**, it builds the cluster and then fails at the GitOps stage: `platform stack directory not found`.
+
+If you keep the stack somewhere else, point the CLI at it: `adhar up -p <dir>` for a local platform, and `--stack-dir <dir>` for `adhar stack` and `adhar upgrade`. A cloud `adhar up -f` always reads `platform/stack` under the current directory, so run it from the clone's root.
 
 ## Verify the install
 
@@ -247,22 +254,21 @@ adhar up
 
 Run it from the root of your Adhar clone. With no `--file` and no `--env`, Adhar uses Kind. On a warm machine this is the ten-minute path. It takes about 2m40s to reach the foundation, then another 6m40s for the GitOps sync of the curated core.
 
-Adhar creates a cluster named `adhar` and maps host ports 8443 and 8080 to the Gateway. If either port is already in use, it picks the next free one. It prints a nine-stage checklist under the heading *Provisioning Adhar platform*. Each line shows `◌` while it runs, `✓` when it finishes and `✖` if it fails. Mid-run, it looks like this:
+Adhar creates a cluster named `adhar` and maps host ports 8443 and 8080 to the Gateway. If either port is already in use, it picks the next free one. It prints a nine-stage checklist under the heading *Provisioning Adhar platform*, with the total time beside it. A spinner marks the stage that is running, along with what it is doing. A finished stage turns to `✓` with how long it took, a waiting one shows `○`, and a failed one `✖`. Mid-run, it looks like this:
 
 ```terminal
 $ adhar up
 
-Provisioning Adhar platform
-
-  ✓ Kind cluster                   local node · Cilium CNI · ports 8443/8080
-  ✓ Platform CRDs                  AdharPlatform · GitRepository · CustomPackage
-  ✓ Networking                     CoreDNS rewrite · self-signed TLS
-  ✓ Cilium & Gateway               eBPF CNI + Cilium Gateway API
-  ✓ ArgoCD                         GitOps engine
-  ✓ Gitea                          in-cluster Git server
-  ◌ GitOps repos                   seed packages · environments · templates into Gitea
-  ◌ Crossplane                     control plane + providers
-  ◌ GitOps sync - platform stack   curated platform apps via ArgoCD
+  Provisioning Adhar platform  2m31s
+  ✓  Kind cluster  38s
+  ✓  Platform CRDs  2s
+  ✓  Networking  4s
+  ✓  Cilium & Gateway  41s
+  ✓  ArgoCD  34s
+  ✓  Gitea  27s
+  ⠋  GitOps repos  seed packages · environments · templates into Gitea
+  ○  Crossplane
+  ○  GitOps sync - platform stack
 ```
 
 The CLI drives the first three stages. From **Cilium & Gateway** onward, the `AdharPlatform` controller owns the work. Locally, that controller runs inside the `adhar up` process, and the checklist only reports what it sees. That is why the second half can sit on one line for a while. It is watching, not stalled.
@@ -388,17 +394,16 @@ The stage checklist has the same shape as the local one. Cloud stages replace th
 ```terminal
 $ adhar up -f config.digitalocean.yaml --env dev
 
-Provisioning Adhar Platform
-
-  ✓ Preflight                      credentials, quota and API access
-  ✓ Cloud cluster                  adhar · digitalocean · blr1
-  ✓ Kubeconfig & TLS               context, certificates, edge DNS
-  ✓ Cilium & Gateway               eBPF data path
-  ✓ ArgoCD                         GitOps engine
-  ◌ Gitea                          in-cluster Git server
-  ◌ GitOps repos                   packages, environments
-  ◌ Crossplane                     control plane + providers
-  ◌ GitOps sync - platform stack   platform apps via ArgoCD
+  Provisioning Adhar Platform  7m22s
+  ✓  Preflight  3s
+  ✓  Cloud cluster  4m41s
+  ✓  Kubeconfig & TLS  19s
+  ✓  Cilium & Gateway  1m12s
+  ✓  ArgoCD  58s
+  ⠋  Gitea  adhar-controlplane Git server
+  ○  GitOps repos
+  ○  Crossplane
+  ○  GitOps sync - platform stack
 ```
 
 The provider sets the time here, not Adhar. On DigitalOcean (measured), the cluster is serving in about 5 minutes and the platform is usable at about 13. The rest of the catalogue then keeps converging for another 30–45 minutes after the CLI returns, while the autoscaler adds workers. Other clouds differ; AWS, Azure and Civo have not had a live run yet. When it finishes, run:
@@ -434,7 +439,7 @@ The provider pages cover per-cloud detail, including IAM permissions, machine si
 | Engine shows `✖ Not found` but the CLI is installed | The daemon is not answering. Being on `PATH` is not enough | Start Docker Desktop, or `podman machine start`; confirm with `docker info` |
 | Wrong engine picked on a machine with two | First-responding engine wins | `export KIND_EXPERIMENTAL_PROVIDER=podman` and re-check with `adhar version` |
 | `adhar up` fails immediately | The engine's daemon is not answering | `docker info` (or `podman info`); start the engine and retry |
-| `platform stack directory not found` | `adhar up` was run outside the Adhar clone | `cd` into the clone's root and run `adhar up` again. It resumes |
+| `failed to validate path …/platform/stack` (local) or `platform stack directory not found` (cloud) | `adhar up` was run outside the Adhar clone | `cd` into the clone's root and run `adhar up` again |
 | Rootless Podman cannot bind `8443` | The host refuses that port to a rootless user | Use another port, for example `adhar up --port 9443` (HTTP derives as port − 363, here `9080`), rather than loosening system limits |
 | Pods stay `Pending`, node under memory pressure | Engine memory limit too low | Raise it to 8 GB or more and re-run `adhar up`. The bootstrap resumes |
 | `*.adhar.localtest.me` will not resolve | No DNS egress, or DNS-rebinding protection | `localtest.me` resolves to `127.0.0.1` from public DNS. Allow it, or use a resolver that does not block loopback answers |

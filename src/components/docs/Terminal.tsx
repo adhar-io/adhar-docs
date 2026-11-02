@@ -9,10 +9,12 @@ import type { ReactNode } from "react";
  * genuine output — never invented to look plausible.
  *
  * Markdown uses a ```terminal fence. The first `$ ` line becomes the window
- * title; glyphs the CLI already emits (✓ ✖ ◌ ●) are colourised.
+ * title; glyphs the CLI already emits (✓ ✖ ◌ ● ○ and the ⠋ spinner) are
+ * colourised.
  */
 
-const GLYPH = /([✓✔●])|([✖✗✘])|([◌○⟳])/;
+// Done · failed · running (including the stage tracker's spinner frames) · waiting.
+const GLYPH = /([✓✔●])|([✖✗✘])|([◌⟳⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏])|(○)/;
 
 function colourise(line: string, key: number): ReactNode {
   // A shell prompt line.
@@ -64,9 +66,15 @@ function colourise(line: string, key: number): ReactNode {
                   {p}
                 </span>
               );
-            if (/^[◌○⟳]$/.test(p))
+            if (/^[◌⟳⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏]$/.test(p))
               return (
                 <span key={i} className="text-amber-400">
+                  {p}
+                </span>
+              );
+            if (p === "○")
+              return (
+                <span key={i} className="text-slate-500">
                   {p}
                 </span>
               );

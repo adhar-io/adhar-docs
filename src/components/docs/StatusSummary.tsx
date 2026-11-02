@@ -1,5 +1,4 @@
 import { useMemo, type ReactNode } from "react";
-import Logo from "@/components/ui/Logo";
 import StatusPill from "@/components/docs/StatusPill";
 import { cn } from "@/lib/utils";
 import { DOC_STATUSES, type DocStatus } from "@/lib/docsStatus";
@@ -56,7 +55,7 @@ const StackedBar = ({ counts, size }: { counts: Record<DocStatus, number>; size:
 };
 
 /**
- * The header of a status page: the Adhar logo, the page title, and a summary
+ * The header of a status page: the page title and a summary
  * of every status table on the page — overall progress, progress per group,
  * and the items still to do. It reads the page's own markdown, so it can never
  * disagree with the tables below it.
@@ -71,8 +70,7 @@ const StatusSummary = ({ title, markdown }: { title: string; markdown: string })
 
   return (
     <header className="status-summary mb-10">
-      <Logo size="md" showTagline={false} linkTo={null} />
-      <h1 className="mt-6 mb-6 text-4xl font-bold tracking-tight text-foreground sm:text-5xl">{title}</h1>
+      <h1 className="mb-6 text-4xl font-bold tracking-tight text-foreground sm:text-5xl">{title}</h1>
 
       <section
         aria-label={`${title}: status summary`}

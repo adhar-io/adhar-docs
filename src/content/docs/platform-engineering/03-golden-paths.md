@@ -114,7 +114,7 @@ Adhar keeps its golden paths in **one collection with two entry points**. The te
 
 The stack's own catalogue registers `basic`, `microservice`, `frontend`, `data-pipeline`, `ml`, `argo-workflows` and `app-with-bucket`. The live list on your platform comes from the mirror, so check `adhar application templates`.
 
-Infrastructure follows the same model. Crossplane v2 exposes databases, caches, buckets and clusters as namespaced Kubernetes resources (`Database`, `Cache`, `Bucket`, `Cluster` and more). So a team requests a bucket in the same place, and the same way, as a Deployment. See [Control Plane](/docs/core-concepts/control-plane).
+Infrastructure follows the same model. Crossplane exposes databases, caches, buckets and clusters as namespaced Kubernetes resources (`Database`, `Cache`, `Bucket`, `Cluster` and more). So a team requests a bucket in the same place, and the same way, as a Deployment. See [Control Plane](/docs/core-concepts/control-plane).
 
 Scaffolding is only day 0. On its own it would be a snippet generator. What makes these real paths is where the generated service lands:
 

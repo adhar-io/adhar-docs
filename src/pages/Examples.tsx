@@ -2,6 +2,7 @@ import React from "react";
 import { ExternalLink, GitBranch, Download, Star, ArrowRight } from "lucide-react";
 import Navigation from "@/components/landing/Navigation";
 import Footer from "@/components/landing/Footer";
+import HeroArt from "@/components/illustrations/scenes";
 
 const Examples = () => {
   const templates = [
@@ -82,6 +83,7 @@ const Examples = () => {
           <div className="absolute inset-0 bg-mesh opacity-80 pointer-events-none" />
           <div className="absolute inset-0 bg-grid bg-grid-fade opacity-40 dark:opacity-25 pointer-events-none" />
           <div className="max-width-content relative text-center">
+            <HeroArt name="scaffold" />
             <span className="eyebrow mb-5">Examples</span>
             <h1 className="section-heading mt-5 text-foreground">
               Templates to

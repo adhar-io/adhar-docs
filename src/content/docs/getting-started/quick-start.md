@@ -220,7 +220,7 @@ Locally, the request becomes an in-cluster CloudNativePG cluster. On a cloud, th
 | Symptom | First move |
 |---|---|
 | `adhar up` fails immediately | Run `docker info`. Is the engine answering? Are you in the root of your Adhar clone? |
-| `platform stack directory not found` | You ran `adhar up` outside the Adhar clone. `cd` into it and run `adhar up` again |
+| `failed to validate path …/platform/stack` | You ran `adhar up` outside the Adhar clone. `cd` into it and run `adhar up` again |
 | Bootstrap stopped part-way (Ctrl-C, sleep, timeout) | Run `adhar up` again. It resumes from the pending gate |
 | ArgoCD is up but shows no applications at all | The GitOps phase never finished. Re-run `adhar up` |
 | A URL returns nothing | Run `adhar stack status <package>`. The package must be enabled, `Healthy`, and ship an `HTTPRoute` |

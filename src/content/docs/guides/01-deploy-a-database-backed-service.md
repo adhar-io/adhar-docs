@@ -44,7 +44,7 @@ ha-db-guide-steps
 
 ## How the pieces fit
 
-**A `Database` is a namespaced Crossplane v2 composite resource.** You create it in the namespace where the service will run. Crossplane picks a composition (the template that turns your request into real resources) by label. `provider: local` plus `engine: postgresql` selects `database-local-cnpg`. That is also the XRD's default, so a bare request never reaches for a cloud composition that has no credentials.
+**A `Database` is a namespaced Crossplane composite resource.** You create it in the namespace where the service will run. Crossplane picks a composition (the template that turns your request into real resources) by label. `provider: local` plus `engine: postgresql` selects `database-local-cnpg`. That is also the XRD's default, so a bare request never reaches for a cloud composition that has no credentials.
 
 On a cloud platform, set `provider: aws` (or `gcp`, `azure`) to select the managed-database composition instead. The rest of the request does not change.
 

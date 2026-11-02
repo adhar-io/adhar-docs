@@ -49,7 +49,7 @@ do-roadmap-phases
 
 | Phase | Focus | Status |
 |---|---|---|
-| [**0 — Local excellence**](#phase-0--local-excellence) | One-command local platform on Kind, the GitOps package model, the Crossplane v2 control plane | `status:complete` |
+| [**0 — Local excellence**](#phase-0--local-excellence) | One-command local platform on Kind, the GitOps package model, the Crossplane control plane | `status:complete` |
 | [**1 — Single-cluster production**](#phase-1--single-cluster-production) | Self-managed clusters, HA mode, the production edge, SSO, backup and restore, upgrades, node autoscaling | `status:complete` |
 | [**2 — Multi-cluster platform**](#phase-2--multi-cluster-platform) | Control-plane / data-plane separation, workload clusters through GitOps, hub-and-spoke observability, Cluster Mesh | `status:complete` |
 | [**3 — Developer experience & ecosystem**](#phase-3--developer-experience--ecosystem) | Paved-road CI, previews, supply-chain enforcement, golden paths, Functions, scorecards, the marketplace, Adhar AI | `status:complete` |
@@ -69,7 +69,7 @@ Two things are deliberately missing, and you should know about them before you p
 |---|---|---|
 | Deterministic bootstrap | `status:complete` | Kind cluster → Gateway API → Cilium → Gateway → Argo CD → Gitea, always in that order |
 | GitOps package model | `status:complete` | The full catalogue wired as packages, with a curated local core enabled |
-| Crossplane v2 control plane | `status:complete` | XRDs and Compositions packaged and installed with the platform |
+| Crossplane control plane | `status:complete` | XRDs and Compositions packaged and installed with the platform |
 | Automated releases | `status:complete` | GoReleaser and GitHub Actions publish binaries, GHCR images and the Homebrew formula |
 | Status conditions | `status:complete` | `AdharPlatform` reports ArgoCDReady, GatewayReady, GiteaReady, CrossplaneReady, GitOpsReady and Ready |
 | Package health view | `status:complete` | `adhar get status` shows every package's Argo CD health and sync, with a summary |

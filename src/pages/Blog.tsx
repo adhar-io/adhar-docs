@@ -17,6 +17,7 @@ import { blogPosts, type BlogPost } from "@/data/blogData";
 import { initials, listBookmarks, parsePostDate, tagsForPost } from "@/lib/blogExtras";
 import BlogSearch from "@/components/blog/BlogSearch";
 import BlogCover from "@/components/blog/BlogCover";
+import HeroArt from "@/components/illustrations/scenes";
 
 const CATEGORIES = ["All Stories", "Platform Updates", "DevOps", "Security", "AI/ML"];
 const DEFAULT_CAT = "All Stories";
@@ -123,6 +124,7 @@ const Blog = () => {
                   and how to ship faster without breaking things.
                 </p>
               </div>
+              <HeroArt name="reading" className="hidden lg:block w-full max-w-100 shrink-0 self-center" />
             </div>
 
             {/* Search */}

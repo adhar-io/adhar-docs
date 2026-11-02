@@ -185,7 +185,7 @@ const MarkdownRenderer = ({ content, className }: MarkdownRendererProps) => {
               return <Terminal content={nodeToText(codeChildren)} />;
             }
             // A ```status-summary fence holds the page title; it renders the
-            // logo, the title and a summary of the page's status tables.
+            // title and a summary of the page's status tables.
             if (/\blanguage-status-summary\b/.test(codeClassName || "")) {
               return <StatusSummary title={nodeToText(codeChildren).trim()} markdown={content} />;
             }

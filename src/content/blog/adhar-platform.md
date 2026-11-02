@@ -41,7 +41,7 @@ Adhar curates 100+ open-source packages. Each one arrives already wired into ide
 | Capability | What ships |
 |---|---|
 | **GitOps delivery** | ArgoCD, reconciling against an in-cluster Gitea repository |
-| **Self-service infrastructure** | Crossplane v2 APIs: databases, caches, buckets and clusters as namespaced Kubernetes resources |
+| **Self-service infrastructure** | Crossplane APIs: databases, caches, buckets and clusters as namespaced Kubernetes resources |
 | **Identity and SSO** | Keycloak (OIDC) across every platform UI |
 | **Secrets** | OpenBao and External Secrets; secrets never go in Git |
 | **Secure supply chain** | Tekton and Buildpacks build, Trivy scans, Cosign signs, Harbor stores, Kyverno admits |

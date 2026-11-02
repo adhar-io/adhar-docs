@@ -5,6 +5,7 @@ import Navigation from '@/components/landing/Navigation';
 import Footer from '@/components/landing/Footer';
 import { Github } from '@/components/brand-icons';
 import { btnSecondary, focusRing } from '@/components/landing/styles';
+import HeroArt from "@/components/illustrations/scenes";
 
 // The site is static, so contact is by email: each card opens a pre-addressed
 // message in the visitor's mail client with a subject that says what it's about.
@@ -48,6 +49,7 @@ const Contact = () => (
         <div className="absolute inset-0 bg-mesh opacity-80 pointer-events-none" />
         <div className="absolute inset-0 bg-grid bg-grid-fade opacity-40 dark:opacity-25 pointer-events-none" />
         <div className="max-width-content relative text-center">
+          <HeroArt name="conversation" />
           <span className="eyebrow mb-5">Contact</span>
           <h1 className="section-heading mt-5 text-foreground">Get in touch.</h1>
           <p className="section-subheading mt-6">

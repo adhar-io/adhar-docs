@@ -251,17 +251,16 @@ The CLI draws one checklist for the run. The CLI runs the first three stages its
 ```terminal
 $ ./adhar up -f config.yaml --env dev
 
-Provisioning Adhar Platform
-
-  ✓ Preflight                      credentials, quota and API access
-  ✓ Cloud cluster                  adhar · digitalocean · blr1
-  ✓ Kubeconfig & TLS               context adhar
-  ✓ Cilium & Gateway               eBPF data path
-  ✓ ArgoCD                         GitOps engine
-  ✓ Gitea                          in-cluster Git server
-  ✓ GitOps repos                   packages, environments
-  ✓ Crossplane                     control plane + providers
-  ◌ GitOps sync - platform stack   platform apps via ArgoCD
+  Provisioning Adhar Platform  10m31s
+  ✓  Preflight  3s
+  ✓  Cloud cluster  4m41s
+  ✓  Kubeconfig & TLS  19s
+  ✓  Cilium & Gateway  1m12s
+  ✓  ArgoCD  58s
+  ✓  Gitea  51s
+  ✓  GitOps repos  14s
+  ✓  Crossplane  1m26s
+  ⠋  GitOps sync - platform stack  26/75 apps Synced + Healthy
 ```
 
 What happens underneath, measured on the 3-worker verified run:

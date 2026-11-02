@@ -1,5 +1,5 @@
 import React from "react";
-import { Server, ShieldCheck, Terminal, Unlock } from "lucide-react";
+import { RefreshCw, Server, ShieldCheck, Unlock } from "lucide-react";
 import SectionHeader from "./SectionHeader";
 
 // `logo: null` renders a generic server icon (on-prem has no brand mark).
@@ -19,9 +19,9 @@ const promises = [
     body: "Standard open-source projects and plain Kubernetes resources, all in your own Git.",
   },
   {
-    icon: Terminal,
-    title: "One command",
-    body: "One command creates the cluster and installs the whole platform.",
+    icon: RefreshCw,
+    title: "Self-healing",
+    body: "Argo CD keeps every cluster matching Git, so drift is corrected automatically.",
   },
   {
     icon: ShieldCheck,

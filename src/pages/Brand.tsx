@@ -5,6 +5,7 @@ import Footer from "@/components/landing/Footer";
 import SectionHeader from "@/components/landing/SectionHeader";
 import { btnPrimary, btnSecondary, focusRing } from "@/components/landing/styles";
 import { copyText, fetchText, makeZip, saveBlob, svgToPng, type ZipEntry } from "@/lib/brandKit";
+import HeroArt from "@/components/illustrations/scenes";
 
 /*
  * Brand & press kit. Content follows the official brand guide in the platform
@@ -247,6 +248,7 @@ const Brand = () => {
           <div className="absolute inset-0 bg-mesh opacity-80 pointer-events-none" />
           <div className="absolute inset-0 bg-grid bg-grid-fade opacity-40 dark:opacity-25 pointer-events-none" />
           <div className="max-width-content relative text-center">
+            <HeroArt name="construct" />
             <span className="eyebrow mb-5">Brand &amp; press</span>
             <h1 className="section-heading mt-5 text-foreground">
               The Adhar brand,

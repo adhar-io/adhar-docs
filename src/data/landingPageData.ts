@@ -90,7 +90,7 @@ export const capabilities = [
     title: "Self-service infrastructure",
     description:
       "Developers request databases, caches and buckets as ordinary Kubernetes resources — no ticket, no waiting.",
-    stats: "Crossplane v2",
+    stats: "Crossplane",
   },
   {
     icon: KeyRound,

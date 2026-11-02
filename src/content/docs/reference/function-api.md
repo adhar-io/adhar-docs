@@ -24,7 +24,7 @@ It is for anyone writing or debugging a `Function` by hand. [Functions](/docs/co
 | **Group / version / kind** | `platform.adhar.io` / `v1alpha1` / `Function` |
 | **Plural** | `functions` — always qualify it: `kubectl get functions.platform.adhar.io` |
 | **Scope** | Namespaced |
-| **Definition** | XRD `functions.platform.adhar.io` (Crossplane v2) |
+| **Definition** | XRD `functions.platform.adhar.io` (Crossplane) |
 | **Composition** | `function-local-knative` (default; labels `feature: function`, `provider: local`, `runtime: knative`) |
 | **Printer columns** | `URL` (`.status.url`), `Revision` (`.status.readyRevision`) |
 | **Required** | `spec.parameters.runtime`, `spec.parameters.image` |
@@ -105,7 +105,7 @@ spec:
 
 **Placement.** In an environment namespace, the namespace's labels `adhar.io/organisation`, `adhar.io/team`, `adhar.io/project` and `adhar.io/environment` override the four placement parameters. The `Placement` condition reports when a parameter disagreed and was ignored. A namespace counts as an environment namespace when it has a non-empty `adhar.io/environment` label.
 
-`spec.compositionSelector` at the top level of `spec` is still accepted, so objects written against the first version of the API stay valid. Crossplane v2 ignores it and reads `spec.crossplane.compositionSelector`.
+`spec.compositionSelector` at the top level of `spec` is still accepted, so objects written against the first version of the API stay valid. Crossplane ignores it and reads `spec.crossplane.compositionSelector`.
 
 ## Triggers
 

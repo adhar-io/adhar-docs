@@ -315,22 +315,21 @@ preflight ● instance type r6i.xlarge: offered in 3 zone(s):
 preflight ● ELB access (needed by teardown): load balancers are listable
 ```
 
-Then the same checklist every cloud draws:
+Then the same checklist every cloud draws. While the machines are created, it looks like this:
 
 ```terminal
 $ ./adhar up -f config.yaml --env dev
 
-Provisioning Adhar Platform
-
-  ✓ Preflight                      credentials, quota and API access
-  ✓ Cloud cluster                  adhar · aws · ap-southeast-1
-  ✓ Kubeconfig & TLS               context adhar
-  ✓ Cilium & Gateway               eBPF data path
-  ✓ ArgoCD                         GitOps engine
-  ✓ Gitea                          in-cluster Git server
-  ✓ GitOps repos                   packages, environments
-  ✓ Crossplane                     control plane + providers
-  ◌ GitOps sync - platform stack   platform apps via ArgoCD
+  Provisioning Adhar Platform  1m07s
+  ✓  Preflight  4s
+  ⠋  Cloud cluster  adhar · aws · ap-southeast-1 — creating machines, this takes a few minutes
+  ○  Kubeconfig & TLS
+  ○  Cilium & Gateway
+  ○  ArgoCD
+  ○  Gitea
+  ○  GitOps repos
+  ○  Crossplane
+  ○  GitOps sync - platform stack
 ```
 
 After the first joins, compute mode installs these over SSH on the control plane:

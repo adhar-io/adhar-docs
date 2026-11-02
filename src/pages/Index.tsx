@@ -11,11 +11,11 @@ import PricingSection from '@/components/landing/PricingSection';
 import FAQSection from '@/components/landing/FAQSection';
 import CTASection from '@/components/landing/CTASection';
 import Footer from '@/components/landing/Footer';
-import Reveal from '@/components/Reveal';
 
 /**
  * Landing page. Below the hero, sections alternate between the plain and the
- * muted background, and each one fades in as it scrolls into view.
+ * muted background; their headers and cards rise in as they scroll into view
+ * (useAutoReveal, applied to every page by RouteTransition).
  */
 // Explicit keys: component names are not stable once the bundle is minified.
 const sections = [
@@ -39,9 +39,7 @@ const Index = () => (
       <HeroSection />
 
       {sections.map(([key, Section]) => (
-        <Reveal key={key}>
-          <Section />
-        </Reveal>
+        <Section key={key} />
       ))}
     </main>
 

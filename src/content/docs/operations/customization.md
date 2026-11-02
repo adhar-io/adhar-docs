@@ -20,7 +20,7 @@ This page is for platform engineers who want the platform to fit their organisat
 | Add your own package | New dir + `adhar-package.yaml` + ApplicationSet and environment-config entries |
 | Deploy team apps | `CustomPackage` CRD |
 | Add a golden path | Backstage scaffolder template (shared by the CLI and the Console) |
-| Add a self-service API | XRD + Composition (Crossplane v2) |
+| Add a self-service API | XRD + Composition (Crossplane) |
 | Add a cloud provider | Implement the provider interface |
 | Preview changes | `adhar upgrade --diff-only` |
 
@@ -312,7 +312,7 @@ The root `config.yaml` has four layers, each overriding the previous: `globalSet
 
 ## Extend the infrastructure APIs
 
-The control plane (`platform/controlplane/`) ships composite APIs (XRDs) plus compositions on Crossplane v2.
+The control plane (`platform/controlplane/`) ships composite APIs (XRDs) plus compositions on Crossplane.
 
 - To add a new implementation of an existing API, write a Composition that selects on your label.
 - To add a whole new API, write an XRD (`apiextensions.crossplane.io/v2`, `scope: Namespaced`, no claims) plus one Composition per implementation.

@@ -441,7 +441,7 @@ adhar version --short
 | Trap | What happens | Do this instead |
 |---|---|---|
 | `adhar up -f config.yaml` with no `--env` | **Every** environment in the file is acted on; each `isolation: cluster` environment gets its own cluster | Always pass `--env <name>` with `-f` |
-| `adhar up`, `stack` or `upgrade` outside the repository | `platform stack directory not found` | Run from the Adhar clone's root, or pass `-p` / `--stack-dir` |
+| `adhar up`, `stack` or `upgrade` outside the repository | Local `up`: `failed to validate path …/platform/stack`. Cloud `up` and `upgrade`: `platform stack directory not found`. `stack`: `reading the ApplicationSet` | Run from the Adhar clone's root, or pass `-p` (local `up`) / `--stack-dir` (`stack`, `upgrade`) |
 | `adhar get apps` is empty on a fresh platform | It lists *your* applications, not platform packages | `adhar stack list` for packages |
 | `adhar cluster list/status/scale/upgrade` with no `--file` | The default config has no cloud provider, so it reports "No clusters found" | Pass `--file config.yaml` |
 | `-f` means different things | On `up`, `down`, `cluster`, `config` and `application deploy` it is `--file`; on `application delete`, `database delete` and `environment delete` it is `--force`; on `logs` it is `--follow`; on `metrics`, `traces`, `gitops`, `secrets`, `scale`, `storage`, `network`, `pipeline`, `routes` and `webhook` it is `--output` | Spell out long flags in scripts |

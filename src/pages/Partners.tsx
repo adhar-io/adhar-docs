@@ -2,6 +2,7 @@ import React from 'react';
 import Navigation from '@/components/landing/Navigation';
 import Footer from '@/components/landing/Footer';
 import { Building, Handshake, Users, Globe, ArrowRight } from "lucide-react";
+import HeroArt from "@/components/illustrations/scenes";
 
 const Partners = () => {
   const partnerTypes = [
@@ -41,6 +42,7 @@ const Partners = () => {
           <div className="absolute inset-0 bg-mesh opacity-80 pointer-events-none" />
           <div className="absolute inset-0 bg-grid bg-grid-fade opacity-40 dark:opacity-25 pointer-events-none" />
           <div className="max-width-content relative text-center">
+            <HeroArt name="alliance" />
             <span className="eyebrow mb-5"><Handshake className="w-3 h-3 mr-1" />Partners</span>
             <h1 className="section-heading mt-5 text-foreground">
               We work with

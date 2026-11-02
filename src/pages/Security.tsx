@@ -22,6 +22,7 @@ import {
   ArrowRight,
   type LucideIcon,
 } from "lucide-react";
+import HeroArt from "@/components/illustrations/scenes";
 
 const securityMetrics = [
   { label: "Security incidents", value: "0", period: "Last 12 months" },
@@ -155,11 +156,12 @@ const Security = () => {
           <div className="absolute inset-0 bg-mesh opacity-80 pointer-events-none" />
           <div className="absolute inset-0 bg-grid bg-grid-fade opacity-40 dark:opacity-25 pointer-events-none" />
           <div className="max-width-content relative text-center">
+            <HeroArt name="supply-chain" />
             <span className="eyebrow mb-5"><Shield className="w-3 h-3 mr-1" />Security</span>
             <h1 className="section-heading mt-5 text-foreground">
               Zero trust, defense in depth,
               <br className="hidden sm:block" />
-              <span className="text-muted-foreground">audit-grade by default.</span>
+              <span className="text-muted-foreground"> audit-grade by default.</span>
             </h1>
             <p className="section-subheading mt-6">
               Security isn't a feature — it's the foundation. Every layer of ADHAR is built

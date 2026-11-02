@@ -20,6 +20,7 @@ import {
   Cpu,
   Workflow,
 } from 'lucide-react';
+import HeroArt from "@/components/illustrations/scenes";
 
 const layers = [
   {
@@ -138,6 +139,7 @@ const Architecture = () => {
           <div className="absolute inset-0 bg-mesh opacity-80 pointer-events-none" />
           <div className="absolute inset-0 bg-grid bg-grid-fade opacity-40 dark:opacity-25 pointer-events-none" />
           <div className="max-width-content relative text-center">
+            <HeroArt name="platform" />
             <span className="eyebrow mb-5">Architecture</span>
             <h1 className="section-heading mt-5 text-foreground">
               Cloud-native by design,

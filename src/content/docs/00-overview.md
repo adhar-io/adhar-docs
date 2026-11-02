@@ -44,7 +44,7 @@ Here is what that looks like in practice. A developer asks for a PostgreSQL data
 
 ## How it works, in one paragraph
 
-`adhar up` builds the platform in two moves. First, it bootstraps a minimal foundation in a fixed order: **Cilium** for networking and the Gateway API, then **ArgoCD** to reconcile, then **Gitea** to hold the source of truth. It then seeds that in-cluster Git with the platform's own definition (the `platform/stack` directory of the Adhar repository). Second, it steps out of the way. A single ArgoCD **ApplicationSet** (one object that generates an ArgoCD Application per package) reads the repository and deploys every enabled package. Meanwhile, a **Crossplane v2** control plane turns databases, caches and buckets into ordinary namespaced Kubernetes resources that a developer can request without a ticket. After that handoff, the platform maintains itself. A push to Gitea triggers a sync straight away, and ArgoCD re-compares every package with Git every two minutes as a backstop. So a commit is the only lasting way to change it. The same model runs unchanged on a laptop under Kind, on one production cluster, or on a control plane that governs a fleet.
+`adhar up` builds the platform in two moves. First, it bootstraps a minimal foundation in a fixed order: **Cilium** for networking and the Gateway API, then **ArgoCD** to reconcile, then **Gitea** to hold the source of truth. It then seeds that in-cluster Git with the platform's own definition (the `platform/stack` directory of the Adhar repository). Second, it steps out of the way. A single ArgoCD **ApplicationSet** (one object that generates an ArgoCD Application per package) reads the repository and deploys every enabled package. Meanwhile, a **Crossplane** control plane turns databases, caches and buckets into ordinary namespaced Kubernetes resources that a developer can request without a ticket. After that handoff, the platform maintains itself. A push to Gitea triggers a sync straight away, and ArgoCD re-compares every package with Git every two minutes as a backstop. So a commit is the only lasting way to change it. The same model runs unchanged on a laptop under Kind, on one production cluster, or on a control plane that governs a fleet.
 
 ## The mental model
 
@@ -77,7 +77,7 @@ The table shows what each capability is built from, and whether the *local profi
 | Capability | What ships | On locally? |
 |---|---|---|
 | **GitOps delivery** | ArgoCD + in-cluster Gitea as the single source of truth | Yes |
-| **Self-service infrastructure** | Crossplane v2 APIs — databases, caches, buckets, clusters as ordinary Kubernetes resources | Yes (CloudNativePG, Valkey and RustFS back the local requests) |
+| **Self-service infrastructure** | Crossplane APIs — databases, caches, buckets, clusters as ordinary Kubernetes resources | Yes (CloudNativePG, Valkey and RustFS back the local requests) |
 | **Identity & SSO** | Keycloak (OIDC) for every service and the Kubernetes API | Yes |
 | **Secrets** | External Secrets Operator + OpenBao (a Vault-compatible secrets store). Secret values never go in Git | External Secrets only. OpenBao is production-only |
 | **Observability** | Prometheus and Grafana for metrics. Loki (logs), Tempo (traces), Mimir (long-term metrics) and Hubble (network flows) in production. No per-service setup | Prometheus and Grafana only |
@@ -96,7 +96,10 @@ None of it is bolted on afterwards. Each package arrives already wired into iden
 | **An SRE or operator** | One observability stack, one identity provider, one promotion path. Scheduled Velero backups (daily and weekly) and credential rotation ship in the production profile |
 | **A technical leader evaluating** | A complete IDP you stand up with one `adhar up`: on a laptop in about ten minutes, or on your cloud. Entirely Apache 2.0, with no vendor to negotiate with before you know if it fits |
 
-Adhar is a good fit if you run Kubernetes and want one coherent platform, not a shelf of separate tools. It is not a PaaS (a hosted platform you rent). You keep your clusters, your cloud account, and your data.
+Adhar is a good fit if you run Kubernetes and want one coherent platform, not a shelf of separate tools. You can run it two ways:
+
+- **Self-hosted.** Adhar runs on your own clusters and in your own cloud account, so you keep your infrastructure and your data.
+- **[Adhar Cloud](/pricing).** The hosted version: the same open-source platform, run for you. You can move between Adhar Cloud and self-hosting at any time.
 
 ## Where to go next
 

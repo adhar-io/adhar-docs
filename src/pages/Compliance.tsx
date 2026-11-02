@@ -3,6 +3,7 @@ import Navigation from '@/components/landing/Navigation';
 import Footer from '@/components/landing/Footer';
 import { Shield, CheckCircle, FileText, Lock, Award, Users, Globe, AlertCircle, ArrowRight } from "lucide-react";
 import { Link } from "@tanstack/react-router";
+import HeroArt from "@/components/illustrations/scenes";
 
 const Compliance = () => {
   const certifications = [
@@ -38,6 +39,7 @@ const Compliance = () => {
           <div className="absolute inset-0 bg-mesh opacity-80 pointer-events-none" />
           <div className="absolute inset-0 bg-grid bg-grid-fade opacity-40 dark:opacity-25 pointer-events-none" />
           <div className="max-width-content relative text-center">
+            <HeroArt name="doc-checks" />
             <span className="eyebrow mb-5"><Shield className="w-3 h-3 mr-1" />Compliance</span>
             <h1 className="section-heading mt-5 text-foreground">
               Compliance &amp;

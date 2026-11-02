@@ -235,7 +235,10 @@ const DocsShell = ({ registry, brand, versionSource, searchLabel }: DocsShellPro
 
           <div className="grid grid-cols-1 lg:grid-cols-[260px_minmax(0,1fr)_200px] gap-10">
             {/* ── Sidebar ── */}
-            <aside ref={sidebarRef} className="lg:sticky lg:top-24 lg:self-start lg:max-h-[calc(100vh-7rem)] lg:overflow-y-auto pr-2 scrollbar-hide">
+            {/* The scroll container clips its children's shadows and focus rings,
+                so it gets room on the left, pulled back out by the negative
+                margin to keep the content where it was. */}
+            <aside ref={sidebarRef} className="lg:sticky lg:top-24 lg:self-start lg:max-h-[calc(100vh-7rem)] lg:overflow-y-auto lg:-ml-2 lg:pl-2 pr-2 scrollbar-hide">
               <Link to={brand.homeHref} className="flex items-center gap-3 mb-6 group">
                 <div className="relative w-10 h-10 rounded-xl bg-gradient-to-br from-primary to-accent flex items-center justify-center shadow-lg shadow-primary/30 group-hover:shadow-primary/50 transition-shadow">
                   <Package className="w-5 h-5 text-white" />

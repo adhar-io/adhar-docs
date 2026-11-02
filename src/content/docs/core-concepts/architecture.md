@@ -346,7 +346,7 @@ Crossplane reconciles everything else — databases, buckets, projects, applicat
 
 ## Day-2 is designed, not discovered
 
-Backup, upgrade, scaling, cost and removal are part of a capability's definition of done. The control plane ships scheduled Crossplane v2 Operations:
+Backup, upgrade, scaling, cost and removal are part of a capability's definition of done. The control plane ships scheduled Crossplane Operations:
 
 - a daily Velero backup
 - a weekly secret-rotation nudge
@@ -397,7 +397,7 @@ A change that violates a pillar needs an ADR (architecture decision record) that
 
 ## Keep reading
 
-- [Control Plane](/docs/core-concepts/control-plane) — the Crossplane v2 self-service engine in depth
+- [Control Plane](/docs/core-concepts/control-plane) — the Crossplane self-service engine in depth
 - [The 6 D's Framework](/docs/core-concepts/ds-framework) — the delivery methodology
 - [Platform Services](/docs/core-concepts/platform-services) — the full package catalogue
 - [Run a Multi-Cluster Fleet](/docs/guides/run-a-fleet) — T3 in practice

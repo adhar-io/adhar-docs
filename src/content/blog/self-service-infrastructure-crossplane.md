@@ -1,6 +1,6 @@
 ---
 title: "Self-service infrastructure without the ticket queue"
-excerpt: "How Adhar uses Crossplane v2 to turn a database, cache or bucket request into a Kubernetes object in your own namespace, bounded by quotas and policy the platform team writes once."
+excerpt: "How Adhar uses Crossplane to turn a database, cache or bucket request into a Kubernetes object in your own namespace, bounded by quotas and policy the platform team writes once."
 category: "Platform Updates"
 author: "Adhar Team"
 date: "2026-10-09"
@@ -25,7 +25,7 @@ The platform-engineering answer is self-service: the common case needs no human 
 
 ## A database is a Kubernetes object
 
-Adhar's control plane is built on Crossplane v2, in its namespaced form. Crossplane extends the Kubernetes API server, so infrastructure becomes ordinary Kubernetes objects. Three Crossplane terms carry the whole design:
+Adhar's control plane is built on Crossplane, in its namespaced form. Crossplane extends the Kubernetes API server, so infrastructure becomes ordinary Kubernetes objects. Three Crossplane terms carry the whole design:
 
 | Term | What it is |
 |---|---|
@@ -33,7 +33,7 @@ Adhar's control plane is built on Crossplane v2, in its namespaced form. Crosspl
 | **XR** (composite resource) | What a developer creates, such as `Database/payments-db` |
 | **Composition** | One implementation of an XRD, labelled so a request can select it |
 
-In Crossplane v2 the XR is namespaced and created directly. There is no separate claim kind. So the request lives in the team's namespace, and Kubernetes RBAC decides who may create it.
+Here the XR is namespaced and created directly. There is no separate claim kind. So the request lives in the team's namespace, and Kubernetes RBAC decides who may create it.
 
 Every self-service kind lives in `platform.adhar.io/v1alpha1` and is named for what you get: `Database`, `Cache`, `Bucket`, `Application`, `Project`, `Cluster`. The old `Composite*` names were retired and are rejected, not aliased.
 
@@ -117,7 +117,7 @@ Qualify the resource name. `Database` and `Cluster` also exist in the CloudNativ
 
 ## Connection details land in a Secret
 
-Crossplane v2 removed automatic connection-detail propagation. Each Composition decides where credentials land. For the common cases:
+Crossplane no longer propagates connection details automatically. Each Composition decides where credentials land. For the common cases:
 
 | Request | Secret | Keys |
 |---|---|---|
