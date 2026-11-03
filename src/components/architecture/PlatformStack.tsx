@@ -15,7 +15,7 @@ const PlatformStack = ({ platformCategories }: PlatformStackProps) => {
       color: "bg-gradient-to-br from-orange-50 to-amber-50",
       tools: [
         { name: "n8n", icon: "https://cdn.jsdelivr.net/gh/simple-icons/simple-icons/icons/n8n.svg", color: TILE, description: "Workflow automation" },
-        { name: "Chaos Mesh", icon: "https://cdn.jsdelivr.net/gh/chaos-mesh/chaos-mesh/static/logo.svg", color: TILE, description: "Chaos engineering" },
+        { name: "LitmusChaos", icon: "https://cdn.jsdelivr.net/gh/cncf/artwork@main/projects/litmus/icon/color/litmus-icon-color.svg", color: TILE, description: "Chaos engineering" },
         { name: "k6", icon: "https://cdn.jsdelivr.net/gh/simple-icons/simple-icons/icons/k6.svg", color: TILE, description: "Load & performance testing" },
         { name: "Baserow", icon: "https://cdn.jsdelivr.net/gh/simple-icons/simple-icons/icons/baserow.svg", color: TILE, description: "No-code database" }
       ]
@@ -26,8 +26,8 @@ const PlatformStack = ({ platformCategories }: PlatformStackProps) => {
       tools: [
         { name: "Prometheus", icon: "https://cdn.jsdelivr.net/gh/devicons/devicon/icons/prometheus/prometheus-original.svg", color: TILE, description: "Metrics & alerting" },
         { name: "Grafana", icon: "https://cdn.jsdelivr.net/gh/devicons/devicon/icons/grafana/grafana-original.svg", color: TILE, description: "Dashboards & visualisation" },
-        { name: "Pixie", icon: "https://cdn.jsdelivr.net/gh/cncf/artwork/projects/pixie/icon/color/pixie-icon-color.svg", color: TILE, description: "eBPF observability" },
-        { name: "Tempo", icon: "https://cdn.jsdelivr.net/gh/devicons/devicon/icons/grafana/grafana-original.svg", color: TILE, description: "Distributed tracing" }
+        { name: "Loki", icon: "https://grafana.com/static/img/logos/logo-loki.svg", color: TILE, description: "Log aggregation" },
+        { name: "Tempo", icon: "https://grafana.com/static/assets/img/logos/grafana-tempo.svg", color: TILE, description: "Distributed tracing" }
       ]
     }
   ];
@@ -64,7 +64,7 @@ const PlatformStack = ({ platformCategories }: PlatformStackProps) => {
             {allCategories.map((category, categoryIndex) => (
               <div 
                 key={category.name}
-                className={`${category.color} dark:bg-none dark:bg-white/[0.04] dark:ring-1 dark:ring-white/10 relative group p-6 rounded-2xl shadow-lg hover:shadow-2xl transition-all duration-500 hover:scale-105 hover:-translate-y-2 backdrop-blur-sm h-full flex flex-col justify-between`}
+                className={`${category.color} dark:bg-none dark:bg-white/[0.04] dark:ring-1 dark:ring-white/10 relative group p-6 rounded-2xl shadow-lg hover:shadow-2xl transition-all duration-500 hover:-translate-y-1 backdrop-blur-sm h-full flex flex-col`}
                 style={{ animation: `fadeInUp 0.8s ease-out ${categoryIndex * 150}ms both` }}
               >
                 {/* Category Header */}
@@ -75,12 +75,13 @@ const PlatformStack = ({ platformCategories }: PlatformStackProps) => {
                   <div className="w-8 h-0.5 bg-gradient-to-r from-gray-400 to-gray-600 dark:from-gray-500 dark:to-gray-400 mx-auto mt-2 rounded-full"></div>
                 </div>
 
-                {/* Tools Grid */}
-                <div className="grid grid-cols-2 gap-2.5 flex-grow">
+                {/* Tools Grid — fixed-height tiles, packed to the top, so a card
+                    made taller by its row never stretches its tiles. */}
+                <div className="grid grid-cols-2 content-start gap-2.5">
                   {category.tools.map((tool) => (
                     <div
                       key={tool.name}
-                      className={`${tool.color} relative group/tool w-full min-h-[76px] px-1.5 py-2.5 rounded-xl flex flex-col items-center justify-center gap-1.5 transition-all duration-300 hover:scale-105 hover:shadow-lg`}
+                      className={`${tool.color} relative group/tool w-full h-21 px-1.5 py-2.5 rounded-xl flex flex-col items-center justify-center gap-1.5 transition-shadow duration-300 hover:shadow-lg`}
                       title={`${tool.name} - ${tool.description}`}
                     >
                       {/* Tool Icon */}
@@ -108,7 +109,7 @@ const PlatformStack = ({ platformCategories }: PlatformStackProps) => {
                           </span>
                         )}
                       </div>
-                      <span className="max-w-full truncate text-[11px] font-medium leading-tight text-gray-700">{tool.name}</span>
+                      <span className="max-w-full line-clamp-2 text-center text-[11px] font-medium leading-tight text-gray-700">{tool.name}</span>
 
                       {/* Enhanced Tooltip */}
                       <div className="absolute -top-14 left-1/2 transform -translate-x-1/2 opacity-0 group-hover/tool:opacity-100 transition-all duration-300 bg-gray-900 dark:bg-gray-100 text-white dark:text-gray-900 text-xs px-3 py-2 rounded-lg whitespace-nowrap z-30 shadow-xl border border-gray-700 dark:border-gray-300">

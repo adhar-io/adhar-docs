@@ -19,7 +19,7 @@ const highlights = [
   { name: "ArgoCD", role: "GitOps delivery", icon: `${SI}/argo.svg` },
   { name: "Gitea", role: "Git server", icon: `${SI}/gitea.svg` },
   { name: "Keycloak", role: "SSO & identity", icon: `${SI}/keycloak.svg` },
-  { name: "Backstage", role: "Developer portal", icon: `${SI}/backstage.svg` },
+  { name: "Kargo", role: "Environment promotion", icon: "https://cdn.jsdelivr.net/gh/akuity/kargo/ui/public/kargo-logo.png" },
   { name: "Harbor", role: "Container registry", icon: `${SI}/harbor.svg` },
   { name: "Grafana", role: "Observability", icon: `${DEV}/grafana/grafana-original.svg` },
   { name: "Prometheus", role: "Metrics", icon: `${DEV}/prometheus/prometheus-original.svg` },
@@ -34,24 +34,24 @@ const marquee = [
   { name: "cert-manager", icon: cncf("cert-manager") },
   { name: "Falco", icon: `${SI}/falco.svg` },
   { name: "OpenTelemetry", icon: `${SI}/opentelemetry.svg` },
-  { name: "Loki", icon: `${DEV}/grafana/grafana-original.svg` },
-  { name: "Tempo", icon: `${DEV}/grafana/grafana-original.svg` },
+  { name: "Loki", icon: "https://grafana.com/static/img/logos/logo-loki.svg" },
+  { name: "Tempo", icon: "https://grafana.com/static/assets/img/logos/grafana-tempo.svg" },
   { name: "Tekton", icon: `${SI}/tekton.svg` },
   { name: "Knative", icon: `${SI}/knative.svg` },
   { name: "KEDA", icon: cncf("keda") },
   { name: "Dapr", icon: `${SI}/dapr.svg` },
   { name: "CloudNativePG", icon: cncf("cloudnativepg") },
   { name: "PostgreSQL", icon: `${DEV}/postgresql/postgresql-original.svg` },
-  { name: "MinIO", icon: `${SI}/minio.svg` },
+  { name: "RustFS", icon: "https://github.com/rustfs.png?size=64" },
   { name: "Apache Kafka", icon: `${SI}/apachekafka.svg` },
   { name: "Trino", icon: `${SI}/trino.svg` },
-  { name: "ClickHouse", icon: `${SI}/clickhouse.svg` },
+  { name: "Valkey", icon: "https://github.com/valkey-io.png?size=64" },
   { name: "Velero", icon: cncf("velero") },
   { name: "Buildpacks", icon: cncf("buildpacks") },
   { name: "Coder", icon: `${SI}/coder.svg` },
   { name: "Penpot", icon: `${SI}/penpot.svg` },
   { name: "Headlamp", icon: cncf("headlamp") },
-  { name: "Kubescape", icon: cncf("kubescape") },
+  { name: "LitmusChaos", icon: cncf("litmus") },
   { name: "vLLM", icon: `${SI}/vllm.svg` },
 ];
 
@@ -127,7 +127,7 @@ const IntegrationsSection = () => {
           {highlights.map((tool) => (
             <article
               key={tool.name}
-              className={`group relative flex items-center gap-3.5 bg-card p-5 transition-all duration-300 hover:bg-muted/40 hover:-translate-y-0.5 ${
+              className={`group relative flex flex-col items-start gap-3 sm:flex-row sm:items-center sm:gap-3.5 bg-card p-5 transition-all duration-300 hover:bg-muted/40 hover:-translate-y-0.5 ${
                 tool.isFoundation ? "ring-1 ring-inset ring-primary/30" : ""
               }`}
             >
