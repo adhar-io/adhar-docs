@@ -239,7 +239,7 @@ const Blog = () => {
                           </span>
                         </div>
                       </div>
-                      <div className="flex flex-col justify-center p-7 sm:p-10 lg:p-12">
+                      <div className="flex flex-col justify-center p-2 sm:p-2 lg:p-2">
                         <div className="flex flex-wrap items-center gap-2 mb-4">
                           <span className="inline-flex items-center px-2.5 py-0.5 rounded-full bg-primary/10 text-primary text-xs font-medium ring-1 ring-inset ring-primary/20">
                             {featured.category}

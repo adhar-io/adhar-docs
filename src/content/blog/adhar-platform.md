@@ -10,7 +10,7 @@ featured: true
 tags: ["Adhar", "Platform Engineering", "IDP", "GitOps", "Kubernetes"]
 ---
 
-Adhar is an open-source Internal Developer Platform (IDP). It is a ready-made set of tools your teams use to build, ship and run software on Kubernetes. One command, `adhar up`, sets up the whole thing: GitOps delivery, identity, CI, a container registry, observability, self-service infrastructure and a developer portal. It runs on your laptop or on your own cloud account.
+Adhar is an open-source Internal Developer Platform (IDP). It is a ready-made set of tools your teams use to build, ship and run software on Kubernetes. One command, `adhar up` sets up the whole platform: GitOps delivery, identity, CI, a container registry, observability, self-service infrastructure and a developer portal. It runs on your laptop or on your own cloud account.
 
 The name comes from the Sanskrit word *Adhāra*, which means "foundation". That is the goal. Adhar is not a hosted service you rent. It is a foundation you own, licensed under Apache 2.0, with no proprietary tier and no managed-only features.
 
@@ -108,31 +108,63 @@ First, it bootstraps a minimal foundation in a fixed order: Cilium for networkin
 
 Second, it steps out of the way. It seeds the in-cluster Gitea with the platform's own definition. A single ArgoCD ApplicationSet then reads that repository and deploys every enabled package. From that point, Git is in charge. ArgoCD runs with self-heal on, so a manual `kubectl edit` on a managed object is soon reverted. To change the platform, you change Git.
 
-Locally, that takes about ten minutes on a warm machine. Install the Adhar CLI, then boot the platform straight from the CLI and repository-managed stack:
+Locally, use the same kind of simple flow:
+
+1. Install the CLI.
+2. Verify your installation.
+3. Bring up the local platform.
+4. Check health and fetch initial credentials.
 
 ```bash
-# Install the CLI
+# 1) Install the CLI
 curl -fsSL https://raw.githubusercontent.com/adhar-io/adhar/main/install.sh | bash
 # or, on macOS with Homebrew:
 brew install adhar
 
-# Verify the CLI is available
+# 2) Verify installation
 adhar version
 
-# Start the local platform
-adhar up                     # Kind on your laptop, no config file
-adhar get status             # conditions and per-package health
-adhar get secrets -p argocd  # credentials, without digging in pods
+# 3) Bootstrap a local platform (Kind)
+adhar up
+
+# 4) Check status and get access credentials
+adhar get status
+adhar get secrets -p argocd
 ```
 
-On a cloud it is the same command, with a config file and an environment:
+For first-time local runs:
+
+- Ensure your container runtime is running before `adhar up`.
+- Keep the first run focused on one environment and default settings.
+- Re-run `adhar up` after interruptions; it resumes from pending phases.
+
+On a cloud, use a short four-step flow:
+
+1. Create a starter config for your provider and region.
+2. Validate it before provisioning anything.
+3. Dry-run to preview exactly what Adhar will create.
+4. Run the real apply for your target environment.
 
 ```bash
+# 1) Generate a starter config
 adhar config create --provider digitalocean --region blr1 --name config.yaml
+
+# 2) Validate inputs (credentials, required fields, schema)
 adhar config validate config.yaml
-adhar up -f config.yaml --env dev --dry-run   # preview; provisions nothing
+
+# 3) Preview only — no infrastructure changes
+adhar up -f config.yaml --env dev --dry-run
+
+# 4) Provision the environment
 adhar up -f config.yaml --env dev
 ```
+
+A practical way to treat this file:
+
+- Keep `config.yaml` in Git for reviewability.
+- Use one `--env` per stage (`dev`, `stage`, `prod`) in the same file.
+- Start with the smallest environment first, then promote the same model.
+- Re-run the same command after edits; Adhar reconciles toward desired state.
 
 How long a cloud run takes depends on how fast the cloud provisions machines. The foundation and GitOps phases take about as long as they do locally. What changes is the time before them. On DigitalOcean, the verified run had the cluster serving in about five minutes and the platform usable in about thirteen. Always pass `--env` with `-f`; without it, every environment in the file is provisioned.
 
@@ -171,32 +203,86 @@ adhar ai diagnose keycloak     # agentic triage: pods, logs, events
 
 The AI layer is on in the production profile and off in the local profile.
 
-## What is verified, and what is still maturing
+## Current readiness and maturity
 
-Adhar is at v0.1.x and in active development. The project uses a strict definition of done: a capability counts as verified only after it has been exercised end to end on a real cluster. A green ArgoCD Application is not enough.
+Adhar is in active development (v0.1.x), with a strict definition of "verified": a capability is marked verified only after an end-to-end run on a real cluster. A green ArgoCD tree alone is not enough.
 
-| Area | Status today |
-|---|---|
-| Local Kind platform | Exercised continuously by an end-to-end bootstrap test |
-| DigitalOcean and GCP | Live-verified end to end |
-| AWS, Azure, Civo | Built and render-verified; treat a first run as a bring-up exercise |
-| On-prem (custom hosts) | Render-verified, using the same kubeadm flow over SSH |
-| Fleet upgrades, compliance export, identity federation | Implemented, still need live verification |
+| Area | Status today | What it means in practice |
+|---|---|---|
+| Local Kind platform | Continuously exercised | Bootstrap and core platform paths are tested regularly end to end |
+| DigitalOcean and GCP | Live-verified | Full bring-up and day-1 workflows have been executed on real cloud resources |
+| AWS, Azure, Civo | Render-verified | Config generation and manifests are validated; treat first runs as guided bring-up |
+| On-prem (custom hosts) | Render-verified | Uses the same kubeadm-over-SSH flow, but should be piloted in a non-production environment first |
+| Fleet upgrades, compliance export, identity federation | Implemented, maturing | Available for early adopters; more large-scale production evidence is still being collected |
 
-Packages carry maturity labels such as alpha and beta, so you can see which parts are newer. Two things are deliberately absent. SPIFFE/SPIRE workload identity is not included; identity comes from Keycloak at the application layer. And HA mode covers platform components, not multi-master control planes.
+### 100+ integrations, one operating model
 
-If a cloud you care about is render-verified only, start with `adhar up --dry-run`. It validates the config and prints the plan without spending anything.
+The platform ships with 100+ curated open-source packages already integrated into one control model:
+
+- Git as the source of truth (Gitea + ArgoCD reconciliation)
+- Shared identity (Keycloak/OIDC across UIs and APIs)
+- Shared platform APIs (`platform.adhar.io/v1alpha1`) for apps and infrastructure
+- Shared telemetry (metrics, logs, traces, network visibility)
+
+This is important because you do not have to integrate each tool yourself before teams can use it. Teams consume a consistent platform contract from day one.
+
+### Security hardened by default
+
+Adhar's default path is security-oriented rather than "open by default":
+
+- CI build + scan + sign flow (Buildpacks/Tekton + Trivy + Cosign)
+- Policy enforcement before deployment (Kyverno admission controls)
+- Secrets lifecycle built in (OpenBao + External Secrets; no secrets in Git)
+- RBAC + SSO at the platform edge (Keycloak identity model)
+- GitOps drift correction (manual in-cluster edits get reconciled back to policy)
+
+If a cloud you care about is render-verified only, start with `adhar up --dry-run`. It validates the config and shows the full plan before any infrastructure is created.
 
 ## Try it
 
-You need a container engine and the `adhar` CLI. The CLI installs the platform bootstrap and seeds the Git server from its bundled platform stack, so you can start without cloning the repository first:
+You can get a working local platform in minutes with a short path:
+
+1. Install and verify the CLI.
+2. Bootstrap the local platform.
+3. Check health and get initial credentials.
+4. Create your first real platform resource with YAML.
 
 ```bash
+# 1) Install and verify
 curl -fsSL https://raw.githubusercontent.com/adhar-io/adhar/main/install.sh | bash
 adhar version
+
+# 2) Bootstrap local platform
 adhar up
+
+# 3) Check health and access
 adhar get status
-adhar application templates
+adhar get secrets -p argocd
+```
+
+Then create your first database the GitOps way:
+
+```yaml
+apiVersion: platform.adhar.io/v1alpha1
+kind: Database
+metadata:
+  name: orders
+  namespace: team-payments
+spec:
+  crossplane:
+    compositionSelector:
+      matchLabels:
+        provider: local
+        engine: postgresql
+  parameters:
+    engine: postgresql
+    engineVersion: "16"
+    storageSize: 20Gi
+```
+
+```bash
+# 4) Apply declarative resource
+kubectl apply -f orders-database.yaml
 ```
 
 From there, these pages take you further:
