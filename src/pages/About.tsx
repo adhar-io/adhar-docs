@@ -42,7 +42,7 @@ const About = () => {
   const team = [
     {
       name: "Sudhir Pradhan",
-      role: "Head of Data & AI Platform",
+      role: "Data & AI Platform",
       avatar: "/avatars/professional-woman-1.jpg",
       bio: "Former engineering leader at major tech companies, passionate about developer productivity.",
       location: "San Francisco, CA",
@@ -54,18 +54,18 @@ const About = () => {
     },
     {
       name: "Tapas Jena",
-      role: "Creator & Head of Architecture",
+      role: "Platform & Architecture",
       avatar: "/avatars/professional-man-2.jpg",
       bio: "Systems architect with 15+ years experience building scalable platforms.",
       location: "Singapore",
       social: {
-        github: "marcusrod",
-        linkedin: "marcus-rodriguez-cto"
+        github: "tapas4java",
+        linkedin: "tapasjena"
       }
     },
     {
       name: "Pavan Chakrabatula",
-      role: "Head of Kubernetes Platform Engineering",
+      role: "Kubernetes Platform Engineering",
       avatar: "/avatars/professional-woman-2.jpg",
       bio: "Product strategist focused on creating intuitive developer experiences.",
       location: "Singapore",
@@ -88,7 +88,7 @@ const About = () => {
     },
     {
       name: "Arun Subramanian",
-      role: "Head of Security & Resiliency Engineering",
+      role: "Security & Resiliency Engineering",
       avatar: "/avatars/professional-woman-3.jpg",
       bio: "Owns supply-chain security, policy and secrets, so every Adhar default is a safe one.",
       location: "Singapore",
@@ -99,10 +99,33 @@ const About = () => {
     },
     {
       name: "Pavan Kumar Kurela",
-      role: "Head of Developer Relations & Community",
+      role: "Developer Relations & Community",
       avatar: "/avatars/professional-man-3.jpg",
       bio: "Works with the community on docs, golden paths and the feedback that shapes the roadmap.",
       location: "Singapore",
+      social: {
+        github: "jwhitfield",
+        linkedin: "james-whitfield-devrel",
+        twitter: "james_devrel"
+      }
+    },
+    {
+      name: "Mahendra Kiran Patcha",
+      role: "Frontend Engineering & UX",
+      avatar: "/avatars/professional-woman-3.jpg",
+      bio: "Owns supply-chain security, policy and secrets, so every Adhar default is a safe one.",
+      location: "Singapore",
+      social: {
+        github: "priyanair",
+        linkedin: "priya-nair-security"
+      }
+    },
+    {
+      name: "Ajith Raj",
+      role: "Marketing & Customer Success",
+      avatar: "/avatars/professional-man-3.jpg",
+      bio: "Works with the community on docs, golden paths and the feedback that shapes the roadmap.",
+      location: "Florida, USA",
       social: {
         github: "jwhitfield",
         linkedin: "james-whitfield-devrel",

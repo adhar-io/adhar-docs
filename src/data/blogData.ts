@@ -31,7 +31,7 @@ export interface BlogPost {
   content: string;
   category: string;
   author: string;
-  /** Optional byline role, e.g. "Creator of Adhar". Falls back to "Contributor". */
+  /** Optional byline role, e.g. "Adhar Maintainer". Falls back to "Contributor". */
   authorRole?: string;
   /** Optional author bio blurb shown in the post footer. */
   authorBio?: string;

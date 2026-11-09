@@ -3,8 +3,8 @@ title: "Introducing Adhar: Open Cloud-Native Foundation"
 excerpt: "Adhar is an open-source Internal Developer Platform. One command, adhar up, brings up 100+ curated packages on a laptop or your cloud, wired together and delivered by GitOps."
 category: "Platform Updates"
 author: "Tapas Jena"
-authorRole: "Creator of Adhar"
-authorBio: "Tapas Jena is the creator of Adhar, building an open foundation for platform engineering."
+authorRole: "Adhar Maintainer"
+authorBio: "Tapas Jena is the Adhar Maintainer, building an open foundation for platform engineering."
 date: "2026-08-28"
 featured: true
 tags: ["Adhar", "Platform Engineering", "IDP", "GitOps", "Kubernetes"]
@@ -27,11 +27,40 @@ Once an engineering organisation grows past a handful of teams, it usually reach
 
 This trade-off only exists when standards are enforced after the fact, through review gates, checklists and people saying no. Adhar takes a different position: put the standards into the road itself. Security, compliance and observability become properties of the default route to production. If that route is also the fastest one, teams take it by choice.
 
-Here is a concrete example. A developer needs a PostgreSQL database. On Adhar they apply a small Kubernetes object in their own namespace, or run one CLI command. The platform returns a quota-bounded database, and its connection details land in a Secret. There is no ticket, and nobody on the platform team has to approve that specific request.
+Here is a concrete example. A developer needs a PostgreSQL database and wants to bind it to an application. On Adhar, they declare both resources as Kubernetes manifests in Git. The platform returns a quota-bounded database, and its connection details land in a Secret. There is no ticket, and nobody on the platform team has to approve that specific request.
+
+```yaml
+apiVersion: platform.adhar.io/v1alpha1
+kind: Database
+metadata:
+  name: orders
+  namespace: team-payments
+spec:
+  crossplane:
+    compositionSelector:
+      matchLabels:
+        provider: local
+        engine: postgresql
+  parameters:
+    engine: postgresql
+    engineVersion: "16"
+    storageSize: 20Gi
+---
+apiVersion: platform.adhar.io/v1alpha1
+kind: Application
+metadata:
+  name: orders-api
+  namespace: team-payments
+spec:
+  bindings:
+    databases:
+      - name: orders
+```
+
+Apply the manifests:
 
 ```bash
-adhar database create --name orders --engine postgresql --version 16 --size 20Gi
-adhar application bind orders-api orders
+kubectl apply -f orders-database-and-binding.yaml
 ```
 
 ## What ships
