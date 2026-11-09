@@ -13,7 +13,7 @@ interface LogoProps {
 const sizeMap = {
   sm: { symbol: 'h-7 w-7', wordmark: 'text-lg', tagline: 'text-[9px]' },
   md: { symbol: 'h-9 w-9', wordmark: 'text-xl', tagline: 'text-[10px]' },
-  lg: { symbol: 'h-11 w-11', wordmark: 'text-3xl', tagline: 'text-xs' },
+  lg: { symbol: 'h-10 w-10', wordmark: 'text-3xl', tagline: 'text-xs' },
 };
 
 const Logo = ({ size = 'md', showTagline = true, className = '', linkTo = '/', variant = 'default' }: LogoProps) => {

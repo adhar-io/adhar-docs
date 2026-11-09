@@ -79,10 +79,18 @@ First, it bootstraps a minimal foundation in a fixed order: Cilium for networkin
 
 Second, it steps out of the way. It seeds the in-cluster Gitea with the platform's own definition. A single ArgoCD ApplicationSet then reads that repository and deploys every enabled package. From that point, Git is in charge. ArgoCD runs with self-heal on, so a manual `kubectl edit` on a managed object is soon reverted. To change the platform, you change Git.
 
-Locally, that takes about ten minutes on a warm machine:
+Locally, that takes about ten minutes on a warm machine. Install the Adhar CLI, then boot the platform straight from the CLI and repository-managed stack:
 
 ```bash
-git clone https://github.com/adhar-io/adhar.git && cd adhar   # adhar up seeds Git from ./platform/stack
+# Install the CLI
+curl -fsSL https://raw.githubusercontent.com/adhar-io/adhar/main/install.sh | bash
+# or, on macOS with Homebrew:
+brew install adhar
+
+# Verify the CLI is available
+adhar version
+
+# Start the local platform
 adhar up                     # Kind on your laptop, no config file
 adhar get status             # conditions and per-package health
 adhar get secrets -p argocd  # credentials, without digging in pods
@@ -152,10 +160,11 @@ If a cloud you care about is render-verified only, start with `adhar up --dry-ru
 
 ## Try it
 
-You need a container engine, the `adhar` CLI and a clone of the Adhar repository. `adhar up` seeds the platform's Git server from the clone's `platform/stack` directory, so run it from the root of the clone:
+You need a container engine and the `adhar` CLI. The CLI installs the platform bootstrap and seeds the Git server from its bundled platform stack, so you can start without cloning the repository first:
 
 ```bash
-git clone https://github.com/adhar-io/adhar.git && cd adhar
+curl -fsSL https://raw.githubusercontent.com/adhar-io/adhar/main/install.sh | bash
+adhar version
 adhar up
 adhar get status
 adhar application templates

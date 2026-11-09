@@ -22,6 +22,9 @@ import HeroArt from "@/components/illustrations/scenes";
 const CATEGORIES = ["All Stories", "Platform Updates", "DevOps", "Security", "AI/ML"];
 const DEFAULT_CAT = "All Stories";
 
+const coverAspectClass = (slug: string) => (slug === "adhar-platform" ? "aspect-[40/21]" : "aspect-[16/10]");
+const featuredCoverAspectClass = (slug: string) =>
+  slug === "adhar-platform" ? "aspect-[40/21] lg:aspect-[40/21]" : "aspect-[16/10] lg:aspect-auto";
 
 const Blog = () => {
   const navigate = useNavigate();
@@ -221,13 +224,13 @@ const Blog = () => {
                     className="group block mb-12 overflow-hidden rounded-3xl border border-border/70 bg-card transition-all hover:border-border hover:shadow-[var(--shadow-md)]"
                   >
                     <div className="grid lg:grid-cols-2 gap-0">
-                      <div className="relative aspect-[16/10] lg:aspect-auto overflow-hidden bg-muted">
+                      <div className={`relative ${featuredCoverAspectClass(featured.slug)} overflow-hidden bg-muted`}>
                         <BlogCover
                           slug={featured.slug}
                           category={featured.category}
                           title={featured.title}
                           size="lg"
-                          className="min-h-[260px] transition-transform duration-700 group-hover:scale-[1.02]"
+                          className="h-full w-full min-h-[260px] transition-transform duration-700 group-hover:scale-[1.02]"
                         />
                         <div className="absolute top-4 right-4">
                           <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-background/90 backdrop-blur-sm border border-border/70 text-xs font-medium text-foreground shadow-[var(--shadow-xs)]">
@@ -275,12 +278,12 @@ const Blog = () => {
                         to="/blog/$slug" params={{ slug: p.slug }}
                         className="group flex flex-col overflow-hidden rounded-2xl border border-border/70 bg-card transition-all hover:border-border hover:shadow-[var(--shadow-md)] hover:-translate-y-0.5"
                       >
-                        <div className="relative aspect-[16/10] overflow-hidden bg-muted">
+                        <div className={`relative ${coverAspectClass(p.slug)} overflow-hidden bg-muted`}>
                           <BlogCover
                             slug={p.slug}
                             category={p.category}
                             title={p.title}
-                            className="transition-transform duration-500 group-hover:scale-[1.03]"
+                            className="h-full w-full transition-transform duration-500 group-hover:scale-[1.03]"
                           />
                         </div>
                         <div className="flex-1 flex flex-col p-5 sm:p-6">

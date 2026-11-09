@@ -47,6 +47,8 @@ interface TocItem {
   level: number;
 }
 
+const coverAspectClass = (slug: string) => (slug === "adhar-platform" ? "aspect-[40/21]" : "aspect-[16/10]");
+
 function slugify(s: string) {
   return s.toLowerCase().trim().replace(/[^\w\s-]/g, "").replace(/\s+/g, "-");
 }
@@ -328,8 +330,8 @@ const BlogPost = () => {
 
                   {/* Cover — flat, full column width */}
                   <figure className="mt-10 mb-10 sm:mb-12">
-                    <div className="aspect-[16/10] overflow-hidden rounded-md bg-muted">
-                      <BlogCover slug={post.slug} category={post.category} title={post.title} size="lg" />
+                    <div className={`${coverAspectClass(post.slug)} overflow-hidden rounded-md bg-muted`}>
+                      <BlogCover slug={post.slug} category={post.category} title={post.title} size="lg" className="h-full w-full" />
                     </div>
                   </figure>
 
@@ -593,12 +595,12 @@ const BlogPost = () => {
                     to="/blog/$slug" params={{ slug: p.slug }}
                     className="group flex flex-col overflow-hidden rounded-2xl border border-border/70 bg-card transition-all hover:border-border hover:shadow-[var(--shadow-md)] hover:-translate-y-0.5"
                   >
-                    <div className="aspect-[16/10] bg-muted overflow-hidden">
+                    <div className={`${coverAspectClass(p.slug)} bg-muted overflow-hidden`}>
                       <BlogCover
                         slug={p.slug}
                         category={p.category}
                         title={p.title}
-                        className="transition-transform duration-500 group-hover:scale-[1.03]"
+                        className="h-full w-full transition-transform duration-500 group-hover:scale-[1.03]"
                       />
                     </div>
                     <div className="flex-1 flex flex-col p-5">

@@ -30,6 +30,7 @@ import {
   Zap,
   type LucideIcon,
 } from "lucide-react";
+import adharMeetAdharCover from "@/assets/Adhar blog — Meet Adhar.png";
 import { cn } from "@/lib/utils";
 
 /**
@@ -472,8 +473,26 @@ interface BlogCoverProps {
   size?: "default" | "lg";
 }
 
+const CUSTOM_COVER_ART: Record<string, string> = {
+  "adhar-platform": adharMeetAdharCover,
+};
+
 const BlogCover = ({ slug, category, title, className, size = "default" }: BlogCoverProps) => {
   const uid = useId().replace(/:/g, "");
+  const customCover = CUSTOM_COVER_ART[slug];
+
+  if (customCover) {
+    return (
+      <div className={cn("relative h-full w-full overflow-hidden bg-muted", className)} role="img" aria-label={`Cover image: ${title}`}>
+        <img
+          src={customCover}
+          alt={title}
+          className="absolute inset-0 block h-full w-full object-contain object-center"
+        />
+      </div>
+    );
+  }
+
   const lg = size === "lg";
   const accent = ACCENTS[category] ?? "#6366F1";
   const scene = useMemo(() => (SCENES[slug] ?? CATEGORY_SCENE[category] ?? platformScene)(), [slug, category]);
