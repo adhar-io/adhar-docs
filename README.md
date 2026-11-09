@@ -86,7 +86,7 @@ Optional. [`.env.development`](.env.development) (read by `npm run dev` only) se
 VITE_ADHAR_UI_URL="http://localhost:5173/"   # shows the "Adhar UI" nav link
 ```
 
-Production builds don't read it, so the Adhar UI link stays hidden unless `VITE_ADHAR_UI_URL` is set for the build. Never commit secrets — `.env` and `.env.local` are git-ignored.
+Production builds default to the public Adhar UI at `https://app.adhar.io/`, and you can override it for staging or preview builds by setting `VITE_ADHAR_UI_URL` in the deployment environment. Never commit secrets — `.env` and `.env.local` are git-ignored.
 
 ---
 

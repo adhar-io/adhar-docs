@@ -13,6 +13,8 @@
   NODE_VERSION = "22"
   # Skip optional dev-only postinstall noise; it already no-ops on Linux.
   NPM_FLAGS = "--no-audit --no-fund"
+  # Default public URL for the Adhar UI app; override in the Netlify UI per environment as needed.
+  VITE_ADHAR_UI_URL = "https://ui.adhar.io/"
 
 # Long-cache the fingerprinted build assets.
 [[headers]]
