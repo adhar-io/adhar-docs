@@ -31,25 +31,25 @@ const HeroTitle = ({ isVisible }: HeroTitleProps) => (
     >
       Eliminate the trade-off between{' '}
       <span className="hero-gradient-text sm:whitespace-nowrap">developer freedom</span> and{' '}
-      <span className="hero-gradient-text sm:whitespace-nowrap">organisational governance</span>.
+      <span className="hero-gradient-text sm:whitespace-nowrap">organisational governance</span>
     </h1>
 
     <p
       style={delay(160)}
       className={`${rise(isVisible)} mx-auto mt-6 max-w-2xl text-pretty text-base sm:text-lg leading-relaxed text-muted-foreground`}
     >
-      <span className="text-foreground">100+ curated open-source packages</span>, wired together and secure by default.
-      Run <code className="font-mono text-[0.95em] text-foreground">adhar up</code> and, in about ten minutes, the
-      whole platform is live on your laptop. The same command works on any supported cloud.
+      <span className="text-foreground">100+ curated open-source packages</span>, wired together and security hardened by default.
+      Run <code className="font-mono text-[0.95em] text-foreground">adhar up</code> and, in about 30 minutes, the
+      whole platform is live on your laptop or on any supported clouds.
     </p>
   </div>
 );
 
 const stats = [
-  { value: '100+', label: 'Curated packages' },
-  { value: '~10 min', label: 'To a platform on your laptop' },
-  { value: '1', label: 'Command to bring it all up' },
-  { value: 'Apache 2.0', label: 'Open source, every feature' },
+  { value: '100+', label: 'Battle tested cloud-native packages' },
+  { value: '~30 min', label: 'To a fully functional platform' },
+  { value: '5', label: 'Public cloud providers and Onprem support' },
+  { value: 'Apache 2.0', label: 'True open source, every feature open' },
 ];
 
 /** The four headline facts, in a clean divided row. */

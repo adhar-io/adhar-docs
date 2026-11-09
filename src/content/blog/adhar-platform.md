@@ -1,5 +1,5 @@
 ---
-title: "Introducing Adhar: an open foundation for platform engineering"
+title: "Introducing Adhar: Open Cloud-Native Foundation"
 excerpt: "Adhar is an open-source Internal Developer Platform. One command, adhar up, brings up 100+ curated packages on a laptop or your cloud, wired together and delivered by GitOps."
 category: "Platform Updates"
 author: "Tapas Jena"

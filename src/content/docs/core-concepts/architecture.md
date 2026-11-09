@@ -53,7 +53,7 @@ These components are pre-rendered, embedded in the `adhar` binary, and applied w
 |---|---|---|
 | Kubernetes (default) | `v1.37.0` | The cluster |
 | **Cilium** | `v1.20.0` | CNI (eBPF), kube-proxy replacement, Gateway API, Hubble, network policy |
-| **ArgoCD** | `v3.5.1` | GitOps engine |
+| **ArgoCD** | `v3.6.1` | GitOps engine |
 | **Gitea** | `1.27.0` | In-cluster Git server (source of truth) |
 | **Crossplane** | `v2.4.2` | Namespaced self-service infrastructure APIs |
 

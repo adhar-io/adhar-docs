@@ -5,7 +5,6 @@ import Footer from "@/components/landing/Footer";
 import SectionHeader from "@/components/landing/SectionHeader";
 import { btnPrimary, btnSecondary, focusRing } from "@/components/landing/styles";
 import { copyText, fetchText, makeZip, saveBlob, svgToPng, type ZipEntry } from "@/lib/brandKit";
-import HeroArt from "@/components/illustrations/scenes";
 
 /*
  * Brand & press kit. Content follows the official brand guide in the platform
@@ -61,7 +60,7 @@ const BOILERPLATE_SHORT =
   "Adhar is an open-source Internal Developer Platform. One command, adhar up, brings up 100+ curated cloud-native packages — GitOps, self-service infrastructure, single sign-on, secrets, a signed supply chain and observability — on a laptop, a public cloud or your own hosts.";
 const BOILERPLATE_LONG = `${BOILERPLATE_SHORT} Adhar is licensed under Apache 2.0 and developed in the open at github.com/adhar-io/adhar. Learn more at adhar.io.`;
 
-const PRESS_EMAIL = "press@adhar.io";
+const PRESS_EMAIL = "contact@adhar.io";
 const SLACK = "https://join.slack.com/t/adhar-io/shared_invite/zt-4e93jrspf-HpEo6FRHwi1LA05TEJUCVg";
 
 const BRAND_TXT = `ADHAR BRAND & PRESS KIT
@@ -248,7 +247,6 @@ const Brand = () => {
           <div className="absolute inset-0 bg-mesh opacity-80 pointer-events-none" />
           <div className="absolute inset-0 bg-grid bg-grid-fade opacity-40 dark:opacity-25 pointer-events-none" />
           <div className="max-width-content relative text-center">
-            <HeroArt name="construct" />
             <span className="eyebrow mb-5">Brand &amp; press</span>
             <h1 className="section-heading mt-5 text-foreground">
               The Adhar brand,

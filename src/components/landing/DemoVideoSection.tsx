@@ -37,7 +37,7 @@ const DemoVideoSection = () => {
             <div className="aspect-video relative">
               <iframe
                 className="w-full h-full"
-                src="https://www.youtube-nocookie.com/embed/gmAfYEPBYr0"
+                src="https://www.youtube-nocookie.com/embed/3ckX4UggCvA"
                 title="Adhar platform demo"
                 loading="lazy"
                 referrerPolicy="strict-origin-when-cross-origin"

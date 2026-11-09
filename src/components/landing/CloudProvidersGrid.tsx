@@ -35,7 +35,7 @@ const CloudProvidersGrid = () => (
     aria-labelledby="clouds-heading"
     className="bg-gradient-to-br from-background/80 to-muted/80 backdrop-blur-sm rounded-3xl py-14 sm:py-16 px-5 sm:px-8 border border-border/50 shadow-xl"
   >
-    <SectionHeader size="sm" id="clouds-heading" eyebrow="Runs anywhere" title="Deploy anywhere," titleMuted="change only the sizing.">
+    <SectionHeader size="sm" id="clouds-heading" eyebrow="Runs anywhere" title="Deploy anywhere," titleMuted="public cloud, on-prem or go hybrid.">
       One platform, one GitOps flow, one <code className="font-mono text-foreground">adhar up</code> — on a laptop, on
       five public clouds or on your own hosts.
     </SectionHeader>

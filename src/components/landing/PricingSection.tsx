@@ -11,7 +11,7 @@ const PricingSection = () => {
       <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-border to-transparent" />
 
       <div className="max-width-content">
-        <SectionHeader id="pricing-heading" eyebrow="Pricing" title="Free to run." titleMuted="Or let us host it.">
+        <SectionHeader id="pricing-heading" eyebrow="Pricing" title="Free forever to run." titleMuted="Or let us host it for you.">
           Every feature ships in the Apache 2.0 open-source release. Run it yourself for free, or let Adhar Cloud run the same platform for you.
         </SectionHeader>
 

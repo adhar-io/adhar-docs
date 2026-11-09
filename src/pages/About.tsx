@@ -14,7 +14,6 @@ import {
   ArrowRight
 } from 'lucide-react';
 import { Github, Linkedin, Twitter } from '@/components/brand-icons';
-import HeroArt from "@/components/illustrations/scenes";
 
 const About = () => {
   const values = [
@@ -42,8 +41,8 @@ const About = () => {
 
   const team = [
     {
-      name: "Sarah Chen",
-      role: "CEO & Co-founder",
+      name: "Sudhir Pradhan",
+      role: "Head of Data & AI Platform",
       avatar: "/avatars/professional-woman-1.jpg",
       bio: "Former engineering leader at major tech companies, passionate about developer productivity.",
       location: "San Francisco, CA",
@@ -54,22 +53,22 @@ const About = () => {
       }
     },
     {
-      name: "Marcus Rodriguez",
-      role: "CTO & Co-founder",
+      name: "Tapas Jena",
+      role: "Creator & Head of Architecture",
       avatar: "/avatars/professional-man-2.jpg",
       bio: "Systems architect with 15+ years experience building scalable platforms.",
-      location: "Austin, TX",
+      location: "Singapore",
       social: {
         github: "marcusrod",
         linkedin: "marcus-rodriguez-cto"
       }
     },
     {
-      name: "Emily Zhang",
-      role: "Head of Product",
+      name: "Pavan Chakrabatula",
+      role: "Head of Kubernetes Platform Engineering",
       avatar: "/avatars/professional-woman-2.jpg",
       bio: "Product strategist focused on creating intuitive developer experiences.",
-      location: "Seattle, WA",
+      location: "Singapore",
       social: {
         github: "emilyzhang",
         linkedin: "emily-zhang-product",
@@ -77,33 +76,33 @@ const About = () => {
       }
     },
     {
-      name: "David Okafor",
-      role: "VP of Engineering",
+      name: "Karthik Chinni",
+      role: "Head of Cloud & Infrastructure Engineering",
       avatar: "/avatars/professional-man-1.jpg",
       bio: "Leads the platform and CLI teams, with a focus on reliable, boring-in-the-best-way infrastructure.",
-      location: "London, UK",
+      location: "Singapore",
       social: {
         github: "davidokafor",
         linkedin: "david-okafor-eng"
       }
     },
     {
-      name: "Priya Nair",
-      role: "Head of Security",
+      name: "Arun Subramanian",
+      role: "Head of Security & Resiliency Engineering",
       avatar: "/avatars/professional-woman-3.jpg",
       bio: "Owns supply-chain security, policy and secrets, so every Adhar default is a safe one.",
-      location: "Bengaluru, India",
+      location: "Singapore",
       social: {
         github: "priyanair",
         linkedin: "priya-nair-security"
       }
     },
     {
-      name: "James Whitfield",
-      role: "Head of Developer Relations",
+      name: "Pavan Kumar Kurela",
+      role: "Head of Developer Relations & Community",
       avatar: "/avatars/professional-man-3.jpg",
       bio: "Works with the community on docs, golden paths and the feedback that shapes the roadmap.",
-      location: "Toronto, Canada",
+      location: "Singapore",
       social: {
         github: "jwhitfield",
         linkedin: "james-whitfield-devrel",
@@ -113,22 +112,22 @@ const About = () => {
   ];
 
   const stats = [
-    { label: "Founded", value: "2022", icon: Sparkles },
-    { label: "Team Members", value: "50+", icon: Users },
+    { label: "Founded", value: "2025", icon: Sparkles },
+    { label: "Core Team Members", value: "10+", icon: Users },
     { label: "Countries", value: "12", icon: Globe },
-    { label: "Funding Raised", value: "$25M", icon: Rocket }
+    { label: "Funding Raised", value: "$0M", icon: Rocket }
   ];
 
   const milestones = [
-    { year: "2022", title: "The beginning", text: "Adhar starts as an internal tool to tame cloud-native sprawl across teams and clouds." },
-    { year: "2023", title: "Open sourced", text: "We release Adhar under Apache 2.0 and welcome our first community contributors." },
-    { year: "2024", title: "50+ integrations", text: "GitOps, security, observability and data services ship as one curated, production-grade stack." },
-    { year: "2025", title: "Adhar 1.0", text: "A complete internal developer platform, deployable to any cloud in a single command." },
+    { year: "2025", title: "The beginning", text: "Adhar starts as an internal tool to tame cloud-native sprawl across teams and clouds." },
+    { year: "2025", title: "Open sourced", text: "We release Adhar under Apache 2.0 and welcome our first community contributors." },
+    { year: "2026", title: "50+ integrations", text: "GitOps, security, observability and data services ship as one curated, production-grade stack." },
+    { year: "2027", title: "Adhar 1.0", text: "A complete internal developer platform, deployable to any cloud in a single command." },
   ];
 
   const openSource = [
-    { label: "GitHub stars", value: "12k+" },
-    { label: "Contributors", value: "300+" },
+    { label: "GitHub stars", value: "1k+" },
+    { label: "Contributors", value: "200+" },
     { label: "Integrated services", value: "100+" },
     { label: "License", value: "Apache 2.0" },
   ];
@@ -143,7 +142,6 @@ const About = () => {
           <div className="absolute inset-0 bg-mesh opacity-80 pointer-events-none" />
           <div className="absolute inset-0 bg-grid bg-grid-fade opacity-40 dark:opacity-25 pointer-events-none" />
           <div className="max-width-content relative text-center">
-            <HeroArt name="orbit" />
             <span className="eyebrow mb-5">About ADHAR</span>
             <h1 className="section-heading mt-5 text-foreground">
               Building the future of
@@ -266,7 +264,7 @@ const About = () => {
           <div className="max-width-content">
             <div className="text-center mb-14">
               <span className="eyebrow mb-5">Team</span>
-              <h2 className="section-heading mt-5 text-foreground">Leadership team.</h2>
+              <h2 className="section-heading mt-5 text-foreground">Adhar steering committee</h2>
               <p className="section-subheading mt-6">The passionate people behind ADHAR.</p>
             </div>
             <div className="grid sm:grid-cols-2 md:grid-cols-3 gap-4">

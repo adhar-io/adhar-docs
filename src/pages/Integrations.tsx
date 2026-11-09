@@ -5,7 +5,6 @@ import Navigation from "@/components/landing/Navigation";
 import Footer from "@/components/landing/Footer";
 import Reveal from "@/components/Reveal";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
-import HeroArt from "@/components/illustrations/scenes";
 
 /* ------------------------------------------------------------------ */
 /* Data — every open-source project the Adhar platform runs on          */
@@ -192,7 +191,6 @@ const Integrations = () => {
         <div className="absolute inset-0 bg-grid bg-grid-fade opacity-40 dark:opacity-25 pointer-events-none" />
         <div className="max-width-content relative">
           <Reveal className="text-center">
-            <HeroArt name="hub" />
             <span className="eyebrow mb-5"><Boxes className="w-3 h-3 mr-1" />Integrations & ecosystem</span>
             <h1 className="section-heading mt-5 text-foreground">
               Every tool Adhar runs

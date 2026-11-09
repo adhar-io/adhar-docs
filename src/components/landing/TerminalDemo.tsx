@@ -112,9 +112,7 @@ const credentialsTable = () => {
 
 const SECRETS = [
   '  [2026-11-03T10:43:05.218Z] INFO: Retrieving platform secrets...',
-  '',
   '  [2026-11-03T10:43:05.734Z] INFO: Found 5 credential(s) for platform',
-  '',
   '',
   ...credentialsTable(),
 ];
