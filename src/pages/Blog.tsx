@@ -119,6 +119,7 @@ const Blog = () => {
                 <span className="eyebrow mb-5">Blog</span>
                 <h1 className="section-heading mt-5 text-foreground">
                   Notes on the
+                  {' '}
                   <br className="hidden sm:block" />
                   <span className="text-muted-foreground">craft of platforms.</span>
                 </h1>

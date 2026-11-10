@@ -48,11 +48,11 @@ const DemoVideoSection = () => {
           </div>
 
           {/* Feature Pills */}
-          <div className="flex flex-wrap justify-center gap-4 mt-8">
+          <div className="flex flex-wrap justify-center gap-2 sm:gap-4 mt-6 sm:mt-8">
             {features.map((feature) => (
               <div
                 key={feature.text}
-                className="flex items-center gap-2 px-5 py-2.5 bg-background/80 backdrop-blur-sm border border-border/70 rounded-full shadow-[var(--shadow-xs)]"
+                className="flex items-center gap-2 px-4 sm:px-5 py-2 sm:py-2.5 bg-background/80 backdrop-blur-sm border border-border/70 rounded-full shadow-[var(--shadow-xs)]"
               >
                 <feature.icon className={`w-4 h-4 ${feature.color}`} aria-hidden />
                 <span className="text-sm font-medium text-foreground">{feature.text}</span>

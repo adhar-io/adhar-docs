@@ -203,6 +203,7 @@ const Security = () => {
               <span className="eyebrow mb-5">Pillars</span>
               <h2 className="section-heading mt-5 text-foreground">
                 Four pillars,
+                {' '}
                 <br className="hidden sm:block" />
                 <span className="text-muted-foreground">one security model.</span>
               </h2>
@@ -248,6 +249,7 @@ const Security = () => {
               <span className="eyebrow mb-5">Zero trust</span>
               <h2 className="section-heading mt-5 text-foreground">
                 Trust nothing.
+                {' '}
                 <br className="hidden sm:block" />
                 <span className="text-muted-foreground">Verify everything.</span>
               </h2>
@@ -281,6 +283,7 @@ const Security = () => {
               <span className="eyebrow mb-5">Threat model</span>
               <h2 className="section-heading mt-5 text-foreground">
                 Six tiers
+                {' '}
                 <br className="hidden sm:block" />
                 <span className="text-muted-foreground">of protection.</span>
               </h2>
@@ -317,6 +320,7 @@ const Security = () => {
               <span className="eyebrow mb-5">Compliance</span>
               <h2 className="section-heading mt-5 text-foreground">
                 Standards we meet
+                {' '}
                 <br className="hidden sm:block" />
                 <span className="text-muted-foreground">and prove.</span>
               </h2>

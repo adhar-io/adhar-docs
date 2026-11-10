@@ -17,7 +17,7 @@ interface SectionHeaderProps {
 
 /** The one header used by every landing section: badge, two-line heading, subheading. */
 const SectionHeader = ({ eyebrow, title, titleMuted, id, children, size = "default" }: SectionHeaderProps) => (
-  <div className={size === "sm" ? "text-center mb-10 lg:mb-12" : "text-center mb-14 lg:mb-16"}>
+  <div className={size === "sm" ? "text-center mb-10 lg:mb-12" : "text-center mb-10 sm:mb-14 lg:mb-16"}>
     <span className="eyebrow mb-5">{eyebrow}</span>
     <h2
       id={id}

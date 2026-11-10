@@ -12,6 +12,7 @@ const ArchitectureShowcase = () => {
             <span className="eyebrow mb-5">Architecture showcase</span>
             <h1 className="section-heading mt-5 text-foreground">
               The ADHAR platform,
+              {' '}
               <br className="hidden sm:block" />
               <span className="text-muted-foreground">visualized.</span>
             </h1>

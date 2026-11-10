@@ -77,6 +77,7 @@ const Privacy = () => {
             <span className="eyebrow mb-5"><Shield className="w-3 h-3 mr-1" />Privacy</span>
             <h1 className="section-heading mt-5 text-foreground">
               How we protect
+              {' '}
               <br className="hidden sm:block" />
               <span className="text-muted-foreground">your data.</span>
             </h1>

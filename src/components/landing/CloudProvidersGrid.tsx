@@ -73,14 +73,16 @@ const CloudProvidersGrid = () => (
       ))}
     </ul>
 
-    <div className="mt-12 grid md:grid-cols-3 gap-6 text-center">
+    <div className="mt-6 sm:mt-12 grid md:grid-cols-3 gap-3 sm:gap-6 md:text-center">
       {promises.map(({ icon: Icon, title, body }) => (
-        <div key={title} className="bg-background/40 backdrop-blur-sm rounded-xl p-6 border border-border/30">
-          <div className="mx-auto mb-4 inline-flex h-11 w-11 items-center justify-center rounded-xl border border-border/70 bg-background text-primary shadow-[var(--shadow-xs)]">
+        <div key={title} className="flex items-start gap-4 md:block bg-background/40 backdrop-blur-sm rounded-xl p-4 md:p-6 border border-border/30">
+          <div className="shrink-0 md:mx-auto md:mb-4 inline-flex h-11 w-11 items-center justify-center rounded-xl border border-border/70 bg-background text-primary shadow-[var(--shadow-xs)]">
             <Icon className="h-5 w-5" aria-hidden />
           </div>
-          <h3 className="font-semibold text-foreground mb-2">{title}</h3>
-          <p className="text-sm text-muted-foreground">{body}</p>
+          <div className="min-w-0">
+            <h3 className="font-semibold text-foreground mb-1 md:mb-2">{title}</h3>
+            <p className="text-sm text-muted-foreground">{body}</p>
+          </div>
         </div>
       ))}
     </div>

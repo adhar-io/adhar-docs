@@ -8,9 +8,9 @@ interface InterfaceLayerProps {
 
 const InterfaceLayer = ({ interfaceItems }: InterfaceLayerProps) => {
   return (
-    <div className="relative mb-16">
+    <div className="relative sm:mb-16">
       {/* Section header */}
-      <div className="text-center mb-8">
+      <div className="text-center mb-5 sm:mb-8">
         <div className="flex items-center justify-center space-x-4 mb-4">
           <div className="w-12 h-0.5 bg-gradient-to-r from-transparent to-green-500"></div>
           <h3 className="text-2xl font-bold text-gray-800 dark:text-white">Ways in</h3>
@@ -20,14 +20,14 @@ const InterfaceLayer = ({ interfaceItems }: InterfaceLayerProps) => {
       </div>
 
       {/* Interface items */}
-      <div className="flex flex-wrap justify-center gap-6">
+      <div className="flex flex-wrap justify-center gap-2.5 sm:gap-6">
         {interfaceItems.map((interfaceItem, index) => (
           <div 
             key={interfaceItem.id}
             className="group relative animate-fadeInUp"
             style={{ animationDelay: `${index * 150}ms` }}
           >
-            <div className={`${interfaceItem.color} px-10 py-5 rounded-3xl text-base font-bold cursor-pointer transition-all duration-500 hover:scale-110 hover:shadow-2xl border-2 border-white/30 backdrop-blur-sm relative overflow-hidden`}>
+            <div className={`${interfaceItem.color} px-5 sm:px-10 py-3 sm:py-5 rounded-2xl sm:rounded-3xl text-sm sm:text-base font-bold cursor-pointer transition-all duration-500 hover:scale-110 hover:shadow-2xl border-2 border-white/30 backdrop-blur-sm relative overflow-hidden`}>
               {/* Background glow */}
               <div className="absolute inset-0 bg-white/10 rounded-3xl opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
               

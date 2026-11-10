@@ -250,6 +250,7 @@ const Brand = () => {
             <span className="eyebrow mb-5">Brand &amp; press</span>
             <h1 className="section-heading mt-5 text-foreground">
               The Adhar brand,
+              {' '}
               <br className="hidden sm:block" />
               <span className="text-muted-foreground">ready to use.</span>
             </h1>

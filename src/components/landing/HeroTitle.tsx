@@ -19,7 +19,8 @@ const HeroTitle = ({ isVisible }: HeroTitleProps) => (
         <span className="rounded-full bg-primary px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-primary-foreground">
           New
         </span>
-        <span>Introducing Adhar — the open-source Internal Developer Platform</span>
+        <span className="sm:hidden">Introducing Adhar, the open-source IDP</span>
+        <span className="hidden sm:inline">Introducing Adhar — the open-source Internal Developer Platform</span>
         <ArrowRight className="h-3 w-3 transition-transform group-hover:translate-x-0.5" aria-hidden />
       </Link>
     </div>

@@ -179,7 +179,7 @@ const InteractiveArchitecture = () => {
     <div className="w-full overflow-hidden rounded-3xl border border-border/70 bg-card shadow-[var(--shadow-sm)]">
       <ArchitectureHeader />
 
-      <div className="p-6 sm:p-8 lg:p-10 space-y-10 sm:space-y-12">
+      <div className="p-4 sm:p-8 lg:p-10 space-y-6 sm:space-y-12">
         <DevelopmentPhases phases={phases} />
 
         <div className="h-px bg-border/60" />

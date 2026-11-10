@@ -46,6 +46,7 @@ const Partners = () => {
             <span className="eyebrow mb-5"><Handshake className="w-3 h-3 mr-1" />Partners</span>
             <h1 className="section-heading mt-5 text-foreground">
               We work with
+              {' '}
               <br className="hidden sm:block" />
               <span className="text-muted-foreground">the best in the field.</span>
             </h1>

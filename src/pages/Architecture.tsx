@@ -141,6 +141,7 @@ const Architecture = () => {
             <span className="eyebrow mb-5">Architecture</span>
             <h1 className="section-heading mt-5 text-foreground">
               Cloud-native by design,
+              {' '}
               <br className="hidden sm:block" />
               <span className="text-muted-foreground">enterprise-ready by default.</span>
             </h1>
@@ -179,6 +180,7 @@ const Architecture = () => {
               <span className="eyebrow mb-5">Layers</span>
               <h2 className="section-heading mt-5 text-foreground">
                 Six layers,
+                {' '}
                 <br className="hidden sm:block" />
                 <span className="text-muted-foreground">one coherent stack.</span>
               </h2>
@@ -234,6 +236,7 @@ const Architecture = () => {
               <span className="eyebrow mb-5">Data flow</span>
               <h2 className="section-heading mt-5 text-foreground">
                 One request,
+                {' '}
                 <br className="hidden sm:block" />
                 <span className="text-muted-foreground">six observable hops.</span>
               </h2>
@@ -275,6 +278,7 @@ const Architecture = () => {
               <span className="eyebrow mb-5">Principles</span>
               <h2 className="section-heading mt-5 text-foreground">
                 Decisions we
+                {' '}
                 <br className="hidden sm:block" />
                 <span className="text-muted-foreground">refuse to compromise on.</span>
               </h2>

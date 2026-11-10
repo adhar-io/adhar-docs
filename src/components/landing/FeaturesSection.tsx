@@ -20,10 +20,10 @@ const FeaturesSection = () => {
           {features.map((feature, index) => (
             <article
               key={feature.title}
-              className="group relative flex flex-col bg-card p-7 sm:p-8 transition-colors duration-300 hover:bg-muted/30"
+              className="group relative flex flex-col bg-card p-5 sm:p-8 transition-colors duration-300 hover:bg-muted/30"
             >
               {/* Icon */}
-              <div className="mb-6 inline-flex h-11 w-11 items-center justify-center rounded-xl border border-border/70 bg-background text-primary shadow-[var(--shadow-xs)] transition-transform duration-300 group-hover:-translate-y-0.5">
+              <div className="mb-4 sm:mb-6 inline-flex h-11 w-11 items-center justify-center rounded-xl border border-border/70 bg-background text-primary shadow-[var(--shadow-xs)] transition-transform duration-300 group-hover:-translate-y-0.5">
                 <feature.icon className="h-5 w-5" aria-hidden />
               </div>
 
@@ -36,7 +36,7 @@ const FeaturesSection = () => {
                 {feature.description}
               </p>
 
-              <ul className="mt-5 space-y-2 border-t border-border/60 pt-5">
+              <ul className="mt-4 sm:mt-5 space-y-2 border-t border-border/60 pt-4 sm:pt-5">
                 {feature.details.map((detail) => (
                   <li key={detail} className="flex items-start gap-2.5 text-sm text-muted-foreground">
                     <Check className="mt-0.5 h-4 w-4 flex-shrink-0 text-primary/80" strokeWidth={2.5} aria-hidden />
@@ -48,7 +48,7 @@ const FeaturesSection = () => {
           ))}
         </div>
 
-        <div className="mt-10 text-center">
+        <div className="mt-6 sm:mt-10 text-center">
           <Link
             to="/docs/$" params={{ _splat: "core-concepts/ds-framework" }}
             className={textLink}

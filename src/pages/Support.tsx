@@ -52,6 +52,7 @@ const Support = () => (
           <span className="eyebrow mb-5">Support</span>
           <h1 className="section-heading mt-5 text-foreground">
             Get unstuck,
+            {' '}
             <br className="hidden sm:block" />
             <span className="text-muted-foreground">fast.</span>
           </h1>

@@ -87,6 +87,7 @@ const Examples = () => {
             <span className="eyebrow mb-5">Examples</span>
             <h1 className="section-heading mt-5 text-foreground">
               Templates to
+              {' '}
               <br className="hidden sm:block" />
               <span className="text-muted-foreground">accelerate your work.</span>
             </h1>

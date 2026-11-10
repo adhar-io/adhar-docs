@@ -85,6 +85,7 @@ const DocsShell = ({ registry, brand, versionSource, searchLabel }: DocsShellPro
   // Phones: the page list is collapsed so the article is not pushed
   // ~2,000px down by 40 links. Desktop always shows it.
   const [navOpen, setNavOpen] = useState(false);
+  const [tocOpen, setTocOpen] = useState(false);
   const openSearch = useCallback(() => setSearchOpen(true), []);
   useSearchHotkey(openSearch);
   // Before anything is typed: the first page of each section.
@@ -185,6 +186,7 @@ const DocsShell = ({ registry, brand, versionSource, searchLabel }: DocsShellPro
   if (navPath !== pathname) {
     setNavPath(pathname);
     setNavOpen(false);
+    setTocOpen(false);
   }
 
   const filteredSections = useMemo(() => {
@@ -219,27 +221,27 @@ const DocsShell = ({ registry, brand, versionSource, searchLabel }: DocsShellPro
       <main className="relative pt-20">
         <div className="max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8 py-6">
           {/* Breadcrumbs */}
-          <nav className="flex items-center gap-1.5 text-xs text-muted-foreground mb-6 flex-wrap">
-            <Link to="/" className="hover:text-primary transition-colors">Home</Link>
+          <nav className="flex items-center gap-1.5 text-xs text-muted-foreground mb-4 lg:mb-6 flex-wrap">
+            <Link to="/" className="py-1.5 lg:py-0 hover:text-primary transition-colors">Home</Link>
             {crumbs.map((c, i) => (
               <span key={c.to} className="flex items-center gap-1.5">
                 <ChevronRight className="w-3 h-3" />
                 {i === crumbs.length - 1 ? (
                   <span className="capitalize text-foreground">{c.label}</span>
                 ) : (
-                  <Link to={c.to} className="capitalize hover:text-primary transition-colors">{c.label}</Link>
+                  <Link to={c.to} className="py-1.5 lg:py-0 capitalize hover:text-primary transition-colors">{c.label}</Link>
                 )}
               </span>
             ))}
           </nav>
 
-          <div className="grid grid-cols-1 lg:grid-cols-[260px_minmax(0,1fr)_200px] gap-10">
+          <div className="grid grid-cols-1 lg:grid-cols-[260px_minmax(0,1fr)_200px] gap-5 lg:gap-10">
             {/* ── Sidebar ── */}
             {/* The scroll container clips its children's shadows and focus rings,
                 so it gets room on the left, pulled back out by the negative
                 margin to keep the content where it was. */}
             <aside ref={sidebarRef} className="lg:sticky lg:top-24 lg:self-start lg:max-h-[calc(100vh-7rem)] lg:overflow-y-auto lg:-ml-2 lg:pl-2 pr-2 scrollbar-hide">
-              <Link to={brand.homeHref} className="flex items-center gap-3 mb-6 group">
+              <Link to={brand.homeHref} className="hidden lg:flex items-center gap-3 mb-6 group">
                 <div className="relative w-10 h-10 rounded-xl bg-gradient-to-br from-primary to-accent flex items-center justify-center shadow-lg shadow-primary/30 group-hover:shadow-primary/50 transition-shadow">
                   <Package className="w-5 h-5 text-white" />
                   <div className="absolute inset-0 rounded-xl bg-gradient-to-br from-primary to-accent opacity-0 group-hover:opacity-40 blur-md transition-opacity" />
@@ -254,7 +256,7 @@ const DocsShell = ({ registry, brand, versionSource, searchLabel }: DocsShellPro
                 </div>
               </Link>
 
-              <div className="relative mb-4">
+              <div className="relative mb-3 lg:mb-4">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
                 <Input
                   value={q}
@@ -266,7 +268,7 @@ const DocsShell = ({ registry, brand, versionSource, searchLabel }: DocsShellPro
                   }}
                   placeholder="Filter pages · Enter to search"
                   aria-label="Filter pages; press Enter to search all documentation"
-                  className="pl-9 pr-12 h-9 text-sm bg-muted/30 border-border/60 focus-visible:ring-primary/40"
+                  className="pl-9 pr-16 lg:pr-12 h-11 lg:h-9 text-sm bg-muted/30 border-border/60 focus-visible:ring-primary/40"
                 />
                 <button
                   type="button"
@@ -281,7 +283,7 @@ const DocsShell = ({ registry, brand, versionSource, searchLabel }: DocsShellPro
               </div>
 
               {versionSource && (
-                <div className="mb-6">
+                <div className="mb-3 lg:mb-6">
                   <DocsVersionSelector source={versionSource} />
                 </div>
               )}
@@ -291,7 +293,7 @@ const DocsShell = ({ registry, brand, versionSource, searchLabel }: DocsShellPro
                 onClick={() => setNavOpen((v) => !v)}
                 aria-expanded={navOpen || !!q}
                 aria-controls="docs-page-list"
-                className="lg:hidden mb-4 flex w-full items-center justify-between rounded-lg border border-border/60 bg-muted/20 px-3 py-2.5 text-left text-sm"
+                className="lg:hidden flex w-full items-center justify-between rounded-lg border border-border/60 bg-muted/20 px-3 py-2.5 text-left text-sm"
               >
                 <span className="min-w-0">
                   <span className="block text-[10px] uppercase tracking-wider text-muted-foreground">
@@ -307,7 +309,7 @@ const DocsShell = ({ registry, brand, versionSource, searchLabel }: DocsShellPro
               <nav
                 id="docs-page-list"
                 aria-label={`${brand.title} pages`}
-                className={`space-y-7 text-sm pb-12 ${navOpen || q ? "block" : "hidden"} lg:block`}
+                className={`mt-4 lg:mt-0 space-y-7 text-sm pb-4 lg:pb-12 ${navOpen || q ? "block" : "hidden"} lg:block`}
               >
                 {filteredSections.map((sec) => {
                   const Icon = SECTION_ICON[sec.title] ?? BookOpen;
@@ -326,7 +328,7 @@ const DocsShell = ({ registry, brand, versionSource, searchLabel }: DocsShellPro
                             <Link
                               to={item.path}
                               activeOptions={{ exact: item.path === registry.base }}
-                              className="flex items-center justify-between gap-2 pl-3 pr-2 py-1.5 rounded-md transition-all group border-l-2"
+                              className="flex items-center justify-between gap-2 pl-3 pr-2 py-2.5 lg:py-1.5 rounded-md transition-all group border-l-2"
                               activeProps={{
                                 className:
                                   "bg-gradient-to-r from-primary/10 to-accent/5 text-foreground font-medium border-primary",
@@ -336,7 +338,7 @@ const DocsShell = ({ registry, brand, versionSource, searchLabel }: DocsShellPro
                                   "text-muted-foreground hover:text-foreground hover:bg-muted/40 border-transparent hover:border-primary/30",
                               }}
                             >
-                              <span className="truncate text-[13px]">{item.meta.title}</span>
+                              <span className="truncate text-sm lg:text-[13px]">{item.meta.title}</span>
                               {item.meta.badge && (
                                 <Badge
                                   variant="secondary"
@@ -367,8 +369,46 @@ const DocsShell = ({ registry, brand, versionSource, searchLabel }: DocsShellPro
             <div className="min-w-0">
               {entry ? (
                 <article className="max-w-3xl">
+                  {/* Below lg the right-hand outline is gone and reference pages
+                      run past 20,000px, so the outline rides under the nav. */}
+                  {toc.length > 0 && (
+                    <div className="lg:hidden sticky top-16 z-30 -mx-4 sm:-mx-6 mb-5 border-y border-border/60 bg-background/90 backdrop-blur-xl">
+                      <button
+                        type="button"
+                        onClick={() => setTocOpen((v) => !v)}
+                        aria-expanded={tocOpen}
+                        aria-controls="docs-mobile-toc"
+                        className="flex h-11 w-full items-center gap-2 px-4 sm:px-6 text-left text-sm"
+                      >
+                        <Hash className="h-3.5 w-3.5 shrink-0 text-primary/70" />
+                        <span className="shrink-0 text-muted-foreground">On this page</span>
+                        <span className="min-w-0 flex-1 truncate font-medium text-foreground">
+                          {toc.find((h) => h.id === activeId)?.text}
+                        </span>
+                        <ChevronRight className={`h-4 w-4 shrink-0 text-muted-foreground transition-transform ${tocOpen ? "rotate-90" : ""}`} />
+                      </button>
+                      {tocOpen && (
+                        <ul id="docs-mobile-toc" className="max-h-[60dvh] overflow-y-auto overscroll-contain border-t border-border/60 px-4 sm:px-6 py-2 text-sm">
+                          {toc.map((h) => (
+                            <li key={h.id} style={{ paddingLeft: h.level === 3 ? 16 : 0 }}>
+                              <a
+                                href={`#${h.id}`}
+                                onClick={() => setTocOpen(false)}
+                                className={`flex min-h-10 items-center py-1 ${
+                                  activeId === h.id ? "font-medium text-primary" : "text-muted-foreground"
+                                }`}
+                              >
+                                {h.text}
+                              </a>
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                    </div>
+                  )}
+
                   {/* Page meta header */}
-                  <div className="flex items-center gap-3 mb-4 text-[11px] uppercase tracking-wider text-muted-foreground">
+                  <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mb-4 text-[11px] uppercase tracking-wider text-muted-foreground">
                     <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-primary/10 text-primary border border-primary/20">
                       {(() => {
                         const Icon = SECTION_ICON[entry.meta.section] ?? BookOpen;

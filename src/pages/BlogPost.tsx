@@ -344,7 +344,7 @@ const BlogPost = () => {
                       <Link
                         key={t}
                         to="/blog" search={{ tag: t }}
-                        className="inline-flex items-center gap-1 h-7 px-2.5 rounded-full bg-muted text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-card border border-transparent hover:border-border transition-colors"
+                        className="inline-flex items-center gap-1 h-9 sm:h-7 px-3 sm:px-2.5 rounded-full bg-muted text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-card border border-transparent hover:border-border transition-colors"
                       >
                         <Hash className="w-3 h-3" />
                         {t}

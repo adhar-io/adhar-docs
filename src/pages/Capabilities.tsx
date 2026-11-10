@@ -231,6 +231,7 @@ const Capabilities = () => {
             <span className="eyebrow mb-5"><Zap className="w-3 h-3 mr-1" />Capabilities</span>
             <h1 className="section-heading mt-5 text-foreground">
               An intelligent platform
+              {' '}
               <br className="hidden sm:block" />
               <span className="text-muted-foreground">for every step of delivery.</span>
             </h1>
@@ -348,6 +349,7 @@ const Capabilities = () => {
               <span className="eyebrow mb-5">Built for</span>
               <h2 className="section-heading mt-5 text-foreground">
                 One platform,
+                {' '}
                 <br className="hidden sm:block" />
                 <span className="text-muted-foreground">every engineering role.</span>
               </h2>
@@ -390,6 +392,7 @@ const Capabilities = () => {
               <span className="eyebrow mb-5">How it feels</span>
               <h2 className="section-heading mt-5 text-foreground">
                 Designed for
+                {' '}
                 <br className="hidden sm:block" />
                 <span className="text-muted-foreground">the way engineers work.</span>
               </h2>

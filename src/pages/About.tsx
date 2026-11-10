@@ -168,6 +168,7 @@ const About = () => {
             <span className="eyebrow mb-5">About ADHAR</span>
             <h1 className="section-heading mt-5 text-foreground">
               Building the future of
+              {' '}
               <br className="hidden sm:block" />
               <span className="text-muted-foreground">cloud-native development.</span>
             </h1>
@@ -260,6 +261,7 @@ const About = () => {
               <span className="eyebrow mb-5">Values</span>
               <h2 className="section-heading mt-5 text-foreground">
                 The principles that guide
+                {' '}
                 <br className="hidden sm:block" />
                 <span className="text-muted-foreground">everything we build.</span>
               </h2>

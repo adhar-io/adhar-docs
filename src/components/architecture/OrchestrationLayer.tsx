@@ -8,8 +8,8 @@ interface OrchestrationLayerProps {
 
 const OrchestrationLayer = ({ orchestrationTools }: OrchestrationLayerProps) => {
   return (
-    <div className="bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 dark:bg-gradient-to-br dark:from-blue-900/30 dark:via-indigo-900/20 dark:to-purple-900/20 p-8 rounded-2xl border border-blue-200 dark:border-blue-700 mb-8 shadow-xl backdrop-blur-sm">
-      <h3 className="text-xl font-bold text-center mb-8 text-blue-800 dark:text-blue-200 relative">
+    <div className="bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 dark:bg-gradient-to-br dark:from-blue-900/30 dark:via-indigo-900/20 dark:to-purple-900/20 p-4 sm:p-8 rounded-2xl border border-blue-200 dark:border-blue-700 sm:mb-8 shadow-xl backdrop-blur-sm">
+      <h3 className="text-xl font-bold text-center mb-5 sm:mb-8 text-blue-800 dark:text-blue-200 relative">
         Orchestration & infrastructure
         <div className="absolute -bottom-2 left-1/2 transform -translate-x-1/2 w-20 h-1 bg-gradient-to-r from-blue-500 to-indigo-500 rounded-full"></div>
       </h3>
@@ -20,7 +20,7 @@ const OrchestrationLayer = ({ orchestrationTools }: OrchestrationLayerProps) => 
         {orchestrationTools.map((tool, index) => (
           <div
             key={tool.name}
-            className={`${tool.color} relative group flex-1 basis-32 min-w-32 px-4 py-4 rounded-xl flex items-center justify-center gap-3 border border-white/60 dark:border-white/20 shadow-lg hover:shadow-xl transition-all duration-500 hover:scale-105 hover:-translate-y-1 cursor-pointer backdrop-blur-sm`}
+            className={`${tool.color} relative group flex-1 basis-28 min-w-28 sm:basis-32 sm:min-w-32 px-2 sm:px-4 py-2.5 sm:py-4 rounded-xl flex items-center justify-center gap-1.5 sm:gap-3 border border-white/60 dark:border-white/20 shadow-lg hover:shadow-xl transition-all duration-500 hover:scale-105 hover:-translate-y-1 cursor-pointer backdrop-blur-sm`}
             style={{
               animationDelay: `${index * 100}ms`,
               animation: 'fadeInUp 0.6s ease-out both'
@@ -32,7 +32,7 @@ const OrchestrationLayer = ({ orchestrationTools }: OrchestrationLayerProps) => 
                 <img
                   src={tool.icon}
                   alt={tool.name}
-                  className="w-8 h-8 object-contain transition-transform duration-300 group-hover:scale-110 filter drop-shadow-sm"
+                  className="w-6 h-6 sm:w-8 sm:h-8 object-contain transition-transform duration-300 group-hover:scale-110 filter drop-shadow-sm"
                   onError={(e) => {
                     const target = e.target as HTMLImageElement;
                     target.style.display = 'none';
@@ -53,7 +53,7 @@ const OrchestrationLayer = ({ orchestrationTools }: OrchestrationLayerProps) => 
             </div>
 
             {/* Enhanced text styling */}
-            <span className="text-sm font-semibold text-gray-700 whitespace-nowrap group-hover:text-gray-900 transition-colors duration-300">
+            <span className="text-[13px] sm:text-sm font-semibold text-gray-700 whitespace-nowrap group-hover:text-gray-900 transition-colors duration-300">
               {tool.name}
             </span>
 

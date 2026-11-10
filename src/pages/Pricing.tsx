@@ -88,6 +88,7 @@ const Pricing = () => {
               <span className="eyebrow mb-5">Why open source</span>
               <h2 className="section-heading mt-5 text-foreground">
                 Your platform,
+                {' '}
                 <br className="hidden sm:block" />
                 <span className="text-muted-foreground">on your terms.</span>
               </h2>
@@ -123,8 +124,8 @@ const Pricing = () => {
 
             <div className="divide-y divide-border/60 overflow-hidden rounded-2xl border border-border/70 bg-card">
               {faqs.map((faq) => (
-                <details key={faq.q} className="group p-6 open:bg-muted/30 transition-colors">
-                  <summary className="cursor-pointer list-none flex items-center justify-between gap-4 text-base font-medium text-foreground">
+                <details key={faq.q} className="group p-4 sm:p-6 open:bg-muted/30 transition-colors">
+                  <summary className="min-h-11 cursor-pointer list-none flex items-center justify-between gap-4 text-base font-medium text-foreground">
                     <span>{faq.q}</span>
                     <span className="inline-flex h-7 w-7 items-center justify-center rounded-full border border-border/70 text-muted-foreground text-lg leading-none transition-transform group-open:rotate-45">
                       +

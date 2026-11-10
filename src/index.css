@@ -30,6 +30,11 @@
   font-size: 0.85em;
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   border: 1px solid hsl(var(--border) / 0.5);
+  /* Long paths and flags wrap instead of running off a phone screen. Not
+     `anywhere`: that would let table columns squeeze code to one character. */
+  overflow-wrap: break-word;
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
 }
 .docs-prose a { color: hsl(var(--primary)); text-decoration: none; border-bottom: 1px dashed hsl(var(--primary) / 0.4); }
 .docs-prose a:hover { border-bottom-color: hsl(var(--primary)); }
@@ -250,7 +255,8 @@
 
   /* Larger tap targets on touch devices for icon-only buttons */
   @media (pointer: coarse) {
-    button[aria-label]:where(:not(.no-min-tap)) {
+    button[aria-label]:where(:not(.no-min-tap)),
+    a[aria-label]:where(:not(.no-min-tap)) {
       min-width: 2.75rem;
       min-height: 2.75rem;
     }
@@ -746,6 +752,12 @@ table { max-width: 100%; }
   .text-7xl { font-size: 2.75rem !important; line-height: 1.05 !important; }
   .text-8xl { font-size: 3rem !important; line-height: 1.02 !important; }
   .text-9xl { font-size: 3.25rem !important; line-height: 1.02 !important; }
+  .section-heading { font-size: clamp(1.75rem, 8vw, 2.25rem); line-height: 1.1; }
+
+  /* Fine print — nothing below 11px; terminal output keeps its column width */
+  .text-\[9px\], .text-\[10px\], .text-\[10\.5px\] { font-size: 0.6875rem !important; }
+  .text-\[11px\]:not(.font-mono) { font-size: 0.75rem !important; }
+  .docs-prose code:not(pre code) { font-size: 0.9em; }
 
   /* Section padding — keep them visually distinct but not wasteful */
   .py-20, .py-24, .py-32 { padding-top: 3rem !important; padding-bottom: 3rem !important; }
@@ -775,6 +787,21 @@ table { max-width: 100%; }
 
   /* Inline padding-left for TOC items needs a smaller bump on tiny screens */
   .container-padding { padding-left: 1rem !important; padding-right: 1rem !important; }
+}
+
+/* iOS zooms the page when a focused field's text is under 16px */
+@media (pointer: coarse), (max-width: 640px) {
+  input, textarea, select { font-size: 16px !important; }
+}
+
+/* Heading anchors only appear on hover, so on touch they are invisible targets */
+@media (hover: none) {
+  .docs-prose .anchor-link { display: none; }
+}
+
+/* Below lg the docs have a sticky "On this page" bar under the nav */
+@media (max-width: 1023.98px) {
+  .docs-prose h1, .docs-prose h2, .docs-prose h3, .docs-prose h4 { scroll-margin-top: 7rem; }
 }
 
 /* Tablets portrait (641-1024px) */

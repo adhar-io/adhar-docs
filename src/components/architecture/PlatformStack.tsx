@@ -1,12 +1,17 @@
 
-import React from 'react';
+import React, { useState } from 'react';
+import { ChevronDown } from 'lucide-react';
 import { PlatformCategory } from './types';
 
 interface PlatformStackProps {
   platformCategories: PlatformCategory[];
 }
 
+// Phones start with this many categories; twelve stacked cards are a long scroll.
+const PHONE_PREVIEW = 4;
+
 const PlatformStack = ({ platformCategories }: PlatformStackProps) => {
+  const [showAll, setShowAll] = useState(false);
   // Two more categories complete the 12-category Adhar stack grid.
   const TILE = "bg-white shadow-sm ring-1 ring-black/5";
   const additionalCategories: PlatformCategory[] = [
@@ -36,9 +41,9 @@ const PlatformStack = ({ platformCategories }: PlatformStackProps) => {
   const allCategories = [...platformCategories, ...additionalCategories];
 
   return (
-    <div className="relative mb-12">
+    <div className="relative sm:mb-12">
       {/* Main Platform Stack Container */}
-      <div className="bg-gradient-to-br from-emerald-50 via-green-50 to-teal-50 dark:bg-gradient-to-br dark:from-emerald-900/30 dark:via-green-900/20 dark:to-teal-900/30 p-8 rounded-3xl shadow-2xl backdrop-blur-sm relative overflow-hidden">
+      <div className="bg-gradient-to-br from-emerald-50 via-green-50 to-teal-50 dark:bg-gradient-to-br dark:from-emerald-900/30 dark:via-green-900/20 dark:to-teal-900/30 p-3 sm:p-8 rounded-3xl shadow-2xl backdrop-blur-sm relative overflow-hidden">
         
         {/* Decorative background elements */}
         <div className="absolute top-0 left-0 w-full h-full opacity-20">
@@ -48,27 +53,28 @@ const PlatformStack = ({ platformCategories }: PlatformStackProps) => {
         </div>
 
         {/* Header Section */}
-        <div className="relative z-10 text-center mb-10">
-          <h3 className="text-3xl font-bold text-emerald-800 dark:text-emerald-200 mb-4 relative">
+        <div className="relative z-10 text-center mt-3 sm:mt-0 mb-6 sm:mb-10">
+          <h3 className="text-2xl sm:text-3xl font-bold text-emerald-800 dark:text-emerald-200 mb-4 relative">
             Adhar platform stack
             <div className="absolute -bottom-2 left-1/2 transform -translate-x-1/2 w-32 h-1 bg-gradient-to-r from-emerald-500 via-green-500 to-teal-500 rounded-full"></div>
           </h3>
-          <p className="text-emerald-700 dark:text-emerald-300 text-lg max-w-2xl mx-auto leading-relaxed">
+          <p className="text-emerald-700 dark:text-emerald-300 text-[15px] sm:text-lg max-w-2xl mx-auto leading-relaxed">
             100+ curated open-source packages, enabled per profile and upgraded together
           </p>
         </div>
 
         {/* Platform Categories Grid - Now with better spacing for 12 categories */}
         <div className="relative z-10">
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 2xl:grid-cols-6 gap-4 sm:gap-5 lg:gap-6 auto-rows-fr">
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 2xl:grid-cols-6 gap-3 sm:gap-5 lg:gap-6 auto-rows-fr">
             {allCategories.map((category, categoryIndex) => (
-              <div 
+              <div
                 key={category.name}
-                className={`${category.color} dark:bg-none dark:bg-white/[0.04] dark:ring-1 dark:ring-white/10 relative group p-6 rounded-2xl shadow-lg hover:shadow-2xl transition-all duration-500 hover:-translate-y-1 backdrop-blur-sm h-full flex flex-col`}
-                style={{ animation: `fadeInUp 0.8s ease-out ${categoryIndex * 150}ms both` }}
+                className={`${category.color} dark:bg-none dark:bg-white/[0.04] dark:ring-1 dark:ring-white/10 relative group p-3 sm:p-6 rounded-2xl shadow-lg hover:shadow-2xl transition-all duration-500 hover:-translate-y-1 backdrop-blur-sm h-full flex-col ${showAll || categoryIndex < PHONE_PREVIEW ? 'flex' : 'hidden sm:flex'}`}
+                // Cards revealed by "Show all" appear at once, not 1.5s late.
+                style={showAll && categoryIndex >= PHONE_PREVIEW ? undefined : { animation: `fadeInUp 0.8s ease-out ${categoryIndex * 150}ms both` }}
               >
                 {/* Category Header */}
-                <div className="text-center mb-6">
+                <div className="text-center mb-3 sm:mb-6">
                   <h4 className="text-sm font-bold text-gray-800 dark:text-gray-200 uppercase tracking-wide leading-tight">
                     {category.name}
                   </h4>
@@ -77,15 +83,15 @@ const PlatformStack = ({ platformCategories }: PlatformStackProps) => {
 
                 {/* Tools Grid — fixed-height tiles, packed to the top, so a card
                     made taller by its row never stretches its tiles. */}
-                <div className="grid grid-cols-2 content-start gap-2.5">
+                <div className="grid grid-cols-2 content-start gap-2 sm:gap-2.5">
                   {category.tools.map((tool) => (
                     <div
                       key={tool.name}
-                      className={`${tool.color} relative group/tool w-full h-21 px-1.5 py-2.5 rounded-xl flex flex-col items-center justify-center gap-1.5 transition-shadow duration-300 hover:shadow-lg`}
+                      className={`${tool.color} relative group/tool w-full h-14 sm:h-21 px-2 sm:px-1.5 py-2.5 rounded-xl flex sm:flex-col items-center sm:justify-center gap-2 sm:gap-1.5 transition-shadow duration-300 hover:shadow-lg`}
                       title={`${tool.name} - ${tool.description}`}
                     >
                       {/* Tool Icon */}
-                      <div className="relative">
+                      <div className="relative shrink-0">
                         {(tool.icon.startsWith('http') || tool.icon.startsWith('/')) ? (
                           <img 
                             src={tool.icon} 
@@ -109,7 +115,7 @@ const PlatformStack = ({ platformCategories }: PlatformStackProps) => {
                           </span>
                         )}
                       </div>
-                      <span className="max-w-full line-clamp-2 text-center text-[11px] font-medium leading-tight text-gray-700">{tool.name}</span>
+                      <span className="min-w-0 max-w-full line-clamp-2 sm:text-center text-[11px] font-medium leading-tight text-gray-700">{tool.name}</span>
 
                       {/* Enhanced Tooltip */}
                       <div className="absolute -top-14 left-1/2 transform -translate-x-1/2 opacity-0 group-hover/tool:opacity-100 transition-all duration-300 bg-gray-900 dark:bg-gray-100 text-white dark:text-gray-900 text-xs px-3 py-2 rounded-lg whitespace-nowrap z-30 shadow-xl border border-gray-700 dark:border-gray-300">
@@ -130,13 +136,24 @@ const PlatformStack = ({ platformCategories }: PlatformStackProps) => {
             ))}
           </div>
           
+          {!showAll && allCategories.length > PHONE_PREVIEW && (
+            <button
+              type="button"
+              onClick={() => setShowAll(true)}
+              className="sm:hidden mt-3 flex h-11 w-full items-center justify-center gap-1.5 rounded-xl bg-white/60 dark:bg-white/10 text-sm font-medium text-emerald-800 dark:text-emerald-200 ring-1 ring-black/5 dark:ring-white/10"
+            >
+              Show all {allCategories.length} categories
+              <ChevronDown className="h-4 w-4" aria-hidden />
+            </button>
+          )}
+
           {/* Enhanced layout hint for better visual balance */}
-          <div className="mt-8 text-center">
-            <div className="inline-flex items-center space-x-2 bg-white/20 dark:bg-black/20 px-4 py-2 rounded-full backdrop-blur-sm">
+          <div className="mt-4 sm:mt-8 mb-1 sm:mb-0 text-center">
+            <div className="inline-flex items-center space-x-2 bg-white/20 dark:bg-black/20 px-4 py-2 rounded-2xl sm:rounded-full backdrop-blur-sm">
               <div className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse"></div>
               <span className="text-xs text-emerald-700 dark:text-emerald-300 font-medium">
                 {allCategories.reduce((total, cat) => total + cat.tools.length, 0)} highlights across {allCategories.length} categories ·{' '}
-                <a href="/integrations" className="underline underline-offset-2 hover:text-emerald-900 dark:hover:text-emerald-100">see all 100+ packages</a>
+                <a href="/integrations" className="inline-block py-1 sm:py-0 underline underline-offset-2 hover:text-emerald-900 dark:hover:text-emerald-100">see all 100+ packages</a>
               </span>
             </div>
           </div>

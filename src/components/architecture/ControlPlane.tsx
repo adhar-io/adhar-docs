@@ -3,7 +3,7 @@ import React from 'react';
 
 const ControlPlane = () => {
   return (
-    <div className="relative mb-16">
+    <div className="relative sm:mb-16">
       {/* Main control plane container */}
       <div className="relative bg-gradient-to-br from-orange-50 via-amber-50 to-yellow-50 dark:bg-gradient-to-br dark:from-orange-900/20 dark:via-amber-900/20 dark:to-yellow-900/20 rounded-3xl shadow-2xl backdrop-blur-sm overflow-hidden animate-fadeInUp">
         {/* Background decorative elements */}
@@ -18,17 +18,17 @@ const ControlPlane = () => {
         <div className="absolute inset-0 bg-gradient-to-r from-orange-500/5 via-transparent to-amber-500/5"></div>
         
         {/* Content */}
-        <div className="relative text-center py-12 px-8">
+        <div className="relative text-center py-7 sm:py-12 px-5 sm:px-8">
           {/* Icon container */}
-          <div className="w-20 h-20 bg-gradient-to-br from-orange-400 to-amber-500 rounded-2xl flex items-center justify-center mb-6 mx-auto shadow-xl">
-            <svg className="w-10 h-10 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <div className="w-14 h-14 sm:w-20 sm:h-20 bg-gradient-to-br from-orange-400 to-amber-500 rounded-2xl flex items-center justify-center mb-4 sm:mb-6 mx-auto shadow-xl">
+            <svg className="w-7 h-7 sm:w-10 sm:h-10 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
             </svg>
           </div>
           
           {/* Title */}
           <div className="mb-4">
-            <h3 className="text-3xl font-bold text-orange-800 dark:text-orange-200 mb-2">
+            <h3 className="text-2xl sm:text-3xl font-bold text-orange-800 dark:text-orange-200 mb-2">
               Adhar Control Plane
             </h3>
             <div className="flex items-center justify-center space-x-3">
@@ -39,12 +39,12 @@ const ControlPlane = () => {
           </div>
           
           {/* Description */}
-          <p className="text-orange-700 dark:text-orange-300 text-base max-w-2xl mx-auto leading-relaxed">
+          <p className="text-orange-700 dark:text-orange-300 text-[15px] sm:text-base max-w-2xl mx-auto leading-relaxed">
             One Kubernetes API for infrastructure, delivery and policy. Crossplane provisions, ArgoCD reconciles from Git, and Kyverno enforces the rules.
           </p>
           
           {/* Feature badges */}
-          <div className="flex flex-wrap justify-center gap-3 mt-8">
+          <div className="flex flex-wrap justify-center gap-2 sm:gap-3 mt-5 sm:mt-8">
             {['Kubernetes API', 'Crossplane', 'ArgoCD', 'Kyverno'].map((feature, index) => (
               <div 
                 key={feature}

@@ -5,7 +5,7 @@ import { Link } from "@tanstack/react-router";
 import Logo from "@/components/ui/Logo";
 import { focusRing } from "./styles";
 
-const linkClass = `rounded-sm text-muted-foreground hover:text-foreground transition-colors duration-300 hover:underline underline-offset-4 ${focusRing}`;
+const linkClass = `inline-block py-1.5 md:py-0 rounded-sm text-muted-foreground hover:text-foreground transition-colors duration-300 hover:underline underline-offset-4 ${focusRing}`;
 
 const Footer = () => {
   const footerSections = [
@@ -53,14 +53,14 @@ const Footer = () => {
     <footer className="dark bg-gray-950 text-foreground border-t border-border">
       <div className="section-padding">
         <div className="max-width-content container-padding">
-          <div className="grid md:grid-cols-5 gap-12 mb-16">
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-x-6 gap-y-10 md:gap-12 mb-10 md:mb-16">
             {/* Company info section */}
-            <div className="md:col-span-2">
-              <div className="mb-8">
+            <div className="col-span-2">
+              <div className="mb-5 md:mb-8">
                 <Logo size="lg" showTagline={false} linkTo="/" />
               </div>
-              
-              <p className="text-muted-foreground leading-relaxed mb-8 text-lg">
+
+              <p className="text-muted-foreground leading-relaxed mb-5 md:mb-8 text-base md:text-lg">
                 The open-source Internal Developer Platform. 100+ curated cloud-native packages, wired together and
                 brought up with a single <code className="font-mono text-foreground text-base">adhar up</code>.
               </p>
@@ -82,8 +82,8 @@ const Footer = () => {
             {/* Navigation sections */}
             {footerSections.map((section) => (
               <div key={section.title}>
-                <h3 className="font-bold mb-6 text-lg text-foreground">{section.title}</h3>
-                <ul className="space-y-4">
+                <h3 className="font-bold mb-3 md:mb-6 text-base md:text-lg text-foreground">{section.title}</h3>
+                <ul className="space-y-1 md:space-y-4">
                   {section.links.map((link) => (
                     <li key={link.label}>
                       {link.to ? (
@@ -108,15 +108,15 @@ const Footer = () => {
             ))}
           </div>
           
-          <Separator className="my-12 bg-border" />
-          
+          <Separator className="my-8 md:my-12 bg-border" />
+
           {/* Bottom section with improved layout */}
-          <div className="flex flex-col lg:flex-row justify-between items-center space-y-6 lg:space-y-0">
-            <p className="text-muted-foreground text-center lg:text-left">
+          <div className="flex flex-col lg:flex-row justify-between items-center space-y-4 lg:space-y-0">
+            <p className="text-sm md:text-base text-muted-foreground text-center lg:text-left">
               &copy; 2026 Anvita Systems Pvt Ltd. All rights reserved.
             </p>
             
-            <div className="flex flex-wrap justify-center lg:justify-end gap-6">
+            <div className="flex flex-wrap justify-center lg:justify-end gap-x-5 gap-y-1 md:gap-6">
               {legalLinks.map((link) => (
                 <Link 
                   key={link.label}

@@ -29,7 +29,7 @@ function slugify(s: string): string {
 }
 
 const HeadingAnchor = ({ id }: { id: string }) => (
-  <a href={`#${id}`} aria-label="Anchor" className="anchor-link inline-flex">
+  <a href={`#${id}`} aria-label="Anchor" className="anchor-link no-min-tap inline-flex align-middle">
     <LinkIcon className="w-3.5 h-3.5" />
   </a>
 );
@@ -49,7 +49,7 @@ const CodeBlock = ({ className, children }: { className?: string; children: Reac
 
   return (
     <div className="relative group my-6">
-      <div className="flex items-center justify-between px-4 py-2 bg-muted/40 border border-b-0 border-border/50 rounded-t-xl">
+      <div className="flex items-center justify-between px-4 py-0.5 sm:py-2 bg-muted/40 border border-b-0 border-border/50 rounded-t-xl">
         <span className="text-[10px] uppercase tracking-wider font-mono text-muted-foreground">
           {lang || "text"}
         </span>
@@ -88,7 +88,7 @@ const MarkdownRenderer = ({ content, className }: MarkdownRendererProps) => {
             return (
               <h2
                 id={safeId}
-                className="group text-2xl font-semibold mt-12 mb-4 pb-2 border-b border-border/50 text-foreground flex items-center"
+                className="group text-2xl font-semibold mt-12 mb-4 pb-2 border-b border-border/50 text-foreground"
               >
                 {children}
                 <HeadingAnchor id={safeId} />
@@ -100,7 +100,7 @@ const MarkdownRenderer = ({ content, className }: MarkdownRendererProps) => {
             return (
               <h3
                 id={safeId}
-                className="group text-lg font-semibold mt-8 mb-3 text-foreground flex items-center"
+                className="group text-lg font-semibold mt-8 mb-3 text-foreground"
               >
                 {children}
                 <HeadingAnchor id={safeId} />
@@ -147,12 +147,12 @@ const MarkdownRenderer = ({ content, className }: MarkdownRendererProps) => {
           ),
           tr: ({ children }) => <tr className="hover:bg-muted/20 transition-colors">{children}</tr>,
           th: ({ children }) => (
-            <th className="px-4 py-2.5 text-left text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+            <th className="px-3 sm:px-4 py-2.5 text-left text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
               {children}
             </th>
           ),
           td: ({ children }) => (
-            <td className="px-4 py-2.5 text-foreground/85 align-top">{children}</td>
+            <td className="px-3 sm:px-4 py-2.5 text-foreground/85 align-top">{children}</td>
           ),
           a: ({ href, children }) => {
             const external = href?.startsWith("http");

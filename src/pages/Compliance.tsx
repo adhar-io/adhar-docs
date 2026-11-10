@@ -43,6 +43,7 @@ const Compliance = () => {
             <span className="eyebrow mb-5"><Shield className="w-3 h-3 mr-1" />Compliance</span>
             <h1 className="section-heading mt-5 text-foreground">
               Compliance &amp;
+              {' '}
               <br className="hidden sm:block" />
               <span className="text-muted-foreground">certifications.</span>
             </h1>
@@ -78,6 +79,7 @@ const Compliance = () => {
               <span className="eyebrow mb-5">Certifications</span>
               <h2 className="section-heading mt-5 text-foreground">
                 Security standards
+                {' '}
                 <br className="hidden sm:block" />
                 <span className="text-muted-foreground">we meet.</span>
               </h2>
@@ -149,6 +151,7 @@ const Compliance = () => {
                 </div>
                 <h2 className="section-heading mt-2 text-foreground">
                   A comprehensive
+                  {' '}
                   <br className="hidden sm:block" />
                   <span className="text-muted-foreground">compliance framework.</span>
                 </h2>

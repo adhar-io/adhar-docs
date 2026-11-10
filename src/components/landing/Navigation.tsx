@@ -31,11 +31,33 @@ const Navigation = () => {
     return () => window.removeEventListener("keydown", onKey);
   }, [mobileMenuOpen]);
 
+  // The page behind an open menu stays put. The lock goes on <html>: it has its
+  // own overflow-x, so the body's overflow never reaches the viewport. Rotating
+  // past the md breakpoint hides the menu, so it has to release the lock too.
+  useEffect(() => {
+    if (!mobileMenuOpen) return;
+    const root = document.documentElement;
+    const previous = root.style.overflow;
+    root.style.overflow = "hidden";
+    const desktop = window.matchMedia("(min-width: 768px)");
+    const onChange = () => setMobileMenuOpen(false);
+    desktop.addEventListener("change", onChange);
+    return () => {
+      root.style.overflow = previous;
+      desktop.removeEventListener("change", onChange);
+    };
+  }, [mobileMenuOpen]);
+
   const closeMenu = () => {
     setMobileMenuOpen(false);
   };
 
   return (
+    <>
+    {/* Outside the header: its backdrop-filter would contain a fixed child. */}
+    {mobileMenuOpen && (
+      <div aria-hidden onClick={closeMenu} className="fixed inset-0 z-40 bg-background/60 backdrop-blur-sm md:hidden" />
+    )}
     <header className="fixed top-0 w-full z-50 bg-background/70 backdrop-blur-xl backdrop-saturate-150 border-b border-border/60 supports-[backdrop-filter]:bg-background/60">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between items-center h-16">
@@ -51,7 +73,7 @@ const Navigation = () => {
           />
         </div>
         {mobileMenuOpen && (
-          <div className="md:hidden -mx-4 sm:-mx-6 px-4 sm:px-6 py-4 border-t border-border/60 bg-background max-h-[calc(100vh-4rem)] overflow-y-auto overscroll-contain">
+          <div className="md:hidden -mx-4 sm:-mx-6 px-4 sm:px-6 py-4 border-t border-border/60 bg-background max-h-[calc(100dvh-4rem)] overflow-y-auto overscroll-contain">
             <nav aria-label="Mobile" className="flex flex-col">
               {[
                 { to: "/docs", label: "Documentation" },
@@ -67,7 +89,7 @@ const Navigation = () => {
                   key={item.to}
                   to={item.to}
                   onClick={closeMenu}
-                  className="text-foreground hover:text-primary hover:bg-muted/60 rounded-lg px-3 min-h-11 flex items-center text-sm font-medium transition-colors"
+                  className="text-foreground hover:text-primary hover:bg-muted/60 rounded-lg px-3 min-h-11 flex items-center text-[15px] font-medium transition-colors"
                 >
                   {item.label}
                 </Link>
@@ -77,7 +99,7 @@ const Navigation = () => {
                 target="_blank"
                 rel="noopener noreferrer"
                 onClick={closeMenu}
-                className="text-foreground hover:text-primary hover:bg-muted/60 rounded-lg px-3 min-h-11 flex items-center gap-1.5 text-sm font-medium transition-colors"
+                className="text-foreground hover:text-primary hover:bg-muted/60 rounded-lg px-3 min-h-11 flex items-center gap-1.5 text-[15px] font-medium transition-colors"
                 title="Opens in a new tab"
               >
                 Adhar UI
@@ -99,7 +121,7 @@ const Navigation = () => {
                     key={item.to}
                     to={item.to}
                     onClick={closeMenu}
-                    className="text-foreground hover:text-primary hover:bg-muted/60 rounded-lg px-3 min-h-11 flex items-center text-sm font-medium transition-colors"
+                    className="text-foreground hover:text-primary hover:bg-muted/60 rounded-lg px-3 min-h-11 flex items-center text-[15px] font-medium transition-colors"
                   >
                     {item.label}
                   </Link>
@@ -124,6 +146,7 @@ const Navigation = () => {
         )}
       </div>
     </header>
+    </>
   );
 };
 

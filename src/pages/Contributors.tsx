@@ -177,6 +177,7 @@ const Contributors = () => {
             <span className="eyebrow mb-5">Community</span>
             <h1 className="section-heading mt-5 text-foreground">
               Our amazing
+              {' '}
               <br className="hidden sm:block" />
               <span className="text-muted-foreground">contributors.</span>
             </h1>

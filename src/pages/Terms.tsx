@@ -77,6 +77,7 @@ const Terms = () => {
             <span className="eyebrow mb-5"><FileText className="w-3 h-3 mr-1" />Legal</span>
             <h1 className="section-heading mt-5 text-foreground">
               Terms of
+              {' '}
               <br className="hidden sm:block" />
               <span className="text-muted-foreground">service.</span>
             </h1>

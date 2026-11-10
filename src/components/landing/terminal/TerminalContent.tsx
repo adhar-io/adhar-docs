@@ -49,8 +49,9 @@ const OutputLine = ({ line }: { line: string }) => {
   if (stage) {
     const [, indent, glyph, gap, label, gap2 = '', rest = ''] = stage;
     const state = glyph === '✓' ? 'done' : glyph === '○' ? 'pending' : glyph === '✖' ? 'failed' : 'active';
+    // Stage details end in an ellipsis on narrow screens; panels scroll instead.
     return (
-      <div className="whitespace-pre">
+      <div className="overflow-hidden text-ellipsis whitespace-pre">
         {indent}{paint(glyph)}{gap}
         <span className={state === 'pending' ? 'text-zinc-600' : state === 'active' ? 'text-zinc-100' : 'text-zinc-300'}>{label}</span>
         {gap2}<span className="text-zinc-500">{rest}</span>
@@ -72,7 +73,7 @@ const Prompt = ({ children }: { children?: ReactNode }) => (
 const Cursor = () => <span className="ml-0.5 inline-block h-4 w-2 animate-pulse bg-zinc-300 align-middle" />;
 
 const TerminalContent = ({ blocks, idle }: { blocks: Block[]; idle: boolean }) => (
-  <div className="flex h-90 flex-col justify-end overflow-hidden bg-zinc-950 p-4 text-left font-mono text-[11px] leading-[18px] sm:h-105 sm:p-6 sm:text-[13px] sm:leading-5 [mask-image:linear-gradient(to_bottom,transparent,black_18%)]">
+  <div className="flex h-90 flex-col justify-end overflow-x-auto overflow-y-hidden scrollbar-hide bg-zinc-950 p-4 text-left font-mono text-[11px] leading-[18px] sm:h-105 sm:p-6 sm:text-[13px] sm:leading-5 [mask-image:linear-gradient(to_bottom,transparent,black_18%)]">
     {blocks.map((b, i) => {
       const typing = b.typed < b.command.length;
       return (

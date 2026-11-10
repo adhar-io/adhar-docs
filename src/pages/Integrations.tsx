@@ -194,6 +194,7 @@ const Integrations = () => {
             <span className="eyebrow mb-5"><Boxes className="w-3 h-3 mr-1" />Integrations & ecosystem</span>
             <h1 className="section-heading mt-5 text-foreground">
               Every tool Adhar runs
+              {' '}
               <br className="hidden sm:block" />
               <span className="text-muted-foreground">under the hood.</span>
             </h1>
