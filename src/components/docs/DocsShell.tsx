@@ -221,15 +221,17 @@ const DocsShell = ({ registry, brand, versionSource, searchLabel }: DocsShellPro
       <main className="relative pt-20">
         <div className="max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8 py-6">
           {/* Breadcrumbs */}
-          <nav className="flex items-center gap-1.5 text-xs text-muted-foreground mb-4 lg:mb-6 flex-wrap">
-            <Link to="/" className="py-1.5 lg:py-0 hover:text-primary transition-colors">Home</Link>
+          {/* Links get a full 44px tap area on phones; the negative margins keep
+              the row as compact as the text it holds. */}
+          <nav className="flex items-center gap-1.5 text-xs text-muted-foreground -mt-3 mb-1 lg:mt-0 lg:mb-6 flex-wrap">
+            <Link to="/" className="-mx-2 px-2 py-3.5 lg:m-0 lg:p-0 hover:text-primary transition-colors">Home</Link>
             {crumbs.map((c, i) => (
               <span key={c.to} className="flex items-center gap-1.5">
                 <ChevronRight className="w-3 h-3" />
                 {i === crumbs.length - 1 ? (
                   <span className="capitalize text-foreground">{c.label}</span>
                 ) : (
-                  <Link to={c.to} className="py-1.5 lg:py-0 capitalize hover:text-primary transition-colors">{c.label}</Link>
+                  <Link to={c.to} className="-mx-2 px-2 py-3.5 lg:m-0 lg:p-0 capitalize hover:text-primary transition-colors">{c.label}</Link>
                 )}
               </span>
             ))}

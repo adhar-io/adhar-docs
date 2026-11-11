@@ -5,7 +5,10 @@ import { Link } from "@tanstack/react-router";
 import Logo from "@/components/ui/Logo";
 import { focusRing } from "./styles";
 
-const linkClass = `inline-block py-1.5 md:py-0 rounded-sm text-muted-foreground hover:text-foreground transition-colors duration-300 hover:underline underline-offset-4 ${focusRing}`;
+const linkBase = `rounded-sm text-muted-foreground hover:text-foreground transition-colors duration-300 hover:underline underline-offset-4 ${focusRing}`;
+const linkClass = `inline-block py-1.5 md:py-0 ${linkBase}`;
+// Full 44px tap height on phones, with the extra space inside the link so the row stays tight.
+const legalLinkClass = `inline-flex items-center min-h-11 md:min-h-0 text-sm ${linkBase}`;
 
 const Footer = () => {
   const footerSections = [
@@ -116,12 +119,12 @@ const Footer = () => {
               &copy; 2026 Anvita Systems Pvt Ltd. All rights reserved.
             </p>
             
-            <div className="flex flex-wrap justify-center lg:justify-end gap-x-5 gap-y-1 md:gap-6">
+            <div className="flex flex-wrap justify-center lg:justify-end gap-x-5 md:gap-6">
               {legalLinks.map((link) => (
                 <Link 
                   key={link.label}
                   to={link.to} 
-                  className={`${linkClass} text-sm`}
+                  className={legalLinkClass}
                 >
                   {link.label}
                 </Link>

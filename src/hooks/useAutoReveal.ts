@@ -61,30 +61,47 @@ export function useAutoReveal(ref: RefObject<HTMLElement | null>, pathname: stri
 
     const timers = new Set<number>();
     const seen = new WeakSet<Element>();
-    const io = new IntersectionObserver(
-      (entries) => {
-        for (const e of entries) {
-          if (!e.isIntersecting) continue;
-          const el = e.target as HTMLElement;
-          io.unobserve(el);
-          el.dataset.reveal = "in";
-          const i = Number(el.dataset.revealI ?? 0);
-          const t = window.setTimeout(() => {
-            el.removeAttribute("data-reveal");
-            el.removeAttribute("data-reveal-i");
-            timers.delete(t);
-          }, DURATION_MS + i * STEP_MS + 100);
-          timers.add(t);
-        }
-      },
-      { threshold: 0.12, rootMargin: "0px 0px -6% 0px" },
-    );
+    const onEnter = (entries: IntersectionObserverEntry[], observer: IntersectionObserver) => {
+      for (const e of entries) {
+        if (!e.isIntersecting) continue;
+        const el = e.target as HTMLElement;
+        observer.unobserve(el);
+        el.dataset.reveal = "in";
+        const i = Number(el.dataset.revealI ?? 0);
+        const t = window.setTimeout(() => {
+          el.removeAttribute("data-reveal");
+          el.removeAttribute("data-reveal-i");
+          timers.delete(t);
+        }, DURATION_MS + i * STEP_MS + 100);
+        timers.add(t);
+      }
+    };
+    const io = new IntersectionObserver(onEnter, { threshold: 0.12, rootMargin: "0px 0px -6% 0px" });
+    // 12% of a block several screens tall is more than a screen: it would sit
+    // blank while in view, or never reveal on a short phone. Tall blocks reveal
+    // as soon as their top clears the bottom edge instead.
+    const tallIo = new IntersectionObserver(onEnter, { threshold: 0, rootMargin: "0px 0px -12% 0px" });
 
     const mark = (el: Element, i: number) => {
       if (!canReveal(el)) return;
       el.setAttribute("data-reveal", "");
       el.setAttribute("data-reveal-i", String(Math.min(i, MAX_STAGGER)));
-      io.observe(el);
+      (el.getBoundingClientRect().height > window.innerHeight * 0.8 ? tallIo : io).observe(el);
+    };
+
+    // A block taller than the screen that is only a wrapper reveals child by
+    // child, so its first part is not held back by the rest.
+    const markBlock = (block: Element, i: number, depth = 0) => {
+      if (isCardGroup(block)) {
+        [...block.children].forEach((card, j) => mark(card, j));
+        return;
+      }
+      const kids = [...block.children].filter((c) => !isDecoration(c));
+      if (depth < 2 && kids.length > 1 && block.getBoundingClientRect().height > window.innerHeight) {
+        kids.forEach((kid, j) => markBlock(kid, j, depth + 1));
+        return;
+      }
+      mark(block, i);
     };
 
     const scan = () => {
@@ -92,10 +109,7 @@ export function useAutoReveal(ref: RefObject<HTMLElement | null>, pathname: stri
         if (seen.has(section) || section.closest("[data-reveal]")) continue;
         seen.add(section);
         const blocks = [...contentRoot(section).children].filter((c) => !isDecoration(c));
-        blocks.forEach((block, i) => {
-          if (isCardGroup(block)) [...block.children].forEach((card, j) => mark(card, j));
-          else mark(block, i);
-        });
+        blocks.forEach((block, i) => markBlock(block, i));
       }
     };
 
@@ -112,6 +126,7 @@ export function useAutoReveal(ref: RefObject<HTMLElement | null>, pathname: stri
     return () => {
       mo.disconnect();
       io.disconnect();
+      tallIo.disconnect();
       timers.forEach((t) => window.clearTimeout(t));
     };
   }, [ref, pathname]);

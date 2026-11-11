@@ -73,7 +73,9 @@ const CloudProvidersGrid = () => (
       ))}
     </ul>
 
-    <div className="mt-6 sm:mt-12 grid md:grid-cols-3 gap-3 sm:gap-6 md:text-center">
+    {/* Icon beside the text below md; the hero around this is centred, so
+        the left alignment has to be explicit. */}
+    <div className="mt-6 sm:mt-12 grid md:grid-cols-3 gap-3 sm:gap-6 text-left md:text-center">
       {promises.map(({ icon: Icon, title, body }) => (
         <div key={title} className="flex items-start gap-4 md:block bg-background/40 backdrop-blur-sm rounded-xl p-4 md:p-6 border border-border/30">
           <div className="shrink-0 md:mx-auto md:mb-4 inline-flex h-11 w-11 items-center justify-center rounded-xl border border-border/70 bg-background text-primary shadow-[var(--shadow-xs)]">
