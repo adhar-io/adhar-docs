@@ -376,4 +376,5 @@ The `knative` package is marked `localSafe: false` because of its footprint. Run
 - **[Function API reference](/docs/reference/function-api)** — every field, condition, composed object and `adhar function` flag
 - **[Promote Across Environments](/docs/guides/promote-across-environments)** — Freight, Stages and Releases in depth
 - **[Your First Service](/docs/getting-started/first-service)** — when a long-running service fits better
+- **[Batch Jobs](/docs/core-concepts/batch)** — when the work is a Spring Batch job that runs for minutes or hours
 - **[Observability](/docs/operations/observability)** — logs, metrics and traces

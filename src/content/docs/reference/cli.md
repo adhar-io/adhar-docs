@@ -326,6 +326,8 @@ adhar fn delete echo -n dev
 
 `create` takes `--image` (required), `--runtime` (`node20`, `python312`, `go122` or `custom`), `--trigger`, `--event-source`, `--port`, `--min-scale`, `--max-scale`, `--target-concurrency` and `--timeout`. Triggers lists, visibility, hostnames, `env` and Dapr have no flags; write the YAML and `kubectl apply` it. The [Function API reference](/docs/reference/function-api#adhar-function) has every field.
 
+**Batch jobs.** There is no `adhar batch` command yet, although some alert and policy messages already name `adhar batch run` and `adhar batch runs`. Run, restart and hold a [batch job](/docs/core-concepts/batch) from Console → **Develop → Batch**, or with `kubectl` as shown in the [BatchJob API reference](/docs/reference/batch-job-api#command-line).
+
 **Environments and GitOps:**
 
 ```bash

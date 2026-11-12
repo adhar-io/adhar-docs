@@ -19,10 +19,10 @@ const PlatformStack = ({ platformCategories }: PlatformStackProps) => {
       name: "Automation & Chaos",
       color: "bg-gradient-to-br from-orange-50 to-amber-50",
       tools: [
-        { name: "n8n", icon: "https://cdn.jsdelivr.net/gh/simple-icons/simple-icons/icons/n8n.svg", color: TILE, description: "Workflow automation" },
+        { name: "n8n", icon: "https://cdn.simpleicons.org/n8n", color: TILE, description: "Workflow automation" },
         { name: "LitmusChaos", icon: "https://cdn.jsdelivr.net/gh/cncf/artwork@main/projects/litmus/icon/color/litmus-icon-color.svg", color: TILE, description: "Chaos engineering" },
-        { name: "k6", icon: "https://cdn.jsdelivr.net/gh/simple-icons/simple-icons/icons/k6.svg", color: TILE, description: "Load & performance testing" },
-        { name: "Baserow", icon: "https://cdn.jsdelivr.net/gh/simple-icons/simple-icons/icons/baserow.svg", color: TILE, description: "No-code database" }
+        { name: "k6", icon: "https://cdn.simpleicons.org/k6", color: TILE, description: "Load & performance testing" },
+        { name: "Baserow", icon: "https://cdn.simpleicons.org/baserow", color: TILE, description: "No-code database" }
       ]
     },
     {

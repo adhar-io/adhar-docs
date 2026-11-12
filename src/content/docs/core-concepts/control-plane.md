@@ -214,7 +214,7 @@ Five functions are installed with the control plane (`configuration/functions/fu
 
 ## Every self-service API the platform ships
 
-At the time of writing, the control plane ships **39 XRDs and 62 Compositions**. The numbers grow, so to see the live list on your cluster, run `kubectl get xrd` and `kubectl get compositions --show-labels`. Every kind below has a working example under `examples/` in the platform repo. A test fails if one loses its example.
+At the time of writing (v0.1.68), the control plane ships **41 XRDs and 63 Compositions**. The numbers grow, so to see the live list on your cluster, run `kubectl get xrd` and `kubectl get compositions --show-labels`. Every kind below has a working example under `examples/` in the platform repo. A test fails if one loses its example.
 
 ### Tenancy and delivery
 
@@ -227,7 +227,9 @@ At the time of writing, the control plane ships **39 XRDs and 62 Compositions**.
 | `Application` | An Argo CD Application (plus Kargo Warehouse and Stages in the multi-environment shape) | `application-local-argocd` (`provider=local`), `application-multienv` (default), `application-argocd` |
 | `Release` | One promotion of a piece of freight into one environment | `release-kargo` |
 | `Repository` | A Gitea repository with its Harbor project and Nexus repositories | `repository-local` |
-| `Pipeline` | A CI pipeline (clone → build → scan → sign → deploy) | `pipeline-local` (default), `pipeline-tekton`, `pipeline-argo-workflows` |
+| `Pipeline` | A CI pipeline (clone → build → scan → sign → deploy) | `pipeline-local` (default), `pipeline-tekton` |
+| `Function` | A scale-to-zero HTTP handler on Knative, with cron, CloudEvent and topic triggers. See [Functions](/docs/core-concepts/functions) | `function-local-knative` |
+| `BatchJob` | A Spring Batch job, scheduled or on demand, with its run template, roles and alerts. See [Batch Jobs](/docs/core-concepts/batch) | `batchjob-kubernetes` |
 | `GitOps` | An Argo CD AppProject and the ApplicationSets that fill it | `gitops-argocd` |
 | `Service`, `Scale`, `Webhook` | A Service with its ServiceMonitor; an HPA; platform events to your endpoint | `service-k8s`, `scale-hpa`, `webhook-k8s` |
 | `AgentWorkload` | A governed AI agent: namespace, quota, egress policy, model and MCP-tool allow-lists | `agentworkload-kubernetes` |

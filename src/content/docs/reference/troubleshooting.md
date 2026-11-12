@@ -1,7 +1,7 @@
 ---
 title: "Troubleshooting"
 section: "Reference"
-order: 3
+order: 4
 path: "/docs/reference/troubleshooting"
 ---
 

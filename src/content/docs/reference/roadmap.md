@@ -1,7 +1,7 @@
 ---
 title: "Roadmap"
 section: "Reference"
-order: 4
+order: 5
 path: "/docs/reference/roadmap"
 ---
 
@@ -122,6 +122,9 @@ Two things are deliberately missing, and you should know about them before you p
 | Both bring-up profiles | `status:complete` | Kind gets the local development core; cloud and on-prem get the full catalogue |
 | Golden paths | `status:complete` | Service, frontend, data-pipeline and ML skeletons, scaffolded from the Console to a signed, running workload |
 | Functions | `status:complete` | The `Function` API on Knative: HTTP, cron, CloudEvent and Dapr topic triggers, five templates, Kargo delivery |
+| [Batch jobs](/docs/core-concepts/batch) | `status:in-progress` | The `BatchJob` API for Spring Batch: scheduled and on-demand runs, holds, the Console page, alerts and policies. The batch template and an `adhar batch` command are still to come |
+| Volcano batch scheduling | `status:planned` | Queues, gang scheduling and partitioned jobs with workers. Volcano ships as an opt-in package, but BatchJobs do not use it yet |
+| Team workflows | `status:planned` | Argo Workflows runs the platform's own maintenance tasks today. Workflows that teams write and run themselves come later |
 | Scorecards | `status:complete` | Every service graded 0–100 from live signals, shown in the Console |
 | Package marketplace | `status:complete` | Every package carries a validated contract; the Console switches packages on and off |
 | Tenant isolation | `status:complete` | Each team gets its own namespace, RBAC and default-deny ingress |

@@ -6,53 +6,54 @@ import SectionHeader from "./SectionHeader";
 import "./marquee.css";
 
 const DEV = "https://cdn.jsdelivr.net/gh/devicons/devicon/icons";
-const SI = "https://cdn.jsdelivr.net/gh/simple-icons/simple-icons/icons";
 const cncf = (p: string) =>
   `https://cdn.jsdelivr.net/gh/cncf/artwork@main/projects/${p}/icon/color/${p}-icon-color.svg`;
 
 // The foundational, most-recognisable tools ADHAR is built on — the ones we
-// spotlight. Logos mirror the /integrations catalogue exactly.
+// spotlight. Every logo is the project's own colour mark; the few that are
+// black (Kafka, Coder, Penpot) are black in their own artwork too.
 const highlights = [
   { name: "Kubernetes", role: "Orchestration", icon: `${DEV}/kubernetes/kubernetes-original.svg`, isFoundation: true },
-  { name: "Cilium", role: "eBPF networking", icon: `${SI}/cilium.svg` },
+  { name: "Cilium", role: "eBPF networking", icon: "https://cdn.jsdelivr.net/gh/cncf/artwork@main/projects/cilium/icon/color/cilium_icon-color.svg" },
   { name: "Crossplane", role: "Control plane", icon: cncf("crossplane") },
-  { name: "ArgoCD", role: "GitOps delivery", icon: `${SI}/argo.svg` },
-  { name: "Gitea", role: "Git server", icon: `${SI}/gitea.svg` },
-  { name: "Keycloak", role: "SSO & identity", icon: `${SI}/keycloak.svg` },
+  { name: "ArgoCD", role: "GitOps delivery", icon: "https://cdn.jsdelivr.net/gh/cncf/artwork@main/projects/argo/icon/color/argo-icon-color.svg" },
+  { name: "Gitea", role: "Git server", icon: "https://cdn.jsdelivr.net/gh/devicons/devicon/icons/gitea/gitea-original.svg" },
+  { name: "Keycloak", role: "SSO & identity", icon: "https://cdn.jsdelivr.net/gh/cncf/artwork/projects/keycloak/icon/color/keycloak-icon-color.svg" },
   { name: "Kargo", role: "Environment promotion", icon: "https://cdn.jsdelivr.net/gh/akuity/kargo/ui/public/kargo-logo.png" },
-  { name: "Harbor", role: "Container registry", icon: `${SI}/harbor.svg` },
+  { name: "Harbor", role: "Container registry", icon: "https://cdn.jsdelivr.net/gh/cncf/artwork@main/projects/harbor/icon/color/harbor-icon-color.svg" },
   { name: "Grafana", role: "Observability", icon: `${DEV}/grafana/grafana-original.svg` },
   { name: "Prometheus", role: "Metrics", icon: `${DEV}/prometheus/prometheus-original.svg` },
   { name: "Kyverno", role: "Policy engine", icon: cncf("kyverno") },
-  { name: "OpenBao", role: "Secrets", icon: `${SI}/openbao.svg` },
+  { name: "OpenBao", role: "Secrets", icon: "https://cdn.simpleicons.org/openbao" },
 ];
 
 // The wider stack — scrolled as a marquee below the spotlight grid.
 const marquee = [
   { name: "Helm", icon: `${DEV}/helm/helm-original.svg` },
-  { name: "Trivy", icon: `${SI}/trivy.svg` },
+  { name: "Trivy", icon: "https://cdn.simpleicons.org/trivy" },
   { name: "cert-manager", icon: cncf("cert-manager") },
-  { name: "Falco", icon: `${SI}/falco.svg` },
-  { name: "OpenTelemetry", icon: `${SI}/opentelemetry.svg` },
+  { name: "Falco", icon: "https://cdn.jsdelivr.net/gh/cncf/artwork@main/projects/falco/icon/color/falco-icon-color.svg" },
+  { name: "OpenTelemetry", icon: "https://cdn.jsdelivr.net/gh/cncf/artwork@main/projects/opentelemetry/icon/color/opentelemetry-icon-color.svg" },
   { name: "Loki", icon: "https://grafana.com/static/img/logos/logo-loki.svg" },
   { name: "Tempo", icon: "https://grafana.com/static/assets/img/logos/grafana-tempo.svg" },
-  { name: "Tekton", icon: `${SI}/tekton.svg` },
-  { name: "Knative", icon: `${SI}/knative.svg` },
+  { name: "Tekton", icon: "https://cdn.jsdelivr.net/gh/cdfoundation/artwork/former_project_logos/tekton/icon/color/tekton-icon-color.svg" },
+  { name: "Knative", icon: "https://cdn.jsdelivr.net/gh/cncf/artwork/projects/knative/icon/color/knative-icon-color.svg" },
   { name: "KEDA", icon: cncf("keda") },
-  { name: "Dapr", icon: `${SI}/dapr.svg` },
+  { name: "Dapr", icon: "https://cdn.jsdelivr.net/gh/cncf/artwork@main/projects/dapr/icon/color/dapr-icon-color.svg" },
   { name: "CloudNativePG", icon: cncf("cloudnativepg") },
   { name: "PostgreSQL", icon: `${DEV}/postgresql/postgresql-original.svg` },
   { name: "RustFS", icon: "https://github.com/rustfs.png?size=64" },
-  { name: "Apache Kafka", icon: `${SI}/apachekafka.svg` },
-  { name: "Trino", icon: `${SI}/trino.svg` },
+  { name: "Apache Kafka", icon: "https://cdn.jsdelivr.net/gh/devicons/devicon/icons/apachekafka/apachekafka-original.svg" },
+  { name: "Trino", icon: "https://cdn.simpleicons.org/trino" },
   { name: "Valkey", icon: "https://github.com/valkey-io.png?size=64" },
   { name: "Velero", icon: cncf("velero") },
   { name: "Buildpacks", icon: cncf("buildpacks") },
-  { name: "Coder", icon: `${SI}/coder.svg` },
-  { name: "Penpot", icon: `${SI}/penpot.svg` },
-  { name: "Headlamp", icon: cncf("headlamp") },
+  { name: "Coder", icon: "https://cdn.simpleicons.org/coder" },
+  { name: "Penpot", icon: "https://cdn.simpleicons.org/penpot" },
+  // jsDelivr refuses this project's SVG; the PNG of the same mark serves.
+  { name: "Headlamp", icon: "https://cdn.jsdelivr.net/gh/cncf/artwork@main/projects/headlamp/icon/color/headlamp-icon-color.png" },
   { name: "LitmusChaos", icon: cncf("litmus") },
-  { name: "vLLM", icon: `${SI}/vllm.svg` },
+  { name: "vLLM", icon: "https://cdn.simpleicons.org/vllm" },
 ];
 
 const kubeMetrics = [
@@ -88,7 +89,7 @@ const IntegrationsSection = () => {
               <div className="flex flex-col sm:flex-row items-start sm:items-center gap-5">
                 <div className="inline-flex h-12 w-12 items-center justify-center rounded-2xl border border-border/70 bg-white shadow-[var(--shadow-xs)] shrink-0">
                   <img
-                    src={`${DEV}/kubernetes/kubernetes-plain.svg`}
+                    src={`${DEV}/kubernetes/kubernetes-original.svg`}
                     alt=""
                     loading="lazy"
                     decoding="async"

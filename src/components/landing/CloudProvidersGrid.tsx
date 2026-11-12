@@ -46,20 +46,22 @@ const CloudProvidersGrid = () => (
           key={provider.name}
           className="group relative bg-background/50 backdrop-blur-sm rounded-2xl p-4 sm:p-6 border border-border/50 transition-all duration-300 hover:scale-105 hover:shadow-lg hover:bg-primary/5"
         >
-          <div className="w-12 h-12 sm:w-16 sm:h-16 mx-auto flex items-center justify-center mb-2 sm:mb-3">
+          {/* A white chip, as everywhere else on the page: the AWS wordmark's dark
+              lettering would vanish on the dark-mode tile. */}
+          <div className="w-14 h-14 sm:w-20 sm:h-20 mx-auto flex items-center justify-center mb-2 sm:mb-3 rounded-2xl bg-white p-2.5 sm:p-3.5 ring-1 ring-black/5 shadow-[var(--shadow-xs)]">
             {provider.logo ? (
               <img
                 src={provider.logo}
                 loading="lazy"
                 decoding="async"
                 alt=""
-                className="max-w-full max-h-full object-contain grayscale opacity-70 group-hover:grayscale-0 group-hover:opacity-100 transition-all duration-300"
+                className="max-w-full max-h-full object-contain transition-transform duration-300 group-hover:scale-105"
                 onError={(e) => {
                   (e.target as HTMLImageElement).style.visibility = "hidden";
                 }}
               />
             ) : (
-              <Server className="w-10 h-10 text-muted-foreground group-hover:text-primary transition-colors duration-300" aria-hidden />
+              <Server className="w-8 h-8 sm:w-10 sm:h-10 text-slate-500 group-hover:text-primary transition-colors duration-300" aria-hidden />
             )}
           </div>
           <p className="text-center text-sm font-semibold text-muted-foreground group-hover:text-foreground transition-colors duration-300">
