@@ -41,7 +41,7 @@ const HeroTitle = ({ isVisible }: HeroTitleProps) => (
     >
       <span className="text-foreground">100+ curated open-source packages</span>, wired together and security hardened by default.
       Run <code className="font-mono text-[0.95em] text-foreground">adhar up</code> and, in about 30 minutes, the
-      whole platform is live on your laptop or on any supported clouds.
+      whole platform is live on your favorite public cloud, on your laptop or on your own infrastructure.
     </p>
   </div>
 );

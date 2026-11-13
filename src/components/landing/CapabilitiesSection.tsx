@@ -1,9 +1,15 @@
-import React from "react";
+import React, { useState } from "react";
 import { Star } from "lucide-react";
 import { capabilities } from "@/data/landingPageData";
 import SectionHeader from "./SectionHeader";
 
+// The highlight rests on the core capability and follows the pointer across the grid.
+const restingIndex = Math.max(0, capabilities.findIndex((c) => c.highlight));
+
 const CapabilitiesSection = () => {
+  const [hovered, setHovered] = useState<number | null>(null);
+  const activeIndex = hovered ?? restingIndex;
+
   return (
     <section id="capabilities" aria-labelledby="capabilities-heading" className="relative section-padding container-padding bg-background">
       <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-border to-transparent" />
@@ -13,14 +19,19 @@ const CapabilitiesSection = () => {
           Delivery, infrastructure, identity, secrets, security and observability ship configured to work with each other. You get a working platform on day one, not a parts list.
         </SectionHeader>
 
-        <div className="grid sm:grid-cols-2 gap-px overflow-hidden rounded-2xl border border-border/70 bg-border/60">
-          {capabilities.map((capability) => {
+        <div
+          className="grid sm:grid-cols-2 gap-px overflow-hidden rounded-2xl border border-border/70 bg-border/60"
+          onMouseLeave={() => setHovered(null)}
+        >
+          {capabilities.map((capability, index) => {
             const Icon = capability.icon;
+            const active = index === activeIndex;
             return (
               <article
                 key={capability.title}
-                className={`group relative flex bg-card p-6 sm:p-7 transition-colors duration-300 hover:bg-muted/30 ${
-                  capability.highlight ? 'ring-1 ring-inset ring-primary/30' : ''
+                onMouseEnter={() => setHovered(index)}
+                className={`group relative flex bg-card p-6 sm:p-7 transition-[background-color,box-shadow] duration-300 ${
+                  active ? 'bg-muted/30 ring-1 ring-inset ring-primary/30' : ''
                 }`}
               >
                 {capability.highlight && (
@@ -32,8 +43,8 @@ const CapabilitiesSection = () => {
 
                 <div className="flex items-start gap-5 w-full">
                   <div
-                    className={`shrink-0 inline-flex h-11 w-11 items-center justify-center rounded-xl border border-border/70 shadow-[var(--shadow-xs)] transition-transform duration-300 group-hover:-translate-y-0.5 ${
-                      capability.highlight ? 'bg-primary/10 text-primary' : 'bg-background text-muted-foreground'
+                    className={`shrink-0 inline-flex h-11 w-11 items-center justify-center rounded-xl border border-border/70 shadow-[var(--shadow-xs)] transition-[transform,background-color,color] duration-300 group-hover:-translate-y-0.5 ${
+                      active ? 'bg-primary/10 text-primary' : 'bg-background text-muted-foreground'
                     }`}
                   >
                     <Icon className="h-5 w-5" aria-hidden />

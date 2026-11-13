@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState } from "react";
 import { ArrowRight } from "lucide-react";
 import { Link } from "@tanstack/react-router";
 import { btnSecondary } from "./styles";
@@ -69,7 +69,13 @@ const hideOnError = (e: React.SyntheticEvent<HTMLImageElement>) => {
   else (e.target as HTMLImageElement).style.display = "none";
 };
 
+// The spotlight ring rests on Kubernetes and follows the pointer across the grid.
+const restingIndex = Math.max(0, highlights.findIndex((t) => t.isFoundation));
+
 const IntegrationsSection = () => {
+  const [hovered, setHovered] = useState<number | null>(null);
+  const activeIndex = hovered ?? restingIndex;
+
   return (
     <section id="integrations" aria-labelledby="integrations-heading" className="relative section-padding container-padding bg-background">
       <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-border to-transparent" />
@@ -124,12 +130,16 @@ const IntegrationsSection = () => {
         </div>
 
         {/* Spotlight grid — the foundational stack */}
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-px overflow-hidden rounded-2xl border border-border/70 bg-border/60">
-          {highlights.map((tool) => (
+        <div
+          className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-px overflow-hidden rounded-2xl border border-border/70 bg-border/60"
+          onMouseLeave={() => setHovered(null)}
+        >
+          {highlights.map((tool, index) => (
             <article
               key={tool.name}
-              className={`group relative flex flex-col items-start gap-3 sm:flex-row sm:items-center sm:gap-3.5 bg-card p-5 transition-all duration-300 hover:bg-muted/40 hover:-translate-y-0.5 ${
-                tool.isFoundation ? "ring-1 ring-inset ring-primary/30" : ""
+              onMouseEnter={() => setHovered(index)}
+              className={`group relative flex flex-col items-start gap-3 sm:flex-row sm:items-center sm:gap-3.5 bg-card p-5 transition-all duration-300 hover:-translate-y-0.5 ${
+                index === activeIndex ? "bg-muted/40 ring-1 ring-inset ring-primary/30" : ""
               }`}
             >
               {tool.isFoundation && (
