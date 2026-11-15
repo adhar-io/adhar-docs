@@ -45,7 +45,7 @@ const About = () => {
       role: "Data & AI Platform",
       avatar: "/avatars/sudhir-ranjan-pradhan.jpeg",
       bio: "Leads data and AI platform strategy, helping teams move from experimentation to secure, governed, production-scale intelligence services.",
-      location: "San Francisco, CA",
+      location: "San Francisco, USA",
       social: {
         github: "https://github.com/adhar-io/",
         linkedin: "https://www.linkedin.com/in/sudhirranjan/"
@@ -92,7 +92,7 @@ const About = () => {
       location: "Singapore",
       social: {
         github: "https://github.com/adhar-io/",
-        linkedin: "priya-nair-security"
+        linkedin: "https://www.linkedin.com/in/arun-subbaram-chelakara/"
       }
     },
     {
@@ -122,7 +122,7 @@ const About = () => {
       role: "Platform & Enterprise Architecture",
       avatar: "/avatars/seshu-devineni.jpeg",
       bio: "Shapes enterprise platform architecture and operating models that scale internal developer platforms with clear governance and measurable outcomes.",
-      location: "Florida, USA",
+      location: "Singapore",
       social: {
         github: "https://github.com/adhar-io/",
         linkedin: "https://www.linkedin.com/in/s3shu/"
