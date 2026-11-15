@@ -11,10 +11,10 @@ Adhar aims to be the **open foundation for platform engineering**. One command, 
 
 It is written for engineers who will run or extend the platform. It starts with the design principles and the four layers. Then it follows the objects that drive the system, with the real manifest for each:
 
-- the `AdharPlatform` resource
-- the controller that reconciles it (keeps the cluster matching what the resource asks for)
-- the ApplicationSet that delivers every package
-- the composite resources that teams create
+- The `AdharPlatform` resource
+- The controller that reconciles it (keeps the cluster matching what the resource asks for)
+- The ApplicationSet that delivers every package
+- The composite resources that teams create
 
 By the end, you should be able to read a running platform's state from its objects and predict what the controller will do next.
 
@@ -80,11 +80,11 @@ metadata:
   name: adhar
   namespace: adhar-system
 spec:
-  provider: civo              # kind | aws | azure | gke | do | civo | custom — kind or empty selects the local profile
+  provider: gcp               # kind | aws | azure | gcp | do | civo | custom — kind or empty selects the local profile
   autoscaling:                # the platform's own node autoscaler
     enabled: true
     minWorkers: 2
-    maxWorkers: 5             # the spend limit
+    maxWorkers: 10            # the spend limit
   clusterMesh:                # this cluster's identity in a Cilium Cluster Mesh
     name: adhar-mgmt
     id: 1                     # management cluster is 1; data planes take 2 upwards
@@ -98,9 +98,9 @@ spec:
     dnsProvider: civo
 ```
 
-`adhar up` writes `provider` for you. It maps `gcp` to `gke`, and any provider it does not recognise to `custom`.
+`adhar up` writes `provider` for you, any provider it does not recognise it maps to `custom`.
 
-Treat `buildCustomization` as fixed once the cluster exists. Every URL, ClusterIssuer and foundation manifest was rendered from it. Nothing in the API stops you editing it, but an edit does not re-render what is already running. To change the host, rebuild the platform.
+Treat `buildCustomization` as fixed once the cluster exists(Immutable). Every URL, ClusterIssuer and foundation manifest was rendered from it. Nothing in the API stops you editing it, but an edit does not re-render what is already running. To change the host, rebuild the platform.
 
 The status is a set of gates (checks that must pass before the controller moves on), plus Kubernetes conditions derived from them.
 
@@ -110,7 +110,7 @@ The status is a set of gates (checks that must pass before the controller moves 
 | `status.ArgoCD.available` | ArgoCD is up | `ArgoCDReady` |
 | `status.gitea.available` | Gitea is serving its API | `GiteaReady` |
 | `status.gitea.repositoriesCreated` | The GitOps repos are seeded | `GitOpsReady` |
-| `status.crossplane.available` · `controlPlaneApplied` | Crossplane core is up · every XRD, Composition and ProviderConfig applied (both are needed) | `CrossplaneReady` |
+| `status.crossplane.available` , `status.crossplane.controlPlaneApplied` | Crossplane core is up · every XRD, Composition and ProviderConfig applied (both are needed) | `CrossplaneReady` |
 | `status.gitOps` | Counts `applicationsTotal` and `applicationsHealthy` as the stack converges | — (informational; no condition reads it) |
 | — | Every gate above except the `gitOps` counts | `Ready` |
 
@@ -171,7 +171,6 @@ After bootstrap, **Git is the only write path**: every change goes through a com
 | `adhar/packages` | One directory per package: pre-rendered manifests, `values.yaml`, marketplace contract | The ApplicationSets |
 | `adhar/environments` | Per-environment configuration (`local`, `dev`, `test`, `prod`). The `local` and `prod` files mirror the two ApplicationSets | Kargo, the Console and `adhar stack` (the ApplicationSets themselves use inline lists) |
 | `adhar/adhar-templates` | Golden-path service templates — a pull mirror of `github.com/adhar-io/adhar-templates` | CLI `--template` and the Console's create wizard |
-| `adhar/adhar` | A read-only pull mirror of the platform source | The in-cluster AI knowledge base |
 
 ```diagram
 write-path
@@ -324,9 +323,9 @@ Moving from one topology to the next is a configuration change, not a redesign.
 
 | Topology | Shape | Status |
 |---|---|---|
-| **T1 — Local** | Single Kind cluster; the controller runs in the CLI and exits after convergence; curated local core; self-signed TLS | Default path |
-| **T2 — Single-cluster production** | One cloud cluster runs platform and workloads; HA mode; the in-cluster controller keeps reconciling the foundation | Verified on DigitalOcean (per the platform repo's architecture notes) |
-| **T3 — Management + workload clusters** | A control plane governs a fleet of data planes | Live-verified (per the platform repo's architecture notes) |
+| **T1 — Local** | Single Kind cluster; the controller runs in the CLI and exits after convergence; curated local core; self-signed TLS | Default path in Local |
+| **T2 — Single-cluster production** | One cloud cluster runs platform and workloads; HA mode; the in-cluster controller keeps reconciling the foundation | Default for Cloud providers |
+| **T3 — Management + workload clusters** | A control plane governs a fleet of data planes | Opt-In while creating platform |
 
 For local–production parity, `adhar upgrade split-planes` can stand up a local data plane as a vcluster (a virtual cluster inside the host cluster) on the same Kind node. Apps then live inside the vcluster and platform services live on the host, so the logical split holds even on a laptop. Scaling to T3 means *adding* physical data planes, not changing the architecture.
 
@@ -367,17 +366,6 @@ Because the platform is data, most extension is declarative:
 - **Add a cloud provider** — implement the provider interface.
 
 Full walkthroughs are in [Customization](/docs/operations/customization).
-
-## Common pitfalls
-
-| Symptom | Cause | Fix |
-|---|---|---|
-| ArgoCD is up but shows no Applications | The pass that applies the ApplicationSet never ran to completion | Re-run `adhar up`; the stack step re-applies on every pass |
-| `adhar get status` healthy, but no `Database` ever composes | `status.crossplane.controlPlaneApplied` is still false | Read `.status.crossplane` and the `CrossplaneReady` condition; see [Control Plane](/docs/core-concepts/control-plane#debugging-and-verification) |
-| URLs render with an empty host after a restart | Build customisation missing in a hand-started controller | Let the controller adopt it from the `AdharPlatform`; do not edit `buildCustomization` |
-| A `kubectl edit` to a package keeps reverting | ArgoCD self-heal | Change the stack in Git, then `adhar upgrade` |
-| Two packages flap `Degraded` together | Both claim one object in `adhar-system` | `adhar stack conflicts`, disable one |
-| `kubectl get applications` shows Argo CD apps, not yours | Short-name collision | `kubectl get applications.platform.adhar.io -A` |
 
 ## The IDP critical pillars
 

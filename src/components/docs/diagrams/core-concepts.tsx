@@ -115,7 +115,7 @@ const LayerStack = () => (
         items: "Adhar Console (Backstage) · Adhar CLI · Headlamp · Hubble UI · Grafana",
       },
       {
-        id: "L2", name: "Platform Services — 91 GitOps packages", tone: "primary",
+        id: "L2", name: "Platform Services — GitOps packages", tone: "primary",
         items: "Security · Observability · Delivery · Data · AI (opt-in)",
       },
       {

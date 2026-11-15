@@ -61,7 +61,7 @@ const CloudProvidersGrid = () => (
                 }}
               />
             ) : (
-              <Server className="w-8 h-8 sm:w-10 sm:h-10 text-slate-500 group-hover:text-primary transition-colors duration-300" aria-hidden />
+              <Server className="w-8 h-8 sm:w-10 sm:h-10 text-primary transition-colors duration-300" aria-hidden />
             )}
           </div>
           <p className="text-center text-sm font-semibold text-muted-foreground group-hover:text-foreground transition-colors duration-300">

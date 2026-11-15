@@ -17,7 +17,7 @@ This page is your map. It covers three things:
 
 > **Active development.** Adhar is at v0.1.x and changing quickly. Expect rough edges, try it on a non-critical environment first, and check the [Roadmap](/docs/reference/roadmap) for what's planned.
 
-## The problem: developer freedom versus governance
+## The problem: developer freedom vs governance
 
 Once an engineering organisation grows past a handful of teams, it reaches a fork in the road. Both directions have a cost.
 
@@ -28,7 +28,7 @@ Once an engineering organisation grows past a handful of teams, it reaches a for
 
 This trade-off only exists when standards are enforced *after* the fact: through review gates, checklists, and people saying no. Adhar's answer is **standardisation as enablement**. It gives you a *paved road* (a supported, ready-made way to build and run a service) where security, compliance and observability are built into the road itself. The paved road is also the fastest way to ship, so nobody has to be forced onto it.
 
-Here is what that looks like in practice. A developer asks for a PostgreSQL database by applying a small Kubernetes object (a `Database`) in their own namespace. The platform builds the database, schedules its backups and writes its connection details to a Secret next to the application. There is no ticket, and the platform team does not have to approve that specific request. Quotas and policies, set once by the platform team, still apply.
+Here is what that looks like in practice. A developer asks for a PostgreSQL database by applying a small Kubernetes object (a `Database`) in their own namespace. The platform builds the database, schedules its backups and writes its connection details to a Secret next to the application. There is no ticket, and the platform team does not have to approve that specific request. Platform-defined quotas, policies and guardrails continue to apply automatically.
 
 ## At a glance
 
@@ -44,7 +44,7 @@ Here is what that looks like in practice. A developer asks for a PostgreSQL data
 
 ## How it works, in one paragraph
 
-`adhar up` builds the platform in two moves. First, it bootstraps a minimal foundation in a fixed order: **Cilium** for networking and the Gateway API, then **ArgoCD** to reconcile, then **Gitea** to hold the source of truth. It then seeds that in-cluster Git with the platform's own definition (the `platform/stack` directory of the Adhar repository). Second, it steps out of the way. A single ArgoCD **ApplicationSet** (one object that generates an ArgoCD Application per package) reads the repository and deploys every enabled package. Meanwhile, a **Crossplane** control plane turns databases, caches and buckets into ordinary namespaced Kubernetes resources that a developer can request without a ticket. After that handoff, the platform maintains itself. A push to Gitea triggers a sync straight away, and ArgoCD re-compares every package with Git every two minutes as a backstop. So a commit is the only lasting way to change it. The same model runs unchanged on a laptop under Kind, on one production cluster, or on a control plane that governs a fleet.
+`adhar up` builds the platform in two stages. First, it bootstraps a minimal foundation in a strict sequence: installing **Cilium** for networking and the Gateway API, **ArgoCD** for reconciliation, and **Gitea** as an in-cluster source of truth—before seeding Gitea with the platform's definitions from the `platform/stack` directory. Second, it steps out of the way. A single ArgoCD **ApplicationSet** reads the repository and automatically deploys every enabled package, while **Crossplane** turns databases, caches, and buckets into standard namespaced Kubernetes resources that developers can self-serve without a ticket. After this handoff, the platform maintains itself: pushing to Gitea triggers an immediate sync, and ArgoCD checks against Git every two minutes as a fallback, ensuring a commit is the only lasting way to make changes. This exact architecture runs unchanged on a local laptop using Kind, a single production cluster, or a control plane managing an entire fleet.
 
 ## The mental model
 
