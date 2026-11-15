@@ -7,7 +7,6 @@ import {
 } from "@/components/ui/navigation-menu";
 import {
   Building2,
-  Users,
   MessageCircle,
   Tag,
   Palette,
@@ -24,7 +23,6 @@ interface Item {
 
 const items: Item[] = [
   { to: "/about", icon: Building2, title: "About us", description: "Who builds Adhar, and why." },
-  { to: "/contributors", icon: Users, title: "Contributors", description: "The people building Adhar in the open." },
   { to: "/brand", icon: Palette, title: "Brand & press", description: "Logos, colours and press copy to download." },
   { to: "/contact", icon: MessageCircle, title: "Contact", description: "Get in touch with our team for support or inquiries." },
   { to: "/pricing", icon: Tag, title: "Pricing", description: "Self-host for free, or let us host it with Adhar Cloud." },

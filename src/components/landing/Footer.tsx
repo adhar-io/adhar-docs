@@ -1,6 +1,6 @@
 
 import { Separator } from "@/components/ui/separator";
-import { Github } from "@/components/brand-icons";
+import { Github, Linkedin, Youtube } from "@/components/brand-icons";
 import { Link } from "@tanstack/react-router";
 import Logo from "@/components/ui/Logo";
 import { focusRing } from "./styles";
@@ -38,7 +38,6 @@ const Footer = () => {
       links: [
         { label: "About Us", to: "/about" },
         { label: "Brand & press", to: "/brand" },
-        { label: "Contributors", to: "/contributors" },
         { label: "Contact", to: "/contact" },
         { label: "Partners", to: "/partners" }
       ]
@@ -78,6 +77,26 @@ const Footer = () => {
                 >
                   <Github className="w-5 h-5" />
                   <span>Star on GitHub</span>
+                </a>
+                <a
+                  href="https://www.linkedin.com/company/adhar-io/"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  aria-label="Adhar on LinkedIn"
+                  className={`inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm text-muted-foreground hover:text-foreground hover:bg-muted transition-colors ${focusRing}`}
+                >
+                  <Linkedin className="w-5 h-5" />
+                  <span>LinkedIn</span>
+                </a>
+                <a
+                  href="https://www.youtube.com/@AdharIDP"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  aria-label="Adhar on YouTube"
+                  className={`inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm text-muted-foreground hover:text-foreground hover:bg-muted transition-colors ${focusRing}`}
+                >
+                  <Youtube className="w-5 h-5" />
+                  <span>YouTube</span>
                 </a>
               </div>
             </div>

@@ -41,95 +41,135 @@ const About = () => {
 
   const team = [
     {
-      name: "Sudhir Pradhan",
+      name: "Sudhir Ranjan Pradhan",
       role: "Data & AI Platform",
-      avatar: "/avatars/professional-woman-1.jpg",
-      bio: "Former engineering leader at major tech companies, passionate about developer productivity.",
+      avatar: "/avatars/sudhir-ranjan-pradhan.jpeg",
+      bio: "Leads data and AI platform strategy, helping teams move from experimentation to secure, governed, production-scale intelligence services.",
       location: "San Francisco, CA",
       social: {
-        github: "sarahchen",
-        linkedin: "sarah-chen-ceo",
-        twitter: "sarah_builds"
+        github: "https://github.com/adhar-io/",
+        linkedin: "https://www.linkedin.com/in/sudhirranjan/"
       }
     },
     {
       name: "Tapas Jena",
-      role: "Platform & Architecture",
-      avatar: "/avatars/professional-man-2.jpg",
-      bio: "Systems architect with 15+ years experience building scalable platforms.",
+      role: "Platform & Enterprise Architecture",
+      avatar: "/avatars/tapas-jena.png",
+      bio: "Architects enterprise platform foundations with a strong focus on modular design, GitOps automation, and multi-cloud operating consistency.",
       location: "Singapore",
       social: {
-        github: "tapas4java",
-        linkedin: "tapasjena"
+        github: "https://github.com/adhar-io/",
+        linkedin: "https://www.linkedin.com/in/tapasjena/"
       }
     },
     {
-      name: "Pavan Chakrabatula",
+      name: "Pavan Kumar Chakravartula",
       role: "Kubernetes Platform Engineering",
-      avatar: "/avatars/professional-woman-2.jpg",
-      bio: "Product strategist focused on creating intuitive developer experiences.",
+      avatar: "/avatars/pavan-kumar-chakravartula.jpeg",
+      bio: "Builds Kubernetes delivery frameworks that standardize deployment, observability, and release reliability for product engineering teams.",
       location: "Singapore",
       social: {
-        github: "emilyzhang",
-        linkedin: "emily-zhang-product",
-        twitter: "emily_products"
+        github: "https://github.com/adhar-io/",
+        linkedin: "https://www.linkedin.com/in/pavan-kumar-chakravartula-464b8423/"
       }
     },
     {
       name: "Karthik Chinni",
-      role: "Head of Cloud & Infrastructure Engineering",
-      avatar: "/avatars/professional-man-1.jpg",
-      bio: "Leads the platform and CLI teams, with a focus on reliable, boring-in-the-best-way infrastructure.",
+      role: "Cloud & Infrastructure Engineering",
+      avatar: "/avatars/karthik-chinni.jpeg",
+      bio: "Leads cloud infrastructure engineering for resilient operations, policy-driven automation, and production-grade reliability across environments.",
       location: "Singapore",
       social: {
-        github: "davidokafor",
-        linkedin: "david-okafor-eng"
+        github: "https://github.com/adhar-io/",
+        linkedin: "https://www.linkedin.com/in/karthik-chinni-23a00915/"
       }
     },
     {
-      name: "Arun Subramanian",
-      role: "Security & Resiliency Engineering",
-      avatar: "/avatars/professional-woman-3.jpg",
-      bio: "Owns supply-chain security, policy and secrets, so every Adhar default is a safe one.",
+      name: "Arun Subbaram Chelakara",
+      role: "Security & Compliance Engineering",
+      avatar: "",
+      bio: "Drives security and compliance engineering across identity, secrets, and software supply chain controls to make safe-by-default platform operations real.",
       location: "Singapore",
       social: {
-        github: "priyanair",
+        github: "https://github.com/adhar-io/",
         linkedin: "priya-nair-security"
       }
     },
     {
-      name: "Pavan Kumar Kurela",
+      name: "Pavan Kumar Kurella",
       role: "Developer Relations & Community",
-      avatar: "/avatars/professional-man-3.jpg",
-      bio: "Works with the community on docs, golden paths and the feedback that shapes the roadmap.",
+      avatar: "/avatars/pavan-kumar-kurella.jpeg",
+      bio: "Champions developer relations through community programs, technical storytelling, and user feedback loops that directly influence the roadmap.",
       location: "Singapore",
       social: {
-        github: "jwhitfield",
-        linkedin: "james-whitfield-devrel",
-        twitter: "james_devrel"
+        github: "https://github.com/adhar-io/",
+        linkedin: "https://www.linkedin.com/in/pavan-kumar-kurella-9031709/"
       }
     },
     {
-      name: "Mahendra Kiran Patcha",
+      name: "Mahendra Sai Kiran",
       role: "Frontend Engineering & UX",
-      avatar: "/avatars/professional-woman-3.jpg",
-      bio: "Owns supply-chain security, policy and secrets, so every Adhar default is a safe one.",
+      avatar: "",
+      bio: "Designs user-centered platform interfaces that simplify complex workflows and deliver consistent, accessible, high-confidence developer experiences.",
       location: "Singapore",
       social: {
-        github: "priyanair",
-        linkedin: "priya-nair-security"
+        github: "https://github.com/adhar-io/",
+        linkedin: "https://www.linkedin.com/in/pmskiran/"
       }
     },
     {
-      name: "Ajith Raj",
-      role: "Marketing & Customer Success",
-      avatar: "/avatars/professional-man-3.jpg",
-      bio: "Works with the community on docs, golden paths and the feedback that shapes the roadmap.",
+      name: "Seshu Devineni",
+      role: "Platform & Enterprise Architecture",
+      avatar: "/avatars/seshu-devineni.jpeg",
+      bio: "Shapes enterprise platform architecture and operating models that scale internal developer platforms with clear governance and measurable outcomes.",
       location: "Florida, USA",
       social: {
-        github: "jwhitfield",
-        linkedin: "james-whitfield-devrel",
-        twitter: "james_devrel"
+        github: "https://github.com/adhar-io/",
+        linkedin: "https://www.linkedin.com/in/s3shu/"
+      }
+    },
+    {
+      name: "Mukesh Chaudhary",
+      role: "Performance & Resiliency Engineering",
+      avatar: "/avatars/mukesh-chaudhary.jpeg",
+      bio: "Owns performance and resiliency engineering, improving latency, capacity, and failure recovery characteristics across critical platform services.",
+      location: "Singapore",
+      social: {
+        github: "https://github.com/adhar-io/",
+        linkedin: "https://www.linkedin.com/in/chaudharymukesh/"
+      }
+    },
+    {
+      name: "Karthik Mamidala",
+      role: "Platform & Enterprise Architecture",
+      avatar: "/avatars/karthik-mamidala.jpeg",
+      bio: "Defines platform architecture blueprints and engineering guardrails that balance developer autonomy with secure, repeatable enterprise operations.",
+      location: "Singapore",
+      social: {
+        github: "https://github.com/adhar-io/",
+        linkedin: "https://www.linkedin.com/in/karthik-mamidala-441a2422/"
+      }
+    },
+    {
+      name: "Muralidharan Ramanujam",
+      role: "Marketing & Customer Success",
+      avatar: "/avatars/muralidharan-ramanujam.png",
+      bio: "Leads go-to-market and customer success strategy, translating customer outcomes into stronger adoption, retention, and product direction.",
+      location: "Singapore",
+      social: {
+        github: "https://github.com/adhar-io/",
+        linkedin: "https://www.linkedin.com/in/muralidharan-ramanujam-a1053010/"
+      }
+    },
+    {
+      name: "Srikanth Varipalli",
+      role: "Developer Relations & Community",
+      avatar: "/avatars/srikanth-varipalli.jpeg",
+      bio: "Grows developer community and advocacy through practical enablement content, contributor engagement, and continuous field-to-product feedback.",
+      location: "Singapore",
+      social: {
+        github: "https://github.com/adhar-io/",
+        linkedin: "https://www.linkedin.com/in/varipallisrikanth/"
       }
     }
   ];
@@ -313,12 +353,24 @@ const About = () => {
                     <p className="text-sm text-muted-foreground leading-relaxed mb-5">{member.bio}</p>
                     <div className="flex justify-center gap-1 pt-4 border-t border-border/60">
                       {member.social.github && (
-                        <a className="inline-flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors" aria-label="GitHub" href="#">
+                        <a
+                          className="inline-flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+                          aria-label="GitHub"
+                          href={member.social.github}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                        >
                           <Github className="w-4 h-4" />
                         </a>
                       )}
                       {member.social.linkedin && (
-                        <a className="inline-flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors" aria-label="LinkedIn" href="#">
+                        <a
+                          className="inline-flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+                          aria-label="LinkedIn"
+                          href={member.social.linkedin}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                        >
                           <Linkedin className="w-4 h-4" />
                         </a>
                       )}
@@ -342,26 +394,28 @@ const About = () => {
               <div className="absolute inset-0 bg-mesh opacity-90 pointer-events-none" />
               <div className="absolute inset-0 bg-grid opacity-40 dark:opacity-25 pointer-events-none" />
               <div className="relative px-6 py-14 sm:px-12 sm:py-16 text-center">
-                <span className="eyebrow mb-6">Join us</span>
-                <h2 className="section-heading mt-4 text-foreground">Build the future with us.</h2>
+                <span className="eyebrow mb-6">Get involved</span>
+                <h2 className="section-heading mt-4 text-foreground">Become a contributor.</h2>
                 <p className="section-subheading mt-5">
-                  We're always looking for talented individuals who share our passion for innovation.
+                  Join our community and help shape the future of cloud-native development.
                 </p>
                 <div className="mt-8 flex flex-col sm:flex-row gap-3 justify-center">
-                  <button
-                    type="button"
+                  <a
+                    href="https://github.com/adhar-io/adhar"
+                    target="_blank"
+                    rel="noopener noreferrer"
                     className="btn-primary-modern group inline-flex items-center justify-center gap-2 rounded-full px-6 h-11 text-[15px] font-medium"
                   >
-                    <span>View open positions</span>
+                    <Github className="w-4 h-4" />
+                    <span>Start contributing</span>
                     <ArrowRight className="w-4 h-4 transition-transform duration-300 group-hover:translate-x-0.5" />
-                  </button>
-                  <button
-                    type="button"
+                  </a>
+                  <a
+                    href="/docs"
                     className="btn-secondary-modern inline-flex items-center justify-center gap-2 rounded-full px-6 h-11 text-[15px] font-medium"
                   >
-                    <Award className="w-4 h-4 text-muted-foreground" />
-                    <span>Learn more</span>
-                  </button>
+                    <span>View contributor guide</span>
+                  </a>
                 </div>
               </div>
             </div>

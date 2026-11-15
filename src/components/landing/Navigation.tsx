@@ -113,7 +113,6 @@ const Navigation = () => {
                 </div>
                 {[
                   { to: "/about", label: "About" },
-                  { to: "/contributors", label: "Contributors" },
                   { to: "/brand", label: "Brand & press" },
                   { to: "/contact", label: "Contact" },
                 ].map((item) => (

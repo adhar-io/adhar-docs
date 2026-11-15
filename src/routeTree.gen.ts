@@ -17,7 +17,6 @@ import { Route as PricingRouteImport } from './routes/pricing'
 import { Route as PartnersRouteImport } from './routes/partners'
 import { Route as IntegrationsRouteImport } from './routes/integrations'
 import { Route as ExamplesRouteImport } from './routes/examples'
-import { Route as ContributorsRouteImport } from './routes/contributors'
 import { Route as ContactRouteImport } from './routes/contact'
 import { Route as ComplianceRouteImport } from './routes/compliance'
 import { Route as CapabilitiesRouteImport } from './routes/capabilities'
@@ -72,11 +71,6 @@ const IntegrationsRoute = IntegrationsRouteImport.update({
 const ExamplesRoute = ExamplesRouteImport.update({
   id: '/examples',
   path: '/examples',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ContributorsRoute = ContributorsRouteImport.update({
-  id: '/contributors',
-  path: '/contributors',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ContactRoute = ContactRouteImport.update({
@@ -164,7 +158,6 @@ export interface FileRoutesByFullPath {
   '/capabilities': typeof CapabilitiesRoute
   '/compliance': typeof ComplianceRoute
   '/contact': typeof ContactRoute
-  '/contributors': typeof ContributorsRoute
   '/examples': typeof ExamplesRoute
   '/integrations': typeof IntegrationsRoute
   '/partners': typeof PartnersRoute
@@ -190,7 +183,6 @@ export interface FileRoutesByTo {
   '/capabilities': typeof CapabilitiesRoute
   '/compliance': typeof ComplianceRoute
   '/contact': typeof ContactRoute
-  '/contributors': typeof ContributorsRoute
   '/examples': typeof ExamplesRoute
   '/integrations': typeof IntegrationsRoute
   '/partners': typeof PartnersRoute
@@ -217,7 +209,6 @@ export interface FileRoutesById {
   '/capabilities': typeof CapabilitiesRoute
   '/compliance': typeof ComplianceRoute
   '/contact': typeof ContactRoute
-  '/contributors': typeof ContributorsRoute
   '/examples': typeof ExamplesRoute
   '/integrations': typeof IntegrationsRoute
   '/partners': typeof PartnersRoute
@@ -245,7 +236,6 @@ export interface FileRouteTypes {
     | '/capabilities'
     | '/compliance'
     | '/contact'
-    | '/contributors'
     | '/examples'
     | '/integrations'
     | '/partners'
@@ -271,7 +261,6 @@ export interface FileRouteTypes {
     | '/capabilities'
     | '/compliance'
     | '/contact'
-    | '/contributors'
     | '/examples'
     | '/integrations'
     | '/partners'
@@ -297,7 +286,6 @@ export interface FileRouteTypes {
     | '/capabilities'
     | '/compliance'
     | '/contact'
-    | '/contributors'
     | '/examples'
     | '/integrations'
     | '/partners'
@@ -324,7 +312,6 @@ export interface RootRouteChildren {
   CapabilitiesRoute: typeof CapabilitiesRoute
   ComplianceRoute: typeof ComplianceRoute
   ContactRoute: typeof ContactRoute
-  ContributorsRoute: typeof ContributorsRoute
   ExamplesRoute: typeof ExamplesRoute
   IntegrationsRoute: typeof IntegrationsRoute
   PartnersRoute: typeof PartnersRoute
@@ -398,13 +385,6 @@ declare module '@tanstack/react-router' {
       path: '/examples'
       fullPath: '/examples'
       preLoaderRoute: typeof ExamplesRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/contributors': {
-      id: '/contributors'
-      path: '/contributors'
-      fullPath: '/contributors'
-      preLoaderRoute: typeof ContributorsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/contact': {
@@ -524,7 +504,6 @@ const rootRouteChildren: RootRouteChildren = {
   CapabilitiesRoute: CapabilitiesRoute,
   ComplianceRoute: ComplianceRoute,
   ContactRoute: ContactRoute,
-  ContributorsRoute: ContributorsRoute,
   ExamplesRoute: ExamplesRoute,
   IntegrationsRoute: IntegrationsRoute,
   PartnersRoute: PartnersRoute,

@@ -35,3 +35,11 @@ export const Twitter = React.forwardRef<SVGSVGElement, IconProps>((props, ref) =
   </svg>
 ));
 Twitter.displayName = "Twitter";
+
+export const Youtube = React.forwardRef<SVGSVGElement, IconProps>((props, ref) => (
+  <svg ref={ref} {...baseProps} {...props}>
+    <path d="M22 8.5a3 3 0 0 0-2.1-2.1C18 6 12 6 12 6s-6 0-7.9.4A3 3 0 0 0 2 8.5 31 31 0 0 0 2 12a31 31 0 0 0 .1 3.5 3 3 0 0 0 2.1 2.1C6 18 12 18 12 18s6 0 7.9-.4a3 3 0 0 0 2.1-2.1c.1-1.1.1-2.3.1-3.5s0-2.4-.1-3.5z" />
+    <path d="m10 9 5 3-5 3z" />
+  </svg>
+));
+Youtube.displayName = "Youtube";
