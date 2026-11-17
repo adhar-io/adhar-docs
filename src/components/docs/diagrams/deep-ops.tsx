@@ -1,9 +1,7 @@
 import type { ComponentType } from "react";
 import {
-  Box, Caption, C, Flow, Frame, GroupBox, Ladder, MONO, Pipeline, SANS, Split, Stack,
-  toneOf,
+  Box, Caption, C, Flow, Frame, GroupBox, Ladder, Pipeline, SANS, Split, Stack,
 } from "@/components/docs/diagram-kit";
-import type { Tone } from "@/components/docs/diagram-kit";
 
 /** Diagrams owned by the deep-ops pages. Every key is prefixed "do-". */
 
@@ -129,92 +127,6 @@ const DefenceLayers = () => (
     ]}
   />
 );
-
-/* ------------------------------------------------------------------ *
- * CLI — the command map, grouped by persona as `adhar --help` groups it.
- * ------------------------------------------------------------------ */
-
-type Persona = { name: string; blurb: string; cmds: string[]; key?: string[] };
-
-const PERSONAS: Persona[] = [
-  {
-    name: "Develop", blurb: "build, ship, self-serve",
-    cmds: ["ai", "application", "bucket", "cache", "database", "environment",
-      "function", "gitops", "pipeline", "project", "routes", "storage"],
-    key: ["application", "database"],
-  },
-  {
-    name: "Observe", blurb: "health, logs, metrics",
-    cmds: ["events", "get", "health", "logs", "metrics", "network", "traces"],
-    key: ["get"],
-  },
-  {
-    name: "Operate", blurb: "day-2 operations",
-    cmds: ["backup", "cluster", "restore", "scale", "upgrade"],
-    key: ["upgrade", "cluster"],
-  },
-  {
-    name: "Administer", blurb: "lifecycle, governance",
-    cmds: ["auth", "compliance", "config", "controller", "cost", "down", "fleet",
-      "policy", "secrets", "security", "stack", "up", "webhook"],
-    key: ["up", "stack"],
-  },
-  {
-    name: "Utilities", blurb: "tooling",
-    cmds: ["completion", "dev", "help", "push", "version"],
-    key: ["push", "dev"],
-  },
-];
-
-function CliMap() {
-  const colW = 148;
-  const gap = 14;
-  const chipH = 22;
-  const chipGap = 6;
-  const top = 50;
-  const maxCmds = Math.max(...PERSONAS.map((p) => p.cmds.length));
-  const width = PERSONAS.length * colW + (PERSONAS.length - 1) * gap;
-  const height = top + maxCmds * (chipH + chipGap) + 34;
-  return (
-    <Frame width={width} height={height} minWidth={640}
-      label="The adhar command map, grouped by persona exactly as adhar --help groups it: Develop, Observe, Operate, Administer and Utilities. Highlighted commands are the ones most people start with.">
-      {PERSONAS.map((p, i) => {
-        const x = i * (colW + gap);
-        return (
-          <g key={p.name}>
-            <text x={x + colW / 2} y={16} textAnchor="middle" fontFamily={SANS}
-              fontSize={12} fontWeight={700} fill={C.text} letterSpacing="0.06em">
-              {p.name.toUpperCase()}
-            </text>
-            <text x={x + colW / 2} y={32} textAnchor="middle" fontFamily={SANS}
-              fontSize={10.5} fill={C.dim}>
-              {p.blurb}
-            </text>
-            <line x1={x} y1={40} x2={x + colW} y2={40} stroke={C.line} strokeWidth={1} />
-            {p.cmds.map((c, k) => {
-              const t: Tone = p.key?.includes(c) ? "primary" : "plain";
-              const { stroke, fill } = toneOf(t);
-              const y = top + k * (chipH + chipGap);
-              return (
-                <g key={c}>
-                  <rect x={x + 8} y={y} width={colW - 16} height={chipH} rx={6}
-                    fill={fill} stroke={stroke} strokeWidth={1.1} />
-                  <text x={x + colW / 2} y={y + 15} textAnchor="middle" fontFamily={MONO}
-                    fontSize={11.5} fontWeight={t === "primary" ? 600 : 400} fill={C.text}>
-                    {c}
-                  </text>
-                </g>
-              );
-            })}
-          </g>
-        );
-      })}
-      <Caption x={0} y={height - 8}>
-        {"adhar <command> --help is authoritative for flags. Aliases: a, ad."}
-      </Caption>
-    </Frame>
-  );
-}
 
 /* ------------------------------------------------------------------ *
  * Troubleshooting — a triage decision chain.
@@ -396,7 +308,6 @@ export const deep_ops = {
   "do-topologies": Topologies,
   "do-ha-mode": HaMode,
   "do-defence-layers": DefenceLayers,
-  "do-cli-map": CliMap,
   "do-triage": Triage,
   "do-bootstrap-failures": BootstrapFailures,
   "do-roadmap-phases": RoadmapPhases,

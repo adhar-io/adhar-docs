@@ -39,7 +39,7 @@ function WritePath() {
       <line x1={590} y1={100} x2={590} y2={160} stroke={C.strong} strokeWidth={1.5}
         markerEnd="url(#dk-arrow)" />
       <Caption x={600} y={124} size={10.5}>apply</Caption>
-      <Caption x={600} y={138} size={10.5}>self-heal ~60s</Caption>
+      <Caption x={600} y={138} size={10.5}>self-heal on</Caption>
 
       <Box x={476} y={160} w={228} h={52} title="cluster" />
 

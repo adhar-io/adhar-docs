@@ -9,26 +9,6 @@ import {
  * Getting Started — Your First Service
  * ------------------------------------------------------------------ */
 
-const ApplicationChain = () => (
-  <Flow
-    label="What you declare becomes an Application (platform.adhar.io), which Crossplane expands into an ArgoCD Application, which reconciles your workload — a Deployment, a Service and an HTTPRoute."
-    caption="reconciled from Git, self-healing"
-    nodes={[
-      { title: "you", tone: "primary" },
-      {
-        title: "Application",
-        lines: ["platform.adhar.io/", "v1alpha1", "(what you declare)"],
-      },
-      { title: "ArgoCD Application", lines: ["GitOps sync"] },
-      {
-        title: "your workload",
-        lines: ["Deployment", "Service", "HTTPRoute"],
-        tone: "accent",
-      },
-    ]}
-  />
-);
-
 /* The sync loop has a feedback edge, so it places its own coordinates. */
 function SyncStates() {
   return (
@@ -143,66 +123,6 @@ function CiPipeline() {
 }
 
 /* ------------------------------------------------------------------ *
- * Getting Started — Quick Start
- * ------------------------------------------------------------------ */
-
-const AdharUpStages = () => (
-  <Ladder
-    width={760}
-    label="What adhar up does, in order: create the Kind node, install the CRDs and controller, apply the embedded foundation manifests, seed Git, apply the ApplicationSet, reconcile Crossplane, then hand off to ArgoCD."
-    heading={["adhar up", "what it does"]}
-    rungs={[
-      {
-        name: "1. Kind node",
-        tone: "primary",
-        adds: [
-          "Create the Kind node `adhar`",
-          "default CNI off · kube-proxy off · host 8443/8080 → 30443/30080",
-        ],
-      },
-      {
-        name: "2. CRDs + controller",
-        adds: ["Install the Adhar CRDs and start the controller"],
-      },
-      {
-        name: "3. Foundation",
-        adds: [
-          "From manifests embedded in the binary (no network fetch):",
-          "Gateway API CRDs → Cilium → Gateway → [CNPG, if --ha] → ArgoCD → Gitea",
-        ],
-      },
-      {
-        name: "4. Seed Git",
-        adds: [
-          "Create and fill two repos in the `adhar` Gitea org",
-          "`packages` (every package's manifests, ~62 MB)",
-          "`environments` (which packages each environment enables)",
-        ],
-      },
-      {
-        name: "5. ApplicationSet",
-        adds: ["Apply the ArgoCD ApplicationSet (101 entries; 17 enabled locally)"],
-      },
-      {
-        name: "6. Crossplane",
-        adds: [
-          "Reconcile Crossplane — deliberately AFTER the ApplicationSet, so",
-          "its slow convergence can never block app delivery",
-        ],
-      },
-      {
-        name: "7. GitOps sync",
-        tone: "accent",
-        adds: [
-          "ArgoCD syncs every enabled package from Git",
-          "◀ GitOps owns it now",
-        ],
-      },
-    ]}
-  />
-);
-
-/* ------------------------------------------------------------------ *
  * Operations — Accessing the Platform
  * ------------------------------------------------------------------ */
 
@@ -293,46 +213,6 @@ const SourceOfTruth = () => (
     ]}
   />
 );
-
-/* ------------------------------------------------------------------ *
- * Core Concepts — Platform Services
- * ------------------------------------------------------------------ */
-
-/* An annotated loop back onto itself, so it places its own coordinates. */
-function ApplicationSetFlow() {
-  return (
-    <Frame
-      width={700}
-      height={230}
-      label="One ApplicationSet reads adhar/packages from Git and, filtering on the selector enabled=true, produces an Application per package whose workloads land in adhar-system; self-heal reverts drift within about a minute and prune removes what you disabled."
-    >
-      <Box x={14} y={30} w={180} h={52} title="adhar/packages" lines={["Git"]} tone="primary" />
-      <line x1={196} y1={56} x2={236} y2={56} stroke={C.strong} strokeWidth={1.5}
-        markerEnd="url(#dk-arrow)" />
-
-      <Box x={240} y={30} w={180} h={52} title="ApplicationSet" />
-      <line x1={330} y1={84} x2={330} y2={98} stroke={C.line} strokeWidth={1} />
-      <Caption x={330} y={112} anchor="middle">selector: enabled=&quot;true&quot;</Caption>
-
-      <line x1={422} y1={56} x2={466} y2={56} stroke={C.strong} strokeWidth={1.5}
-        markerEnd="url(#dk-arrow)" />
-      <Box x={470} y={30} w={170} h={52} title="Application" lines={["per package"]} />
-
-      <line x1={555} y1={84} x2={555} y2={116} stroke={C.strong} strokeWidth={1.5}
-        markerEnd="url(#dk-arrow)" />
-      <Box x={430} y={118} w={250} h={48} title="workloads in adhar-system" tone="accent" />
-
-      <path d="M 555 168 L 555 196 L 324 196" fill="none" stroke={C.line}
-        strokeWidth={1.5} strokeDasharray="4 4" markerEnd="url(#dk-arrow)" />
-      <Caption x={316} y={192} anchor="end" weight={600}>
-        self-heal reverts drift  (~1 min)
-      </Caption>
-      <Caption x={316} y={210} anchor="end">
-        prune removes what you disabled
-      </Caption>
-    </Frame>
-  );
-}
 
 /* ------------------------------------------------------------------ *
  * Operations — Observability
@@ -502,13 +382,10 @@ function GoldenPathEscapeHatch() {
 }
 
 export const guides = {
-  "gd-composite-application": ApplicationChain,
   "gd-sync-states": SyncStates,
   "gd-ci-pipeline": CiPipeline,
-  "gd-adhar-up-stages": AdharUpStages,
   "gd-request-path": RequestPath,
   "gd-source-of-truth": SourceOfTruth,
-  "gd-applicationset-flow": ApplicationSetFlow,
   "gd-observability-signals": ObservabilitySignals,
   "gd-golden-path-escape-hatch": GoldenPathEscapeHatch,
 } as Record<string, ComponentType>;

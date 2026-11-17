@@ -50,32 +50,6 @@ const AwsOwnership = ownership({
   },
 });
 
-const AzureOwnership = ownership({
-  label:
-    "Two halves, two credentials on Azure: an az login session creates the subscription's infrastructure, while the in-cluster controllers read their own service principal or managed identity.",
-  caption:
-    "ARM creates the resource group, VNet, NSG, public IPs, NICs, VMs and LB; then kubeadm over SSH, then Helm on the control plane.",
-  left: {
-    heading: "your machine",
-    tone: "primary",
-    items: ["adhar up", "az login OK"],
-  },
-  right: {
-    heading: "Azure subscription",
-    tone: "accent",
-    items: [
-      "cluster infrastructure",
-      "cluster: cloud-provider-azure CCM + Azure Disk CSI",
-      "← kube-system/azure-cloud-provider (azure.json)",
-      "← AND /etc/kubernetes/azure.json on the control plane",
-      "a service principal, or useManagedIdentityExtension",
-      "cluster: external-dns + cert-manager DNS-01",
-      "← a service principal with DNS Zone Contributor ON THE ZONE,",
-      "plus subscriptionId and dnsResourceGroup",
-    ],
-  },
-});
-
 const GcpOwnership = ownership({
   label:
     "Which Google Cloud credential does what: adhar up provisions with ADC, a key file or compute metadata, while the cluster's controllers use the nodes' own service account and a mounted key.",
@@ -133,111 +107,6 @@ const CustomOwnership = ownership({
  * Provisioning sequences — conceptual orderings, not verbatim CLI
  * output, so they are ladders rather than terminal transcripts.
  * ------------------------------------------------------------------ */
-
-const CivoSequence = () => (
-  <Ladder
-    width={880}
-    boxW={250}
-    heading={["stage", "what happens"]}
-    label="The Civo provisioning sequence: preflight, then network, firewall and SSH key, instances prepared in parallel, kubeadm init and join — with no Civo CCM or CSI in compute mode — the platform bootstrap, and finally the GitOps sync."
-    rungs={[
-      {
-        name: "preflight",
-        detail: "credentials, API",
-        tone: "primary",
-        adds: [
-          "credentials and API access; quota: 4 × g3.xlarge fits within",
-          "the account limits — ✖ any fail → STOP, nothing was created",
-        ],
-      },
-      { name: "network", detail: "firewall · SSH key", adds: [] },
-      {
-        name: "instances",
-        detail: "created in parallel",
-        adds: ["containerd, pinned kubeadm stream, Cilium images pre-pulled"],
-      },
-      {
-        name: "kubeadm init / join",
-        detail: "kube-proxy SKIPPED",
-        adds: [
-          "Cilium replaces kube-proxy; nodes NotReady until Cilium arrives",
-        ],
-      },
-      {
-        name: "cloud integration",
-        detail: "compute mode",
-        adds: [
-          "deliberately none: no Civo CCM or CSI in compute mode, and a",
-          "host-network Gateway — the shipped default is managed (k3s) mode",
-        ],
-      },
-      {
-        name: "platform bootstrap",
-        adds: [
-          "Gateway API CRDs → Cilium → Gateway → ArgoCD → Gitea → Crossplane →",
-          "seed platform/stack into Gitea",
-        ],
-      },
-      {
-        name: "GitOps sync",
-        detail: "ArgoCD",
-        tone: "accent",
-        adds: ["every package Synced + Healthy"],
-      },
-    ]}
-  />
-);
-
-const DigitalOceanSequence = () => (
-  <Ladder
-    width={880}
-    boxW={250}
-    heading={["stage", "what happens"]}
-    label="The DigitalOcean provisioning sequence: preflight, VPC, firewall and SSH key, four droplets prepared in parallel, kubeadm init and join, the DigitalOcean cloud-controller-manager and CSI over SSH, the platform bootstrap, and provisioning complete at about thirteen minutes."
-    rungs={[
-      {
-        name: "preflight",
-        detail: "credentials, API",
-        tone: "primary",
-        adds: ["credentials and API access"],
-      },
-      { name: "VPC", detail: "firewall · SSH key", adds: [] },
-      {
-        name: "4 droplets",
-        detail: "PREPARED IN PARALLEL",
-        adds: [
-          "containerd, pinned kubeadm stream, swap off, Cilium data-path",
-          "images pre-pulled in the background",
-        ],
-      },
-      {
-        name: "kubeadm init / join",
-        detail: "kube-proxy SKIPPED",
-        adds: [
-          "Cilium replaces kube-proxy; nodes stay NotReady — no CNI yet, by design",
-        ],
-      },
-      {
-        name: "DO CCM + CSI",
-        detail: "installed over SSH",
-        adds: ["~5 min: cluster serving, kubeconfig fetched over SSH"],
-      },
-      {
-        name: "platform bootstrap",
-        adds: [
-          "Gateway API CRDs → Cilium → Gateway → ArgoCD → Gitea → Crossplane →",
-          "seed platform/stack into Gitea",
-        ],
-      },
-      {
-        name: "provisioning done",
-        detail: "~13 min",
-        tone: "accent",
-        adds: ["Completed Environment Provisioning"],
-      },
-    ]}
-  />
-);
 
 const ProviderUpSequence = () => (
   <Ladder
@@ -492,11 +361,8 @@ const AdoptionFunnel = () => (
 
 export const providers = {
   "pv-aws-ownership": AwsOwnership,
-  "pv-azure-ownership": AzureOwnership,
   "pv-gcp-ownership": GcpOwnership,
   "pv-custom-ownership": CustomOwnership,
-  "pv-civo-sequence": CivoSequence,
-  "pv-digitalocean-sequence": DigitalOceanSequence,
   "pv-provider-up-sequence": ProviderUpSequence,
   "pv-pe-cognitive-load": CognitiveLoadSplit,
   "pv-pe-ownership-boundary": OwnershipBoundary,

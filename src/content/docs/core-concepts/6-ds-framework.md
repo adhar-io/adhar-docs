@@ -7,23 +7,20 @@ path: "/docs/core-concepts/ds-framework"
 
 # The 6 D's Framework
 
-The 6 D's are Adhar's model for the full cloud-native lifecycle. It has **six named stages. Each stage has an owner, an artifact it hands to the next stage, and platform capabilities that make that handoff automatic.**
+The 6 D's are Adhar's model of the cloud-native delivery lifecycle: **Define, Design, Develop, Deliver, Discover, Decide**. Each stage has an owner, an artifact it hands to the next stage, and platform capabilities that automate the handoff. Use this page to see which part of the platform serves each stage, and what "done" means for it.
 
-The model exists because platform engineering fails when tools are adopted one at a time and nobody can see the whole path. That path runs from an idea to production and back again.
+## How it works
 
-The six stages are **Define, Design, Develop, Deliver, Discover, Decide**. The last feeds the first, which makes it a loop rather than a pipeline.
+Decide feeds the next Define, so the model is a loop, not a pipeline.
 
 ```diagram
 cc-lifecycle-loop
 ```
 
-## Why the framework earns its place
+The framework does two jobs:
 
-A framework that only renames familiar activities adds work without value. This one does two jobs.
-
-**It gives the catalogue an organising principle.** Adhar ships over a hundred packages. "Which of these do I need?" cannot be answered from a list of technologies. It can be answered from a list of outcomes. Each package is meant to serve at least one D. A D with no packages behind it is a gap in the platform, not a gap in your process.
-
-**It names the handoffs.** Most delivery pain is not inside a stage. It is at the boundary between two stages: a design nobody encoded, a deployment nobody can trace to a commit, a dashboard nobody reads. Adhar's position is that **every handoff should be a reviewable artifact in Git**, not a document or a conversation.
+- **It organises the catalogue.** Adhar ships over a hundred packages. "Which of these do I need?" is hard to answer from a list of technologies and easy to answer from a list of outcomes. Every package serves at least one D, so a D with no packages behind it is a gap in the platform.
+- **It names the handoffs.** Most delivery pain sits at the boundary between two stages: a design nobody encoded, a deployment nobody can trace to a commit, a dashboard nobody reads. In Adhar, **every handoff is a reviewable artifact in Git**, not a document or a conversation.
 
 ```diagram
 cc-handoff-artifacts
@@ -44,18 +41,13 @@ cc-handoff-artifacts
 
 ### 1. Define — what are we building, and who owns it
 
-Define fixes scope and ownership before any code exists. It covers:
-
-- service boundaries and responsibilities
-- the data model
-- API contracts
-- the non-functional requirements (latency, availability, data residency) that later constrain Design
+Define fixes scope and ownership before any code exists: service boundaries, the data model, API contracts, and the non-functional requirements (latency, availability, data residency) that later constrain Design.
 
 In Adhar, Define is not a document. The unit of ownership is a **project**, and a project is a real object:
 
 ```yaml
 apiVersion: platform.adhar.io/v1alpha1
-kind: Project                     # platform.adhar.io — formerly CompositeProject
+kind: Project
 metadata:
   name: payments-api
   namespace: team-payments
@@ -76,7 +68,7 @@ spec:
     createRepository: true          # a Gitea repo for the project
 ```
 
-Apply it, then check what Define produced: first the request, then the namespace and guardrails it composed.
+Apply it, then check what it produced: first the request, then the namespaces and guardrails it composed.
 
 ```bash
 kubectl create namespace team-payments    # the Project XR is namespaced; nothing creates this for you
@@ -85,17 +77,15 @@ kubectl get projects.platform.adhar.io -n team-payments       # READY True
 kubectl get resourcequota,limitrange,networkpolicy -A | grep payments-api
 ```
 
-The CLI makes the same object with `adhar project create`. The CLI always puts the `Project` in `adhar-system`, so look for it there if you used the CLI. `Project` shares its short name with Kargo's `Project`, so qualify it as `projects.platform.adhar.io` on the command line.
+`adhar project create` makes the same object, but always puts it in `adhar-system`, so look for it there if you used the CLI. `Project` shares its short name with Kargo's `Project`; qualify it as `projects.platform.adhar.io`.
 
-Applying it creates:
+A `Project` creates:
 
 - a home namespace named after the project (`payments-api`), plus one namespace for each of the project's environments (by default `payments-api-dev`, `payments-api-test` and `payments-api-prod`)
 - guardrails on each: a ResourceQuota, a LimitRange and a default-deny ingress NetworkPolicy
 - RBAC that binds the team's Keycloak group (`ws-team-<organisation>.<team>`) to `admin` in those namespaces (`view` in prod), and the organisation's admin group `org-<organisation>-admin` to `admin`
 - an Argo CD AppProject and a Kargo project for promotion
 - a Gitea repository, when `createRepository` is true
-
-Ownership, limits and the source of truth are decided once and expressed in one place.
 
 **What Adhar provides:**
 
@@ -108,20 +98,15 @@ Ownership, limits and the source of truth are decided once and expressed in one 
 
 ### 2. Design — how it will be built, and within which limits
 
-Design turns requirements into a shape you can build. It covers:
+Design turns requirements into a shape you can build: component architecture, the security model, deployment topology, promotion strategy and integration patterns.
 
-- component architecture
-- the security model (authentication, authorisation, data classification)
-- deployment topology and promotion strategy
-- integration patterns with everything outside the service
+Adhar makes **guardrails executable**. Instead of a design review that a service passes or fails, the platform encodes the decision:
 
-Here, Adhar makes **guardrails executable**. Instead of a design review that a service passes or fails, the platform encodes the decision:
-
-- A self-service infrastructure contract is a Crossplane **XRD** (an API definition). Each implementation of it is a **Composition**. At the time of writing, the control plane ships 39 XRDs and 62 Compositions (`kubectl get xrd` lists them on your cluster). See [Control Plane](/docs/core-concepts/control-plane).
+- A self-service infrastructure contract is a Crossplane **XRD** (an API definition). Each implementation of it is a **Composition**. The control plane ships 41 XRDs and 63 Compositions (`kubectl get xrd` lists them on your cluster). See [Control Plane](/docs/core-concepts/control-plane).
 - An architectural rule is a **Kyverno** policy. In the production profile, `adhar-kyverno-policies` carries the baseline (the Pod Security Standards Baseline rules, in Audit mode). `adhar-policy-packs` holds further opt-in packs and is off by default. When a policy in Enforce mode denies a workload, the denial names the policy.
 - A tenancy boundary is a quota. `adhar-tenant-quotas` (production profile) caps a team's total across its projects.
 
-A guardrail written this way is an ordinary manifest. The `CompliancePolicy` API puts Kyverno guardrails, in audit or enforce mode, behind the same self-service contract as a database. Its default Composition is `compliancepolicy-local`. `examples/compliance-policy.yaml` in the platform repo is a working request. Explore the API before you write one:
+A guardrail written this way is an ordinary manifest. The `CompliancePolicy` API puts Kyverno guardrails, in audit or enforce mode, behind the same self-service contract as a database. Its default Composition is `compliancepolicy-local`, and `examples/compliance-policy.yaml` in the platform repo is a working request. Explore the API before you write one:
 
 ```bash
 kubectl explain compliancepolicies.platform.adhar.io.spec.parameters   # the fields you can set
@@ -132,15 +117,15 @@ kubectl get compositions -l feature=compliance --show-labels          # the engi
 
 ### 3. Develop — does the code work against the real platform
 
-Develop is the inner loop: scaffolding, local iteration, testing and code quality. It targets the gap between a developer's laptop and the environment the code will actually run in.
+Develop is the inner loop: scaffolding, local iteration, testing and code quality. Its problem is the gap between a developer's laptop and the environment the code will run in.
 
 `adhar dev` closes that gap by moving the inner loop onto the cluster:
 
 1. It creates a dev namespace for each developer.
 2. It runs your working tree there.
-3. It re-syncs on every save, typically in about a second. There is no image build, registry push or commit in the loop.
+3. It re-syncs on every save. There is no image build, registry push or commit in the loop.
 
-Your code runs beside the platform's own Postgres, Kafka, object store and identity. It runs under the same service DNS, NetworkPolicies and admission rules as production.
+Your code runs beside the platform's own Postgres, Kafka, object store and identity, under the same service DNS, NetworkPolicies and admission rules as production.
 
 ```bash
 adhar dev api --port 8080      # working tree on the cluster, re-synced on save
@@ -159,19 +144,19 @@ adhar push api --git-url https://github.com/acme/api   # deploys library/api:lat
 
 ### 4. Deliver — how a commit becomes production, safely
 
-Deliver is the outer loop. It is the stage Adhar automates most completely. The chain is: build, scan, sign, store, admit, deploy, promote.
+Deliver is the outer loop, and the stage Adhar automates most completely: build, scan, sign, store, admit, deploy, promote.
 
 ```diagram
 cc-deliver-chain
 ```
 
-Deployment itself is declarative. `adhar application deploy --repo …` creates an `Application` (`platform.adhar.io/v1alpha1`). So does the Console's create wizard — it is the same object either way.
+Deployment is declarative. `adhar application deploy --repo …` and the Console's create wizard both create the same `Application` object (`platform.adhar.io/v1alpha1`).
 
-An application is deployed to every environment of its `Project`. With the multi-environment Composition (`application-multienv`, the API's default), the project's Kargo stages promote each new piece of freight automatically into `dev` and `test`. Promotion into `prod` is manual:
+An application is deployed to every environment of its `Project`. With the default Composition, `application-multienv`, the project's Kargo stages promote each new piece of **freight** (a versioned set of artifacts) automatically into `dev` and `test`. Promotion into `prod` is manual:
 
 ```yaml
 apiVersion: platform.adhar.io/v1alpha1
-kind: Application                   # formerly CompositeApplication
+kind: Application
 metadata:
   name: payments-api
   namespace: team-payments
@@ -194,15 +179,15 @@ spec:
     # application-multienv, which wires in Kargo promotion.
 ```
 
-A promotion is itself an object: a `Release` moves one piece of freight (a versioned set of artifacts) into one environment. So the answer to "what is in production, and how did it get there?" is a list of commits and `Release` objects, not a chat log.
+A promotion is itself an object: a `Release` moves one piece of freight into one environment. So the answer to "what is in production, and how did it get there?" is a list of commits and `Release` objects.
 
-> **Nothing is deployed by a person.** ArgoCD self-heals, so a change applied directly to the cluster is reverted. If a deployment did not come from a commit, it does not survive.
+> **Note:** Nothing is deployed by hand. ArgoCD self-heals, so a change applied directly to the cluster is reverted.
 
 **Done when** production state is derivable from Git alone, and a rollback is a revert.
 
 ### 5. Discover — what it is actually doing in production
 
-Discover is observation. It covers service and dependency discovery, metrics, logs, traces, profiles, network flows and cost. It also covers the alerting that turns any of these into action. Adhar collects all of it by construction. Once a package is enabled, Grafana already sees it, with no per-service instrumentation work.
+Discover is observation: metrics, logs, traces, profiles, network flows and cost, plus the alerting that turns them into action. Adhar collects all of it by construction. Once a package is enabled, Grafana sees it, with no per-service instrumentation work.
 
 **What Adhar provides:**
 
@@ -215,18 +200,13 @@ Discover is observation. It covers service and dependency discovery, metrics, lo
 - OpenCost for per-namespace and per-workload spend
 - Grafana OnCall for alert routing
 - `adhar-scorecards`, which grades every service 0–100 from in-cluster signals
-- Litmus, to provoke deliberately the failures you would rather find on purpose (Chaos Mesh is also in the catalogue, but disabled in favour of Litmus)
+- Litmus, for chaos experiments that surface failures on purpose
 
 **Done when** you can answer "is it healthy, how fast is it, what does it cost, and who is paged" without adding instrumentation.
 
 ### 6. Decide — what to do next, and why
 
-Most lifecycle models leave out Decide, yet it is the stage that closes the loop. It turns the signals Discover produces into commitments:
-
-- what to invest in
-- what to deprecate
-- what a team is allowed to spend
-- which requirements go back into Define
+Decide closes the loop. It turns the signals from Discover into commitments: what to invest in, what to deprecate, what a team may spend, and which requirements go back into Define.
 
 **What Adhar provides:**
 
@@ -250,8 +230,7 @@ Most lifecycle models leave out Decide, yet it is the stage that closes the loop
 | **Discover** | Metrics, logs, traces, flows, cost, readiness | `kube-prometheus`, `mimir`, `loki`, `tempo`, `alloy`, `faro`, `hubble`, `opencost`, `oncall`, `adhar-scorecards`, `headlamp`, `litmus` |
 | **Decide** | BI, product analytics, budgets, evidence | `metabase`, `posthog`, `adhar-cost-governance`, `adhar cost`, `adhar compliance export`, `trino`, `mlflow` |
 
-Not every package is enabled in every profile. See [Platform Services](/docs/core-concepts/platform-services) for what the local and production profiles turn on, and how to enable the rest.
-
+Not every package is enabled in every profile. See [Platform Services](/docs/core-concepts/platform-services#enabled-by-default-and-opt-in) for what the local and production profiles turn on, and how to enable the rest.
 
 ## Common pitfalls
 
@@ -260,7 +239,7 @@ Not every package is enabled in every profile. See [Platform Services](/docs/cor
 | Design decisions keep getting re-litigated in review | The constraint lives in a document, not in the platform | Encode it as a Composition, a Kyverno policy, or a quota |
 | Deployments that nobody can trace to a change | Someone applied to the cluster directly | Revert it (ArgoCD already has), then make the change in Git |
 | Dashboards exist but no decision has ever come from them | Discover produced signals with no Decide stage consuming them | Attach a budget, a scorecard threshold, or a review to the signal |
-| `no matches for kind "CompositeProject"` | The `Composite*` kinds were renamed on 2026-10-07 and are not aliased | Use `kind: Project` (likewise `Application`, `Database`) |
+| `no matches for kind "CompositeProject"` | The `Composite*` kinds were renamed and are not aliased | Use `kind: Project` (likewise `Application`, `Database`) |
 | A service reaches production with no owner | Define was skipped — the namespace predates the project | Create the `Project`; the namespace, quotas and repository follow |
 
 ## Next steps

@@ -7,15 +7,7 @@ path: "/docs/reference/function-api"
 
 # Function API Reference
 
-This page is the complete reference for the `Function` resource and the `adhar function` command. It lists:
-
-- every field, with its type, default and limits
-- every trigger option
-- every status field and condition reason
-- every object the composition creates
-- every command and flag
-
-It is for anyone writing or debugging a `Function` by hand. [Functions](/docs/core-concepts/functions) explains the model, and [Deploy a Function](/docs/guides/deploy-a-function) walks through it.
+This page lists every field, trigger option, status condition and composed object of the `Function` resource, and every `adhar function` command and flag. Use it when you write or debug a `Function` by hand. [Functions](/docs/core-concepts/functions) explains the model, and [Deploy a Function](/docs/guides/deploy-a-function) walks through it.
 
 ## At a glance
 
@@ -105,7 +97,7 @@ spec:
 
 **Placement.** In an environment namespace, the namespace's labels `adhar.io/organisation`, `adhar.io/team`, `adhar.io/project` and `adhar.io/environment` override the four placement parameters. The `Placement` condition reports when a parameter disagreed and was ignored. A namespace counts as an environment namespace when it has a non-empty `adhar.io/environment` label.
 
-`spec.compositionSelector` at the top level of `spec` is still accepted, so objects written against the first version of the API stay valid. Crossplane ignores it and reads `spec.crossplane.compositionSelector`.
+`spec.compositionSelector` at the top level of `spec` is accepted for compatibility with older objects. Crossplane ignores it and reads `spec.crossplane.compositionSelector`.
 
 ## Triggers
 
@@ -140,7 +132,7 @@ A composed source is named `<function>-<trigger name>`. Names longer than 63 cha
 
 ### The one-trigger shorthand
 
-The first version of the API took a single `trigger` and `eventSource`. That form still works when `triggers` is not set. An optional `scheme://` prefix is stripped from `eventSource`:
+A single `trigger` and `eventSource` work when `triggers` is not set. An optional `scheme://` prefix is stripped from `eventSource`:
 
 | `trigger` | `eventSource` examples | Becomes |
 |---|---|---|
@@ -280,7 +272,7 @@ For the fields the CLI has no flags for (`triggers`, `visibility`, `hostname`, `
 | Stream its logs in the Console | `get pods/log` in its namespace |
 | Delete a delivered function (its Application) in the Console | `delete applications.console.adhar.io` |
 
-## See also
+## Next steps
 
 - **[Functions](/docs/core-concepts/functions)** — the model behind these fields
 - **[Deploy a Function](/docs/guides/deploy-a-function)** — the fields in use, step by step

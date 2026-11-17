@@ -20,6 +20,7 @@ const Documentation = () => (
     registry={registry}
     versionSource={PLATFORM_VERSIONS}
     searchLabel="the Adhar docs"
+    issuesUrl="https://github.com/adhar-io/adhar/issues"
     brand={{
       title: "Adhar Documentation",
       subtitle: "Platform reference",

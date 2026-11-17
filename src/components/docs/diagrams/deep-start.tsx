@@ -1,6 +1,6 @@
 import type { ComponentType } from "react";
 import {
-  Box, Caption, C, Flow, Frame, GroupBox, Ladder, Pipeline, Split,
+  Box, Caption, C, Flow, Frame, GroupBox, Ladder, Split,
 } from "@/components/docs/diagram-kit";
 
 /** Diagrams owned by the deep-start pages. Every key is prefixed "ds-". */
@@ -95,36 +95,6 @@ function ComposedTree() {
   );
 }
 
-/* ---------------- control plane: install order ---------------- */
-
-const CpInstallOrder = () => (
-  <Ladder
-    label="Control-plane install order: Crossplane core and a wait of up to five minutes, then composition RBAC, XRDs, Compositions, Functions, provider-kubernetes and provider-helm packages, their ClusterProviderConfigs which are strict, day-2 Operations, and on a cloud only the active cloud family's providers and ClusterProviderConfig."
-    heading={["step", "why it is here"]}
-    caption="Gated on AdharPlatform status.crossplane.controlPlaneApplied, retried every pass until all of it applies."
-    rungs={[
-      { name: "Crossplane core", detail: "install.yaml / install-ha.yaml", tone: "primary",
-        adds: ["started early so the image pull overlaps repo seeding;", "then wait up to 5 min for the Deployment"] },
-      { name: "Composition RBAC", detail: "crossplane-compose-local",
-        adds: ["lets Crossplane create CNPG Clusters, Valkey, Argo CD", "Applications — else every local request is forbidden"] },
-      { name: "XRDs", detail: "configuration/xrd/",
-        adds: ["the API types must exist before anything references them"] },
-      { name: "Compositions", detail: "compositions/<domain>/",
-        adds: ["one file per implementation, applied recursively"] },
-      { name: "Functions", detail: "functions/functions.yaml",
-        adds: ["kcl · go-templating · patch-and-transform", "auto-ready · python"] },
-      { name: "Provider packages", detail: "provider-kubernetes · helm",
-        adds: ["their CRDs register a minute or two later"] },
-      { name: "ClusterProviderConfigs", detail: "STRICT — no NoMatch", tone: "accent",
-        adds: ["kubernetes-provider · helm-provider; an empty list is", "a hard error, not a valid state"] },
-      { name: "Operations", detail: "ops.crossplane.io",
-        adds: ["CronOperation / WatchOperation for day-2 work"] },
-      { name: "Active cloud only", detail: "provider family + default",
-        adds: ["skipped on Kind; one cloud's providers, never all five"] },
-    ]}
-  />
-);
-
 /* ---------------- architecture: the AdharPlatform reconcile loop ---------------- */
 
 const ReconcileLoop = () => (
@@ -150,53 +120,6 @@ const ReconcileLoop = () => (
       { name: "Requeue or exit", detail: "15 s · 5 s on error",
         adds: ["watch mode keeps nudging stuck Applications;", "run from the CLI, it exits once converged"] },
     ]}
-  />
-);
-
-/* ---------------- quick start: where the ten minutes go ---------------- */
-
-const UpTimeline = () => (
-  <Pipeline
-    label="Where a local adhar up spends its time on a warm machine: the Kind node and CRDs in seconds, the foundation in about 2 minutes 40 seconds, the GitOps sync of the curated core in about 6 minutes 40 seconds, so roughly ten minutes to every application Synced and Healthy."
-    caption="Measured on Docker Desktop with 11 CPUs and a warm image cache. A cold first run also pulls ~10 GB of images."
-    stages={[
-      { name: "Kind node", detail: "CLI-driven", guarantee: "seconds" },
-      { name: "Foundation", detail: "Cilium → Crossplane", guarantee: "≈ 2m40s", tone: "primary" },
-      { name: "GitOps sync", detail: "curated core", guarantee: "≈ 6m40s", tone: "primary" },
-      { name: "Ready panel", detail: "URLs + hints", guarantee: "≈ 10 min total", tone: "accent" },
-    ]}
-  />
-);
-
-/* ---------------- installation: two kinds of host ---------------- */
-
-const InstallPaths = () => (
-  <Split
-    label="Preparing a host. Locally: a container engine that answers, memory given to the engine, and the adhar CLI; about ten minutes to a platform. On a cloud: credentials in the environment, a delegated DNS zone, quota, a config file and a clean dry run; provider provisioning sets the pace."
-    left={{
-      heading: "Laptop — Kind",
-      tone: "primary",
-      items: [
-        "A container engine that answers (docker info)",
-        "8 GB+ given to the engine, 20 GB+ disk",
-        "The adhar CLI — nothing else",
-        "adhar up — no config file",
-        "≈ 10 min warm; first run pulls ~10 GB",
-      ],
-      note: "Ports 8443/8080 on 127.0.0.1",
-    }}
-    right={{
-      heading: "Cloud — AWS, GCP, Azure, DO, Civo",
-      tone: "accent",
-      items: [
-        "Credentials in the environment, never the file",
-        "A DNS zone delegated to the provider, first",
-        "Quota for instances, vCPU, LBs, volumes",
-        "config.yaml + adhar up -f … --env … --dry-run",
-        "Provisioning sets the pace (DO ~13 min)",
-      ],
-      note: "AWS first runs take 25–40 min",
-    }}
   />
 );
 
@@ -287,10 +210,7 @@ const Profiles = () => (
 export const deep_start: Record<string, ComponentType> = {
   "ds-composition-fanout": CompositionFanout,
   "ds-composed-tree": ComposedTree,
-  "ds-cp-install-order": CpInstallOrder,
   "ds-reconcile-loop": ReconcileLoop,
-  "ds-up-timeline": UpTimeline,
-  "ds-install-paths": InstallPaths,
   "ds-config-boundary": ConfigBoundary,
   "ds-bind-flow": BindFlow,
   "ds-profiles": Profiles,

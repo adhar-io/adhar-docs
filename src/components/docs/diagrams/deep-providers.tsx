@@ -183,54 +183,6 @@ const DigitalOceanTopology = topology({
   belowLabel: "Also in the account",
 });
 
-const AwsTopology = topology({
-  label:
-    "AWS topology: Route 53 answers for the delegated zone, a classic ELB or NLB created by the in-cluster cloud-controller-manager forwards to the Gateway node ports, and the EC2 control plane and workers sit in the public subnet of one VPC with an internet gateway and a default route.",
-  client: { title: "you / your users", lines: ["https://console.<defaultHost>"] },
-  dns: { title: "Route 53 public hosted zone", lines: ["<defaultHost> (you create it)", "records by external-dns (static keys)"] },
-  dnsLink: "records → ELB",
-  edge: { title: "ELB or NLB", lines: ["created by aws-cloud-controller-manager", "one per LoadBalancer Service"] },
-  edgeLink: "node ports",
-  network: "VPC 10.0.0.0/16 · public subnet 10.0.1.0/24 · IGW + 0.0.0.0/0 route",
-  left: { title: "control plane (EC2)", lines: ["r6i.large · Ubuntu 24.04 AMI", "256 GiB gp3 root volume"] },
-  right: { title: "workers (EC2)", lines: ["r6i.xlarge · public IP on launch", "autoscaled minWorkers…maxWorkers"] },
-  innerLink: "kubeadm join",
-  networkNotes: [
-    "Security group in: 22, 6443, 30000-32767 tcp/udp; all traffic between members. No NAT gateway, no Elastic IPs.",
-    "Private subnet 10.0.2.0/24 is created and tagged for internal load balancers but holds no nodes.",
-  ],
-  below: [
-    { title: "key pair", lines: ["per-cluster ed25519 key"] },
-    { title: "EBS volumes", lines: ["only for adhar-block (gp3)", "tagged kubernetes.io/cluster/<n>"] },
-    { title: "IAM (managed mode)", lines: ["adhar-<cluster>-eks-cluster", "adhar-<cluster>-eks-node"] },
-  ],
-  belowLabel: "Also in the account",
-});
-
-const AzureTopology = topology({
-  label:
-    "Azure topology: Azure DNS answers for the delegated zone, a Standard load balancer created by cloud-provider-azure forwards to the Gateway node ports, and the control-plane and worker VMs, each with a NIC and public IP, live in one VNet inside one resource group.",
-  client: { title: "you / your users", lines: ["https://console.<defaultHost>"] },
-  dns: { title: "Azure DNS zone", lines: ["in config.dnsResourceGroup", "records by external-dns (SP)"] },
-  dnsLink: "A → LB IP",
-  edge: { title: "Standard load balancer", lines: ["created by cloud-provider-azure", "one per LoadBalancer Service"] },
-  edgeLink: "node ports",
-  network: "resource group adhar-rg · VNet 10.30.0.0/16 · subnet 10.30.1.0/24 · NSG",
-  left: { title: "<cluster>-master-1 (VM)", lines: ["config.vmSize Standard_E4bds_v5", "NIC + public IP · 256 GiB OS disk"] },
-  right: { title: "<cluster>-worker-N (VMs)", lines: ["clusterConfig.machineType", "NIC + public IP each"] },
-  innerLink: "kubeadm join",
-  networkNotes: [
-    "NSG in: 22, 6443, 30000-32767 tcp/udp. Everything the cluster owns is in the resource group.",
-    "azure.json (kube-system/azure-cloud-provider) carries the in-cluster credential.",
-  ],
-  below: [
-    { title: "managed disks", lines: ["only for adhar-block", "StandardSSD, 4/8/16 per VM"] },
-    { title: "DNS service principal", lines: ["DNS Zone Contributor", "scoped to the zone only"] },
-    { title: "Let's Encrypt", lines: ["DNS-01 via Azure DNS", "*.<defaultHost> wildcard"] },
-  ],
-  belowLabel: "Also in the subscription",
-});
-
 const GcpTopology = topology({
   label:
     "Google Cloud topology: Cloud DNS answers for the delegated zone, a forwarding rule and target pool created by cloud-provider-gcp forward to the Gateway node ports, and the GCE control plane and workers, each with an ephemeral external IP, share one VPC subnet guarded by tag-scoped firewall rules.",
@@ -276,29 +228,6 @@ const CivoTopology = topology({
     { title: "quota preflight", lines: ["instances, CPU, RAM,", "disk, networks"] },
   ],
   belowLabel: "Also in the account",
-});
-
-const CustomTopology = topology({
-  label:
-    "Custom provider topology: you own the DNS records, the load balancer and the hosts; the adhar CLI reaches every host over SSH on port 22, installs kubeadm on the one control-plane host and joins the workers, and the Gateway listens on node ports 30080 and 30443.",
-  client: { title: "you / your users", lines: ["https://console.<defaultHost>"] },
-  dns: { title: "your DNS", lines: ["*.<defaultHost> → your LB", "or a dnsProvider zone for DNS-01"] },
-  dnsLink: "A → your LB",
-  edge: { title: "your load balancer / MetalLB", lines: ["80 → node port 30080", "443 → node port 30443"] },
-  edgeLink: "node ports",
-  network: "your network — firewall and routing are yours",
-  left: { title: "masterIPs[0]", lines: ["exactly one control-plane host", "Ubuntu 24.04, root or sudo -n"] },
-  right: { title: "workerIPs[…]", lines: ["joined over SSH", "scale moves within this list"] },
-  innerLink: "kubeadm join",
-  networkNotes: [
-    "The machine running adhar needs TCP 22 to every host and TCP 6443 to the control plane; nodes need each other unrestricted.",
-  ],
-  below: [
-    { title: "adhar CLI", lines: ["SSH key, passphrase-less", "port 22 only"] },
-    { title: "storage", lines: ["local-path provisioner (default)", "not replicated"] },
-    { title: "not created", lines: ["no VMs, no LB, no volumes", "adhar down = kubeadm reset"] },
-  ],
-  belowLabel: "Outside the node network",
 });
 
 /* ------------------------------------------------------------------ *
@@ -347,10 +276,7 @@ const ClusterModes = () => (
 export const deep_providers = {
   "dp-kind-topology": KindTopology,
   "dp-digitalocean-topology": DigitalOceanTopology,
-  "dp-aws-topology": AwsTopology,
-  "dp-azure-topology": AzureTopology,
   "dp-gcp-topology": GcpTopology,
   "dp-civo-topology": CivoTopology,
-  "dp-custom-topology": CustomTopology,
   "dp-cluster-modes": ClusterModes,
 } as Record<string, ComponentType>;

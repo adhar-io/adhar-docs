@@ -10,6 +10,15 @@ import { deep_start } from "./deep-start";
 import { deep_providers } from "./deep-providers";
 import { deep_ops } from "./deep-ops";
 import { functions } from "./functions";
+import { rw_start } from "./rw-start";
+import { rw_concepts } from "./rw-concepts";
+import { rw_serverless } from "./rw-serverless";
+import { rw_guides_a } from "./rw-guides-a";
+import { rw_guides_b } from "./rw-guides-b";
+import { rw_ops } from "./rw-ops";
+import { rw_providers_a } from "./rw-providers-a";
+import { rw_providers_b } from "./rw-providers-b";
+import { rw_pe } from "./rw-pe";
 
 /**
  * Every docs diagram, keyed by the name a ```diagram fence uses.
@@ -27,4 +36,13 @@ export const DIAGRAMS: Record<string, ComponentType> = {
   ...deep_providers,
   ...deep_ops,
   ...functions,
+  ...rw_start,
+  ...rw_concepts,
+  ...rw_serverless,
+  ...rw_guides_a,
+  ...rw_guides_b,
+  ...rw_ops,
+  ...rw_providers_a,
+  ...rw_providers_b,
+  ...rw_pe,
 };

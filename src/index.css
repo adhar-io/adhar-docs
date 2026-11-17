@@ -43,6 +43,44 @@
 .docs-prose h1, .docs-prose h2, .docs-prose h3, .docs-prose h4 { scroll-margin-top: 6rem; }
 .docs-prose .anchor-link { opacity: 0; margin-left: 0.4rem; color: hsl(var(--primary)); transition: opacity 0.15s; }
 .docs-prose h2:hover .anchor-link, .docs-prose h3:hover .anchor-link, .docs-prose h4:hover .anchor-link { opacity: 1; }
+.docs-prose .anchor-link:focus-visible { opacity: 1; }
+
+/* Docs: reading rhythm */
+/* The lead paragraph under the title reads a step larger than body text. */
+.docs-prose h1 + p { font-size: 1.0625rem; line-height: 1.7; color: hsl(var(--foreground) / 0.88); }
+/* A heading directly under another heading does not need the full gap. */
+.docs-prose h2 + h3 { margin-top: 1.25rem; }
+/* Nested lists sit tighter than top-level ones. */
+.docs-prose li > ul, .docs-prose li > ol { margin-top: 0.4rem; margin-bottom: 0.4rem; }
+.docs-prose li > p { margin-bottom: 0.5rem; }
+.docs-prose li > p:last-child { margin-bottom: 0; }
+/* Code blocks and diagrams inside list steps align with the step text. */
+.docs-prose li > div.my-6, .docs-prose li > figure { margin-top: 0.75rem; margin-bottom: 0.75rem; }
+/* Tables: numbers line up, long code wraps rather than widening the table. */
+.docs-prose table { font-variant-numeric: tabular-nums; border-collapse: collapse; }
+.docs-prose td code:not(pre code) { white-space: normal; }
+.docs-prose td:first-child { font-weight: 500; color: hsl(var(--foreground)); }
+/* Callouts carry their own colour; links and code inside stay legible. */
+.docs-prose .docs-callout code:not(pre code) { background: hsl(var(--background) / 0.6); }
+/* Keyboard users can scroll wide code blocks; show where focus is. */
+.docs-prose pre:focus-visible { outline: 2px solid hsl(var(--primary) / 0.6); outline-offset: 2px; box-shadow: none; }
+/* Thin, unobtrusive scrollbars on wide code, tables and diagrams. */
+.docs-prose pre, .docs-prose figure, .docs-prose div.overflow-x-auto {
+  scrollbar-width: thin;
+  scrollbar-color: hsl(var(--muted-foreground) / 0.35) transparent;
+}
+.docs-prose ::selection { background: hsl(var(--primary) / 0.22); }
+
+/* Docs: print as a clean single column — chrome is hidden with print:hidden. */
+@media print {
+  .docs-prose { font-size: 11pt; }
+  .docs-prose pre { white-space: pre-wrap; word-break: break-word; background: #fff; color: #111; border: 1px solid #ccc; }
+  .docs-prose pre code.hljs, .docs-prose pre code.hljs * { color: #111 !important; }
+  .docs-prose h2, .docs-prose h3 { break-after: avoid; }
+  .docs-prose pre, .docs-prose figure, .docs-prose table, .docs-prose blockquote { break-inside: avoid; }
+  .docs-prose a { border-bottom: 0; }
+  .docs-prose .anchor-link { display: none; }
+}
 
 
 

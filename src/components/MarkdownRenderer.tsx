@@ -3,7 +3,9 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import rehypeHighlight from "rehype-highlight";
 import rehypeSlug from "rehype-slug";
-import { Check, Copy, Link as LinkIcon } from "lucide-react";
+import {
+  AlertTriangle, Check, CircleCheck, Copy, Info, Lightbulb, Link as LinkIcon, Activity, OctagonAlert,
+} from "lucide-react";
 import { cn } from "@/lib/utils";
 import { parseStatus } from "@/lib/docsStatus";
 import { DIAGRAMS } from "@/components/docs/diagrams/index";
@@ -28,15 +30,112 @@ function slugify(s: string): string {
   return s.toLowerCase().trim().replace(/[^\w\s-]/g, "").replace(/\s+/g, "-");
 }
 
-const HeadingAnchor = ({ id }: { id: string }) => (
-  <a href={`#${id}`} aria-label="Anchor" className="anchor-link no-min-tap inline-flex align-middle">
-    <LinkIcon className="w-3.5 h-3.5" />
-  </a>
-);
+const HeadingAnchor = ({ id }: { id: string }) => {
+  const [copied, setCopied] = useState(false);
+  // The link still navigates to the heading; clicking also copies its URL.
+  const copy = () => {
+    const url = `${window.location.origin}${window.location.pathname}#${id}`;
+    navigator.clipboard?.writeText(url).then(
+      () => {
+        setCopied(true);
+        setTimeout(() => setCopied(false), 1400);
+      },
+      () => { /* clipboard unavailable — the link still works */ },
+    );
+  };
+  return (
+    <a
+      href={`#${id}`}
+      onClick={copy}
+      aria-label={copied ? "Link copied" : "Copy link to this section"}
+      title={copied ? "Link copied" : "Copy link to this section"}
+      className="anchor-link no-min-tap inline-flex align-middle"
+    >
+      {copied ? <Check className="w-3.5 h-3.5" /> : <LinkIcon className="w-3.5 h-3.5" />}
+    </a>
+  );
+};
+
+/* Callouts: a blockquote that opens with a bold label — "> **Note:** …",
+   "> **Warning:** …" — is drawn as a typed callout with its own icon and
+   colour. Any other blockquote keeps the neutral style. */
+const CALLOUTS = [
+  {
+    match: /^(note|info|active development)\b/i,
+    Icon: Info,
+    box: "border-primary/60 bg-primary/[0.06]",
+    icon: "text-primary",
+  },
+  {
+    match: /^(tip|hint|good to know)\b/i,
+    Icon: Lightbulb,
+    box: "border-emerald-500/60 bg-emerald-500/[0.07]",
+    icon: "text-emerald-600 dark:text-emerald-400",
+  },
+  {
+    match: /^(check|result|expected)\b/i,
+    Icon: CircleCheck,
+    box: "border-emerald-500/60 bg-emerald-500/[0.07]",
+    icon: "text-emerald-600 dark:text-emerald-400",
+  },
+  {
+    match: /^(warning|caution|careful)\b/i,
+    Icon: AlertTriangle,
+    box: "border-amber-500/70 bg-amber-500/[0.08]",
+    icon: "text-amber-600 dark:text-amber-400",
+  },
+  {
+    match: /^(important|danger|do not)\b/i,
+    Icon: OctagonAlert,
+    box: "border-rose-500/60 bg-rose-500/[0.07]",
+    icon: "text-rose-600 dark:text-rose-400",
+  },
+  {
+    match: /^status\b/i,
+    Icon: Activity,
+    box: "border-sky-500/60 bg-sky-500/[0.07]",
+    icon: "text-sky-600 dark:text-sky-400",
+  },
+] as const;
+
+const Callout = ({ children }: { children: ReactNode }) => {
+  const lead = nodeToText(children).trimStart().slice(0, 40);
+  const kind = CALLOUTS.find((c) => c.match.test(lead));
+  if (!kind) {
+    return (
+      <blockquote className="my-6 border-l-2 border-border pl-4 py-3 pr-4 bg-muted/30 rounded-r-lg text-foreground/85 [&>p]:mb-2 [&>p:last-child]:mb-0">
+        {children}
+      </blockquote>
+    );
+  }
+  const { Icon } = kind;
+  return (
+    <blockquote
+      className={cn(
+        "docs-callout my-6 flex gap-3 rounded-lg border-l-[3px] py-3.5 pl-4 pr-4 text-foreground/85",
+        kind.box,
+      )}
+    >
+      <Icon aria-hidden="true" className={cn("mt-[3px] h-4 w-4 shrink-0", kind.icon)} />
+      <div className="min-w-0 flex-1 [&>p]:mb-2 [&>p:last-child]:mb-0 [&>ul]:my-2 [&>ol]:my-2">
+        {children}
+      </div>
+    </blockquote>
+  );
+};
+
+const LANG_LABEL: Record<string, string> = {
+  bash: "shell", sh: "shell", shell: "shell", zsh: "shell", console: "shell",
+  yaml: "yaml", yml: "yaml", json: "json", go: "go", ts: "typescript",
+  tsx: "tsx", js: "javascript", py: "python", python: "python", java: "java",
+  dockerfile: "dockerfile", hcl: "hcl", toml: "toml", ini: "ini", sql: "sql",
+  text: "text", plaintext: "text", diff: "diff",
+};
 
 const CodeBlock = ({ className, children }: { className?: string; children: ReactNode }) => {
   const [copied, setCopied] = useState(false);
-  const lang = /language-(\w+)/.exec(className || "")?.[1];
+  const lang = /language-([\w-]+)/.exec(className || "")?.[1];
+  const label = (lang && LANG_LABEL[lang]) || lang || "text";
   const raw = nodeToText(children);
 
   const copy = async () => {
@@ -51,17 +150,19 @@ const CodeBlock = ({ className, children }: { className?: string; children: Reac
     <div className="relative group my-6">
       <div className="flex items-center justify-between px-4 py-0.5 sm:py-2 bg-muted/40 border border-b-0 border-border/50 rounded-t-xl">
         <span className="text-[10px] uppercase tracking-wider font-mono text-muted-foreground">
-          {lang || "text"}
+          {label}
         </span>
         <button
+          type="button"
           onClick={copy}
-          className="text-[11px] inline-flex items-center gap-1.5 text-muted-foreground hover:text-foreground transition-colors"
+          aria-label={copied ? "Copied" : "Copy code"}
+          className="no-min-tap text-[11px] inline-flex items-center gap-1.5 text-muted-foreground hover:text-foreground transition-colors"
         >
           {copied ? <Check className="w-3 h-3 text-primary" /> : <Copy className="w-3 h-3" />}
           {copied ? "Copied" : "Copy"}
         </button>
       </div>
-      <pre className="!mt-0 !rounded-t-none !border-t-0">
+      <pre tabIndex={0} className="!mt-0 !rounded-t-none !border-t-0">
         <code className={className}>{children}</code>
       </pre>
     </div>
@@ -78,7 +179,7 @@ const MarkdownRenderer = ({ content, className }: MarkdownRendererProps) => {
           h1: ({ children, id }) => (
             <h1
               id={id}
-              className="text-4xl sm:text-5xl font-bold tracking-tight mb-4 text-foreground"
+              className="text-3xl sm:text-[2.5rem] sm:leading-[1.15] font-bold tracking-tight mb-5 text-foreground text-balance"
             >
               {children}
             </h1>
@@ -115,11 +216,7 @@ const MarkdownRenderer = ({ content, className }: MarkdownRendererProps) => {
           ),
           strong: ({ children }) => <strong className="text-foreground font-semibold">{children}</strong>,
           em: ({ children }) => <em className="text-foreground/90">{children}</em>,
-          blockquote: ({ children }) => (
-            <blockquote className="my-6 border-l-2 border-primary pl-4 py-3 pr-4 bg-primary/5 rounded-r-lg text-foreground/85 [&>p]:mb-0">
-              {children}
-            </blockquote>
-          ),
+          blockquote: ({ children }) => <Callout>{children}</Callout>,
           ul: ({ children }) => (
             <ul className="my-4 space-y-2 list-none [&>li]:relative [&>li]:pl-5 [&>li:before]:content-[''] [&>li:before]:absolute [&>li:before]:left-0 [&>li:before]:top-[0.6em] [&>li:before]:w-1.5 [&>li:before]:h-1.5 [&>li:before]:rounded-full [&>li:before]:bg-gradient-to-br [&>li:before]:from-primary [&>li:before]:to-accent">
               {children}
@@ -147,7 +244,7 @@ const MarkdownRenderer = ({ content, className }: MarkdownRendererProps) => {
           ),
           tr: ({ children }) => <tr className="hover:bg-muted/20 transition-colors">{children}</tr>,
           th: ({ children }) => (
-            <th className="px-3 sm:px-4 py-2.5 text-left text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+            <th className="px-3 sm:px-4 py-2.5 text-left text-[11px] font-semibold uppercase tracking-wider text-muted-foreground whitespace-nowrap">
               {children}
             </th>
           ),

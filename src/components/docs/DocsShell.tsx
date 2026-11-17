@@ -2,7 +2,8 @@ import { useMemo, useState, useEffect, useCallback, useRef } from "react";
 import { Link, useLocation, useRouter } from "@tanstack/react-router";
 import {
   Search, ChevronRight, BookOpen, Rocket, Package, Coffee, Layers,
-  GraduationCap, Code2, Shield, Settings, Sparkles, ArrowRight, Hash, Compass,
+  GraduationCap, Code2, Shield, Settings, Sparkles, ArrowRight, ArrowUp, Hash, Compass,
+  Cloud, LibraryBig, MessageSquareWarning,
 } from "lucide-react";
 import Navigation from "@/components/landing/Navigation";
 import Footer from "@/components/landing/Footer";
@@ -27,6 +28,8 @@ interface DocsShellProps {
   versionSource?: VersionSource;
   /** Short portal name used in the search placeholder */
   searchLabel?: string;
+  /** Where "report a problem with this page" goes */
+  issuesUrl?: string;
 }
 
 const SECTION_ICON: Record<string, typeof BookOpen> = {
@@ -40,6 +43,9 @@ const SECTION_ICON: Record<string, typeof BookOpen> = {
   "Platform Engineering": Compass,
   "Security": Shield,
   "Operations": Settings,
+  "Cloud Providers": Cloud,
+  "Providers": Cloud,
+  "Reference": LibraryBig,
 };
 
 function findEntry(registry: Registry, pathname: string): DocEntry | null {
@@ -72,13 +78,36 @@ function extractToc(body: string) {
   return out;
 }
 
-function readTime(body: string): string {
-  const words = body.trim().split(/\s+/).length;
-  const mins = Math.max(1, Math.round(words / 220));
-  return `${mins} min read`;
+/** Scroll progress through the page (0–1) and whether to offer "back to top". */
+function useReadingProgress(key: string) {
+  const barRef = useRef<HTMLDivElement>(null);
+  const [showTop, setShowTop] = useState(false);
+  useEffect(() => {
+    let frame = 0;
+    const update = () => {
+      frame = 0;
+      const doc = document.documentElement;
+      const max = doc.scrollHeight - doc.clientHeight;
+      const ratio = max > 0 ? Math.min(1, doc.scrollTop / max) : 0;
+      if (barRef.current) barRef.current.style.transform = `scaleX(${ratio})`;
+      setShowTop(doc.scrollTop > 900);
+    };
+    const onScroll = () => {
+      if (!frame) frame = requestAnimationFrame(update);
+    };
+    update();
+    window.addEventListener("scroll", onScroll, { passive: true });
+    window.addEventListener("resize", onScroll);
+    return () => {
+      if (frame) cancelAnimationFrame(frame);
+      window.removeEventListener("scroll", onScroll);
+      window.removeEventListener("resize", onScroll);
+    };
+  }, [key]);
+  return { barRef, showTop };
 }
 
-const DocsShell = ({ registry, brand, versionSource, searchLabel }: DocsShellProps) => {
+const DocsShell = ({ registry, brand, versionSource, searchLabel, issuesUrl }: DocsShellProps) => {
   const { pathname, hash } = useLocation();
   const [q, setQ] = useState("");
   const [searchOpen, setSearchOpen] = useState(false);
@@ -96,6 +125,14 @@ const DocsShell = ({ registry, brand, versionSource, searchLabel }: DocsShellPro
 
   const entry = useMemo(() => findEntry(registry, pathname), [registry, pathname]);
   const toc = useMemo(() => entry ? extractToc(entry.body) : [], [entry]);
+  const { barRef, showTop } = useReadingProgress(pathname);
+
+  // Each page gets its own tab title, restored when the docs are left.
+  useEffect(() => {
+    const before = document.title;
+    document.title = entry ? `${entry.meta.title} · ${brand.title}` : brand.title;
+    return () => { document.title = before; };
+  }, [entry, brand.title]);
   // TOC scroll tracking: the active section is the last heading that has
   // scrolled above the reading line, so the highlight follows every scroll —
   // including jumps — rather than only when a heading crosses a narrow band.
@@ -218,12 +255,21 @@ const DocsShell = ({ registry, brand, versionSource, searchLabel }: DocsShellPro
 
       <Navigation />
 
+      {/* Reading progress, pinned under the top navigation */}
+      <div aria-hidden="true" className="fixed inset-x-0 top-0 z-[60] h-0.5 print:hidden">
+        <div
+          ref={barRef}
+          className="h-full origin-left bg-gradient-to-r from-primary to-accent"
+          style={{ transform: "scaleX(0)" }}
+        />
+      </div>
+
       <main className="relative pt-20">
         <div className="max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8 py-6">
           {/* Breadcrumbs */}
           {/* Links get a full 44px tap area on phones; the negative margins keep
               the row as compact as the text it holds. */}
-          <nav className="flex items-center gap-1.5 text-xs text-muted-foreground -mt-3 mb-1 lg:mt-0 lg:mb-6 flex-wrap">
+          <nav aria-label="Breadcrumb" className="flex items-center gap-1.5 text-xs text-muted-foreground -mt-3 mb-1 lg:mt-0 lg:mb-6 flex-wrap print:hidden">
             <Link to="/" className="-mx-2 px-2 py-3.5 lg:m-0 lg:p-0 hover:text-primary transition-colors">Home</Link>
             {crumbs.map((c, i) => (
               <span key={c.to} className="flex items-center gap-1.5">
@@ -242,7 +288,7 @@ const DocsShell = ({ registry, brand, versionSource, searchLabel }: DocsShellPro
             {/* The scroll container clips its children's shadows and focus rings,
                 so it gets room on the left, pulled back out by the negative
                 margin to keep the content where it was. */}
-            <aside ref={sidebarRef} className="lg:sticky lg:top-24 lg:self-start lg:max-h-[calc(100vh-7rem)] lg:overflow-y-auto lg:-ml-2 lg:pl-2 pr-2 scrollbar-hide">
+            <aside ref={sidebarRef} className="print:hidden lg:sticky lg:top-24 lg:self-start lg:max-h-[calc(100vh-7rem)] lg:overflow-y-auto lg:-ml-2 lg:pl-2 pr-2 scrollbar-hide">
               <Link to={brand.homeHref} className="hidden lg:flex items-center gap-3 mb-6 group">
                 <div className="relative w-10 h-10 rounded-xl bg-gradient-to-br from-primary to-accent flex items-center justify-center shadow-lg shadow-primary/30 group-hover:shadow-primary/50 transition-shadow">
                   <Package className="w-5 h-5 text-white" />
@@ -418,8 +464,6 @@ const DocsShell = ({ registry, brand, versionSource, searchLabel }: DocsShellPro
                       })()}
                       {entry.meta.section}
                     </span>
-                    <span className="text-muted-foreground/60">·</span>
-                    <span>{readTime(entry.body)}</span>
                     {entry.meta.badge && (
                       <>
                         <span className="text-muted-foreground/60">·</span>
@@ -429,7 +473,7 @@ const DocsShell = ({ registry, brand, versionSource, searchLabel }: DocsShellPro
                   </div>
 
                   <MarkdownRenderer content={entry.body} />
-                  <DocFooter registry={registry} entry={entry} />
+                  <DocFooter registry={registry} entry={entry} issuesUrl={issuesUrl} />
                 </article>
               ) : (
                 <div className="py-20 text-center max-w-md mx-auto">
@@ -451,7 +495,7 @@ const DocsShell = ({ registry, brand, versionSource, searchLabel }: DocsShellPro
             </div>
 
             {/* ── Right TOC ── */}
-            <aside className="hidden lg:block">
+            <aside aria-label="On this page" className="hidden lg:block print:hidden">
               {toc.length > 0 && (
                 <div ref={tocRef} className="sticky top-24 max-h-[calc(100vh-7rem)] overflow-y-auto pr-2 scrollbar-hide">
                   <div className="flex items-center gap-2 mb-3 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
@@ -482,6 +526,18 @@ const DocsShell = ({ registry, brand, versionSource, searchLabel }: DocsShellPro
         </div>
       </main>
 
+      <button
+        type="button"
+        onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
+        aria-label="Back to top"
+        tabIndex={showTop ? 0 : -1}
+        className={`fixed bottom-5 right-5 z-40 flex h-10 w-10 items-center justify-center rounded-full border border-border/60 bg-background/90 text-muted-foreground shadow-lg backdrop-blur transition-all hover:border-primary/50 hover:text-primary print:hidden ${
+          showTop ? "opacity-100 translate-y-0" : "pointer-events-none opacity-0 translate-y-2"
+        }`}
+      >
+        <ArrowUp className="h-4 w-4" />
+      </button>
+
       <DocsSearch
         open={searchOpen}
         onOpenChange={setSearchOpen}
@@ -495,14 +551,33 @@ const DocsShell = ({ registry, brand, versionSource, searchLabel }: DocsShellPro
   );
 };
 
-const DocFooter = ({ registry, entry }: { registry: Registry; entry: DocEntry }) => {
+const DocFooter = ({
+  registry, entry, issuesUrl,
+}: { registry: Registry; entry: DocEntry; issuesUrl?: string }) => {
   const flat = registry.sections.flatMap((s) => s.items);
   const idx = flat.findIndex((e) => e.path === entry.path);
   const prev = idx > 0 ? flat[idx - 1] : null;
   const next = idx >= 0 && idx < flat.length - 1 ? flat[idx + 1] : null;
-  if (!prev && !next) return null;
+  if (!prev && !next && !issuesUrl) return null;
+  const issueHref = issuesUrl
+    ? `${issuesUrl}/new?title=${encodeURIComponent(`Docs: ${entry.meta.title}`)}&body=${encodeURIComponent(`Page: ${entry.path}\n\nWhat is unclear or wrong?\n`)}`
+    : null;
   return (
-    <div className="mt-16 pt-8 border-t border-border/50 grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
+    <footer className="mt-16 print:hidden">
+    {issueHref && (
+      <div className="mb-6 flex flex-wrap items-center justify-between gap-x-4 gap-y-2 rounded-xl border border-border/50 bg-muted/20 px-5 py-3.5 text-sm">
+        <span className="text-muted-foreground">Something unclear or out of date on this page?</span>
+        <a
+          href={issueHref}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex items-center gap-1.5 font-medium text-primary hover:underline"
+        >
+          <MessageSquareWarning className="h-4 w-4" /> Report an issue
+        </a>
+      </div>
+    )}
+    <nav aria-label="Previous and next page" className="pt-8 border-t border-border/50 grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
       {prev ? (
         <Link
           to={prev.path}
@@ -525,7 +600,8 @@ const DocFooter = ({ registry, entry }: { registry: Registry; entry: DocEntry })
           <div className="font-medium group-hover:text-primary transition-colors">{next.meta.title}</div>
         </Link>
       ) : <span />}
-    </div>
+    </nav>
+    </footer>
   );
 };
 

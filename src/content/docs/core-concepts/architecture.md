@@ -7,32 +7,33 @@ path: "/docs/core-concepts/architecture"
 
 # Architecture
 
-Adhar aims to be the **open foundation for platform engineering**. One command, `adhar up`, builds a complete Internal Developer Platform (IDP) from open-source components only. It runs on any of six providers or on a local machine. This page explains how Adhar is designed and why.
+Adhar builds a complete Internal Developer Platform (IDP) from open-source components with one command, `adhar up`. It runs on a laptop or on any of six providers. This page explains how the platform is put together: the layers, the bootstrap, the GitOps loop that delivers every package, and the objects that drive it all.
 
-It is written for engineers who will run or extend the platform. It starts with the design principles and the four layers. Then it follows the objects that drive the system, with the real manifest for each:
+It is for engineers who run or extend the platform. After reading it, you can look at a running platform's objects and predict what the controller will do next.
 
-- The `AdharPlatform` resource
-- The controller that reconciles it (keeps the cluster matching what the resource asks for)
-- The ApplicationSet that delivers every package
-- The composite resources that teams create
+## How it works
 
-By the end, you should be able to read a running platform's state from its objects and predict what the controller will do next.
+Adhar starts in two phases. A short **imperative** phase lays the foundation. A **declarative** GitOps phase then delivers everything else and never stops.
+
+```diagram
+ncc-bootstrap
+```
+
+The split exists because a pure-GitOps system cannot bootstrap itself. ArgoCD cannot install the CNI (cluster network plugin) it needs to run, and the Git server it reads from does not exist yet. So `adhar up` installs just enough for GitOps to take over: the network, the GitOps engine and the Git server.
 
 ## Design principles
 
-Everything below follows from seven principles:
-
-1. **Management cluster first.** One cluster is the source of truth. It hosts the Git server, the GitOps engine, and the Crossplane control plane. The control plane provisions everything else, including other clusters.
-2. **Bootstrap imperatively, operate declaratively.** A pure-GitOps system cannot bootstrap itself: ArgoCD cannot install the CNI (the cluster network plugin) it needs, and the Git server does not exist yet. So `adhar up` runs a fixed, repeatable bootstrap, then hands off to GitOps for good.
-3. **The platform is data, not code.** Packages and environments are declarative, pre-rendered YAML in Git. Turning on a capability is a one-line change, not a code change.
-4. **Standards over frameworks.** Gateway API for routing, OIDC for identity, OCI for artefacts, CRDs for APIs, MCP for agent tooling. Components can be replaced because the seams are standard.
+1. **Management cluster first.** One cluster is the source of truth. It hosts the Git server, the GitOps engine and the Crossplane control plane, and it provisions everything else, including other clusters.
+2. **Bootstrap imperatively, operate declaratively.** `adhar up` runs a fixed, repeatable bootstrap, then hands off to GitOps for good.
+3. **The platform is data, not code.** Packages and environments are pre-rendered YAML in Git. Turning on a capability is a one-line change.
+4. **Standards over frameworks.** Gateway API for routing, OIDC for identity, OCI for artefacts, CRDs for APIs, MCP for agent tooling. Components are replaceable because the seams are standard.
 5. **Secure by default, permissive by exception.**
-6. **Everything observable** — by construction, not per-component setup.
-7. **Local–production parity.** Kind runs the same controllers, GitOps flow, and package model as production — smaller, not different.
+6. **Everything observable**, by construction rather than per-component setup.
+7. **Local–production parity.** Kind runs the same controllers, GitOps flow and package model as production. It is smaller, not different.
 
 ## The four layers
 
-Each layer depends only on the layer below it. Each one also has a defined set of things you can customise.
+Each layer depends only on the layer below it, and each has a defined way to customise it.
 
 ```diagram
 cc-layer-stack
@@ -41,37 +42,29 @@ cc-layer-stack
 | Layer | What it is | Managed by | You customise with |
 |---|---|---|---|
 | **L0 — Infrastructure** | Clusters, networks, load balancers, storage | Provider interface + Crossplane | Provider config, Compositions |
-| **L1 — Foundation** | CNI, Gateway, GitOps engine, Git server, control plane | AdharPlatform controller (embedded manifests) | `AdharPlatform` spec, HA flags |
+| **L1 — Foundation** | CNI, Gateway, GitOps engine, Git server, control plane | `AdharPlatform` controller (embedded manifests) | `AdharPlatform` spec, HA flags |
 | **L2 — Platform Services** | 100+ packages across seven categories | ArgoCD ApplicationSet from Gitea | Package toggles, values, custom packages |
 | **L3 — Developer Experience** | Console, CLI, dashboards, golden-path templates | GitOps packages + CLI releases | Templates, Backstage plugins |
 
-## Foundation components
+### Foundation components
 
-These components are pre-rendered, embedded in the `adhar` binary, and applied with Server-Side Apply. Because nothing is fetched from an upstream chart repository during bootstrap, a chart repository being down cannot break it. The versions below are the ones pinned at the time of writing; the embedded manifests under `platform/controllers/adharplatform/resources/` are the authority.
+The foundation is pre-rendered, embedded in the `adhar` binary and applied with Server-Side Apply. Bootstrap fetches nothing from an upstream chart repository, so an unreachable repository cannot break it. The embedded manifests under `platform/controllers/adharplatform/resources/` are the authority for versions.
 
 | Component | Version | Role |
 |---|---|---|
 | Kubernetes (default) | `v1.37.0` | The cluster |
 | **Cilium** | `v1.20.0` | CNI (eBPF), kube-proxy replacement, Gateway API, Hubble, network policy |
 | **ArgoCD** | `v3.6.1` | GitOps engine |
-| **Gitea** | `1.27.0` | In-cluster Git server (source of truth) |
+| **Gitea** | `1.27.0` | In-cluster Git server, the source of truth |
 | **Crossplane** | `v2.4.2` | Namespaced self-service infrastructure APIs |
 
-**Cilium is the entire network layer in one component.** It provides:
-
-- the CNI
-- north-south routing (traffic in and out of the cluster) through Gateway API, with no separate ingress controller
-- flow observability (Hubble)
-- microsegmentation (network policy)
-- optional transparent encryption (WireGuard). This is **not** switched on by the shipped configuration; see [Security Best Practices](/docs/security/security-best-practices)
-
-Nothing else can be scheduled until Cilium is installed. That is why it fixes the bootstrap order.
+Cilium is the whole network layer: the CNI, north-south routing through Gateway API (there is no separate ingress controller), flow observability (Hubble) and network policy. Transparent WireGuard encryption is available but **not** enabled by the shipped configuration; see [Security Best Practices](/docs/security/security-best-practices). Nothing can be scheduled until Cilium is installed, which is why it comes first.
 
 ## The AdharPlatform resource
 
-One object drives the whole foundation. `adhar up` creates it, the controller reconciles it, and `adhar get status` reads it back.
+One object drives the foundation. `adhar up` creates it, the controller reconciles it, and `adhar get status` reads it back. You rarely write it yourself, but its `status` is the platform's own record of how far bootstrap has got.
 
-You rarely write this object yourself, but it is worth reading. Its `status` is the platform's own record of how far bootstrap has got. This is `examples/adharplatform.yaml`, trimmed:
+This is `examples/adharplatform.yaml`, trimmed:
 
 ```yaml
 apiVersion: platform.adhar.io/v1alpha1
@@ -80,7 +73,7 @@ metadata:
   name: adhar
   namespace: adhar-system
 spec:
-  provider: gcp               # kind | aws | azure | gcp | do | civo | custom — kind or empty selects the local profile
+  provider: gcp               # kind | aws | azure | gcp | do | civo | custom
   autoscaling:                # the platform's own node autoscaler
     enabled: true
     minWorkers: 2
@@ -88,33 +81,34 @@ spec:
   clusterMesh:                # this cluster's identity in a Cilium Cluster Mesh
     name: adhar-mgmt
     id: 1                     # management cluster is 1; data planes take 2 upwards
-  buildCustomization:         # written by `adhar up`; IMMUTABLE after creation
+  buildCustomization:         # written by `adhar up`; treat as immutable
     protocol: https
     host: platform.example.com
     port: "443"
     clusterName: adhar-prod
     email: admin@example.com
-    enableHAMode: true        # e.g. picks Crossplane's install-ha.yaml
+    enableHAMode: true        # e.g. selects Crossplane's install-ha.yaml
     dnsProvider: civo
 ```
 
-`adhar up` writes `provider` for you, any provider it does not recognise it maps to `custom`.
+- `adhar up` writes `provider` for you. `kind` or an empty value selects the local profile; a provider it does not recognise becomes `custom`.
+- **Treat `buildCustomization` as fixed once the cluster exists.** Every URL, ClusterIssuer and foundation manifest is rendered from it. The API does not stop you editing it, but an edit does not re-render what is already running. To change the host, rebuild the platform.
 
-Treat `buildCustomization` as fixed once the cluster exists(Immutable). Every URL, ClusterIssuer and foundation manifest was rendered from it. Nothing in the API stops you editing it, but an edit does not re-render what is already running. To change the host, rebuild the platform.
+### Status gates
 
-The status is a set of gates (checks that must pass before the controller moves on), plus Kubernetes conditions derived from them.
+The status is a set of **gates**: checks that must pass before the controller moves on. Each gate is also surfaced as a Kubernetes condition.
 
-| Status field | Set when | Surfaced as condition |
+| Status field | Set when | Condition |
 |---|---|---|
 | `status.gateway.available` | Gateway API CRDs, Cilium and the Cilium Gateway are up | `GatewayReady` |
 | `status.ArgoCD.available` | ArgoCD is up | `ArgoCDReady` |
 | `status.gitea.available` | Gitea is serving its API | `GiteaReady` |
-| `status.gitea.repositoriesCreated` | The GitOps repos are seeded | `GitOpsReady` |
-| `status.crossplane.available` , `status.crossplane.controlPlaneApplied` | Crossplane core is up · every XRD, Composition and ProviderConfig applied (both are needed) | `CrossplaneReady` |
-| `status.gitOps` | Counts `applicationsTotal` and `applicationsHealthy` as the stack converges | — (informational; no condition reads it) |
-| — | Every gate above except the `gitOps` counts | `Ready` |
+| `status.gitea.repositoriesCreated` | The GitOps repositories are seeded | `GitOpsReady` |
+| `status.crossplane.available` and `status.crossplane.controlPlaneApplied` | Crossplane core is up, and every XRD, Composition and ProviderConfig is applied (both are required) | `CrossplaneReady` |
+| `status.gitOps` | Counts `applicationsTotal` and `applicationsHealthy` as the stack converges | None (informational) |
+| All gates above except `status.gitOps` | Every gate has passed | `Ready` |
 
-The `ArgoCD` key really is capitalised, unlike its neighbours.
+> **Note:** The `ArgoCD` key is capitalised, unlike its neighbours.
 
 ```bash
 kubectl -n adhar-system get adharplatform adhar -o jsonpath='{.status.crossplane}{"\n"}'
@@ -124,77 +118,72 @@ kubectl -n adhar-system get adharplatform adhar \
 
 ## The reconcile loop
 
-The `AdharPlatform` controller is a controller-runtime reconciler. Each pass walks the same sequence of gates:
-
-- A gate that is already satisfied is skipped.
-- The first unsatisfied gate does the work.
-
-This makes `adhar up` **idempotent, all-or-retry, and resumable**. If it is interrupted, re-running it starts a new pass. That pass picks up at whichever gate was still pending.
+The `AdharPlatform` controller walks the same sequence of gates on every pass. It skips a gate that is already satisfied and does the work for the first one that is not. This makes `adhar up` **idempotent and resumable**: if a run is interrupted, the next run picks up at whichever gate was still pending.
 
 ```diagram
 ds-reconcile-loop
 ```
 
-Read top to bottom, a pass does this:
+A pass does this, top to bottom:
 
-1. **Fetch and adopt.** Read `adhar-system/adhar`. An in-cluster manager starts with no host configuration of its own, so it adopts `spec.buildCustomization` from the resource. Before that fix, it rendered URLs like `https://keycloak./realms/adhar`.
-2. **Short-circuit when done.** This applies when the controller runs inside the CLI (`ExitOnSync`). If Crossplane's control plane is applied and the platform is already deployed, skip straight to driving Applications to `Synced` and `Healthy`, then exit.
-3. **Install the foundation.** If ArgoCD, the Gateway or Gitea is not available, install the foundation in this order: Gateway API CRDs → Cilium → Cilium Gateway → (CNPG in HA mode) → ArgoCD → Gitea. Crossplane is deliberately **not** in this block.
-4. **Start Crossplane early.** Apply the Crossplane core manifest on a best-effort basis. Its image pull then overlaps the repo seeding instead of waiting for it.
-5. **Apply the platform stack** (only when the controller has a local stack directory, that is, when it runs inside the CLI). Seed the GitOps repositories once (guarded by `repositoriesCreated`). Then apply ArgoCD's repo credentials and the ApplicationSets on **every** pass. Re-applying each time is deliberate. An earlier design applied the ApplicationSet only when the repos were new. Any re-run found the repos present, skipped the apply, and left ArgoCD empty.
-6. **Install Crossplane.** Install core and wait up to five minutes for it. Then apply the control plane in strict order (see [Control Plane](/docs/core-concepts/control-plane#install-order)). This step runs *after* the ApplicationSet, so a slow or failing Crossplane can never stop applications from deploying.
-7. **Requeue or exit.** Until `controlPlaneApplied` is true, requeue every 15 seconds. Any failure records a reason on the status and requeues in 5 seconds. In watch mode, the controller keeps nudging Applications stuck on a comparison error. Run from the CLI, it exits once everything has converged.
+1. **Fetch and adopt.** Read `adhar-system/adhar`. A controller that starts without host configuration of its own (the in-cluster manager) adopts `spec.buildCustomization` from the resource.
+2. **Short-circuit when done.** When the controller runs inside the CLI and the platform is already deployed with Crossplane's control plane applied, it skips straight to driving Applications to `Synced` and `Healthy`, then exits.
+3. **Install the foundation.** If ArgoCD, the Gateway or Gitea is unavailable, install in order: Gateway API CRDs → Cilium → Cilium Gateway → (CNPG in HA mode) → ArgoCD → Gitea. Crossplane is deliberately **not** in this block.
+4. **Start Crossplane early.** Apply the Crossplane core manifest on a best-effort basis, so its image pull overlaps the repository seeding.
+5. **Apply the platform stack.** This step runs only when the controller has a local stack directory, that is, inside the CLI. Seed the GitOps repositories once (guarded by `repositoriesCreated`). Then apply ArgoCD's repository credentials and the ApplicationSets on **every** pass, so an ArgoCD that has lost its ApplicationSet corrects itself on the next run.
+6. **Install Crossplane.** Install core, wait for it, then apply the control plane in strict order (see [Control Plane](/docs/core-concepts/control-plane#install-order)). This runs *after* the ApplicationSets, so a slow or failing Crossplane never stops packages from deploying.
+7. **Requeue or exit.** Until `controlPlaneApplied` is true, requeue every 15 seconds. A failure records a reason on the status and requeues in 5 seconds. In watch mode, the controller keeps nudging Applications stuck on a comparison error. Run from the CLI, it exits once everything has converged.
 
-### Two phases, two homes for the controller
+### Where the controller runs
 
-ADR-0001 describes bootstrap in two phases: a short imperative phase that lays the foundation, then GitOps for everything after. The same reconciler serves both, from two places:
+The same reconciler serves both phases, from two places:
 
-```diagram
-cc-bootstrap-phases
-```
+| When | Where it runs | What it does |
+|---|---|---|
+| During `adhar up` | Inside the `adhar` CLI process | Reads the platform stack from the working tree and runs the full loop. Exits when the platform has converged or `--apps-timeout` (default `15m`) runs out. ArgoCD keeps reconciling packages after it exits |
+| After `adhar up` | An in-cluster controller manager (a Deployment that runs `adhar controller`, with leader election) | Maintains the foundation of an already-seeded platform. It has no stack directory, so it skips step 5 |
 
-- **During `adhar up`**, the controller runs **inside the `adhar` CLI process**. It reads the platform stack from the working tree. It exits once the platform has converged, or when `--apps-timeout` runs out. ArgoCD keeps reconciling the packages after it exits.
-- **After `adhar up`**, an in-cluster controller manager (a Deployment started as `adhar controller --leader-elect=true …`) can take over foundation reconciliation:
-  - **On a cloud or on-prem provider**, the CLI always installs it once its own run ends.
-  - **On Kind**, it is installed only with `adhar up --in-cluster`. Otherwise, re-running `adhar up` is how you restart the foundation controller.
+The CLI always installs the in-cluster manager on a cloud or on-prem provider. On Kind, it is installed only with `adhar up --in-cluster`; otherwise, re-run `adhar up` to reconcile the foundation again.
 
-  The in-cluster controller has no local stack directory. So it skips the whole stack step (seeding, ArgoCD repo credentials and the ApplicationSets) and only maintains a platform that is already seeded. Stack changes reach the cluster through `adhar upgrade`.
-
-Phase 1 lays just enough foundation for Phase 2 (GitOps) to take over: the network, the GitOps engine and the Git server. Crossplane's control plane is applied by the same controller, but after the ApplicationSet, so GitOps never waits for it.
+Because the in-cluster manager never applies the stack, stack changes reach the cluster through `adhar upgrade`.
 
 ## The GitOps write path
 
-After bootstrap, **Git is the only write path**: every change goes through a commit. The controller creates these repositories in the in-cluster Gitea, under the `adhar` organisation. It seeds the first two from the stack, and creates the other two as pull mirrors of GitHub:
+After bootstrap, **Git is the only write path**: every change to the platform goes through a commit.
+
+```diagram
+ncc-gitops-path
+```
+
+The controller creates three repositories in the in-cluster Gitea, under the `adhar` organisation:
 
 | Repository | Content | Consumed by |
 |---|---|---|
-| `adhar/packages` | One directory per package: pre-rendered manifests, `values.yaml`, marketplace contract | The ApplicationSets |
-| `adhar/environments` | Per-environment configuration (`local`, `dev`, `test`, `prod`). The `local` and `prod` files mirror the two ApplicationSets | Kargo, the Console and `adhar stack` (the ApplicationSets themselves use inline lists) |
-| `adhar/adhar-templates` | Golden-path service templates — a pull mirror of `github.com/adhar-io/adhar-templates` | CLI `--template` and the Console's create wizard |
+| `adhar/packages` | One directory per package: pre-rendered manifests, `values.yaml`, marketplace contract. Seeded from the stack | The ApplicationSets |
+| `adhar/environments` | Per-environment configuration (`local`, `dev`, `test`, `prod`). The `local` and `prod` files mirror the two ApplicationSets. Seeded from the stack | Kargo, the Console and `adhar stack` (the ApplicationSets use inline lists) |
+| `adhar/adhar-templates` | Golden-path service templates: a pull mirror of `github.com/adhar-io/adhar-templates` | CLI `--template` and the Console's create wizard |
 
-```diagram
-write-path
-```
-
-To enable a package, make a one-line Git change, then run `adhar upgrade`. If you edit an object that ArgoCD manages, its self-heal reverts the edit.
+To change the platform, change the stack and run `adhar upgrade`. It re-applies the foundation, shows the stack diff, pushes the stack to Gitea and re-applies the ApplicationSet. If you edit an object that ArgoCD manages directly on the cluster, self-heal reverts the edit.
 
 ## The package model
 
-The catalogue has **100+ packages**. Each one is wired as one element of an ArgoCD **ApplicationSet**, a resource that generates one ArgoCD Application per entry. The ApplicationSet file is **selected by provider**. The controller's `appSetFileForProvider` returns one of two:
+The catalogue has **100+ packages**. Each is one element of an ArgoCD **ApplicationSet**, a resource that generates one ArgoCD Application per list entry. The controller selects the ApplicationSet file by provider:
 
-- **Kind, or provider unset** → `adhar-appset-local.yaml`. This is a curated core, because a single node cannot run the full catalogue (the full set OOM-kills it).
-- **Any cloud or on-prem** → `adhar-appset-production.yaml`. This has most of the catalogue, and every disabled entry carries its reason inline.
+| Provider | File | Enables |
+|---|---|---|
+| Kind, or unset | `adhar-appset-local.yaml` | A curated core. A single node cannot run the full catalogue |
+| Any cloud or on-prem | `adhar-appset-production.yaml` | Most of the catalogue. Every disabled entry carries its reason inline |
 
-Every package is wired in both files. Apart from a few template details, such as retry timings, only the `enabled` flag differs. `adhar stack list --enabled` prints the live count for your profile.
+Every package is wired in both files. Apart from a few template details, only the `enabled` flag differs. `adhar stack list --enabled` prints the live set for your profile.
 
 Two more ApplicationSets are always applied:
 
-- a **workload** set, which generates nothing until workload clusters register
-- a **services** set (`adhar-services-appset.yaml`), which adopts any Gitea repo that has a `.adhar/app.yaml`
+- a **workload** set (`adhar-appset-workload.yaml`), which generates nothing until workload clusters register
+- a **services** set (`adhar-services-appset.yaml`), which adopts any Gitea repository that has a `.adhar/app.yaml`
 
-### The shape of an ApplicationSet entry
+### An ApplicationSet entry
 
-Each package is one list element. The generator's selector passes only the elements whose `enabled` label is `"true"`:
+Each package is one list element. The generator's selector passes only elements whose `enabled` label is `"true"`:
 
 ```yaml
 apiVersion: argoproj.io/v1alpha1
@@ -239,23 +228,30 @@ spec:
           - SkipDryRunOnMissingResource=true
 ```
 
-Three details in the real file are worth noting:
+The real file adds three things:
 
-- **A long `ignoreDifferences` list.** These are fields that controllers and admission webhooks add to objects after ArgoCD applies them. Each one was measured against the live object. Ignoring them lets packages settle at `Synced` instead of flapping `OutOfSync` forever.
-- **No retry limit.** The retry policy has no limit, with a short backoff.
-- **The source is the in-cluster Gitea, not GitHub.** What ArgoCD applies is always what the platform's own Git server holds.
+- **An `ignoreDifferences` list** for fields that controllers and admission webhooks add after ArgoCD applies an object. Ignoring them lets packages settle at `Synced` instead of flapping `OutOfSync`.
+- **A retry policy with no limit** and a short backoff.
+- **The in-cluster Gitea as the source**, not GitHub. ArgoCD always applies what the platform's own Git server holds.
 
 See [Platform Services](/docs/core-concepts/platform-services) for the catalogue and [Customization](/docs/operations/customization) for how to change it.
 
+### One namespace
+
+Every platform package installs into **`adhar-system`**, alongside the foundation and Crossplane. Your applications get their own namespaces. Sharing one namespace keeps the platform easy to read, but it forces two rules on packages:
+
+- **Rename colliding objects**, or make the packages mutually exclusive (for example `vault` ↔ `openbao`). `platform/stack/packages/CONFLICTS.md` lists the known collisions.
+- **Set `enableServiceLinks: false`** on components that read configuration from environment variables. Otherwise Kubernetes injects service-link variables that a component can mistake for its own settings.
+
 ## What teams create: composite resources
 
-Platform operators change the platform through the stack. Teams change *their* part of it through namespaced composite resources. A composite resource is a request object that Crossplane expands into the real resources behind it. Examples are `Application`, `Database`, `Project` and the rest of the [Control Plane](/docs/core-concepts/control-plane) APIs.
+Platform operators change the platform through the stack. Teams change *their* part of it through **composite resources**: namespaced request objects that Crossplane expands into the real resources behind them. `Application`, `Database`, `Project` and the rest of the [Control Plane](/docs/core-concepts/control-plane) APIs are all composite resources.
 
-An application deployed with `adhar application deploy --repo …` is exactly this object (from `examples/application.yaml`):
+`adhar application deploy --repo …` creates exactly this object (from `examples/application.yaml`):
 
 ```yaml
 apiVersion: platform.adhar.io/v1alpha1
-kind: Application                    # formerly CompositeApplication — renamed, not aliased
+kind: Application
 metadata:
   name: payments-api
   namespace: team-payments
@@ -263,7 +259,7 @@ spec:
   crossplane:
     compositionSelector:
       matchLabels:
-        provider: local              # picks application-local-argocd
+        provider: local              # selects application-local-argocd
   parameters:
     displayName: Payments API
     project: default
@@ -275,75 +271,49 @@ spec:
       namespace: team-payments
 ```
 
-Crossplane turns it into an Argo CD `Application` in `adhar-system`:
+Crossplane turns it into an Argo CD `Application` in `adhar-system`. Because that crosses namespaces, the Argo CD object is wrapped in a provider-kubernetes `Object` and labelled with the source namespace, so the platform can trace it back. From there, the same GitOps loop that delivers the platform's packages delivers your application.
 
-- It is wrapped in a provider-kubernetes `Object`, because it crosses namespaces.
-- It is labelled with the source namespace, so the platform can trace it back.
+> **Note:** The kind `Application` also exists in Argo CD's API group. Qualify it on the command line: `kubectl get applications.platform.adhar.io -A`.
 
-From there, the same GitOps loop that delivers the platform's own packages takes over. The kind `Application` also exists in Argo CD's group, so qualify it on the command line: `kubectl get applications.platform.adhar.io -A`.
+## Control plane and data plane
 
-## Namespace model
-
-Every platform package installs into **`adhar-system`**, the same namespace as the foundation and Crossplane. Every element of both ApplicationSets targets it, `buildpack` (kpack) included. Your applications get their own namespaces.
-
-Sharing one namespace keeps the platform easy to read, but it forces two rules:
-
-- **Rename colliding objects**, or make the packages mutually exclusive (for example, `vault` ↔ `openbao`). `platform/stack/packages/CONFLICTS.md` lists the known collisions.
-- **Set `enableServiceLinks: false`** on components that read configuration from environment variables. Kubernetes injects service-link variables, and these have crashed components that mistook them for their own flags.
-
-## Control plane vs data plane
-
-The target design (ADR-0023) is: **application workloads run only on data planes; the control plane runs only fleet and platform services.** It is a target you switch on, not a default. A fresh platform is a single cluster that runs both roles. `adhar upgrade split-planes` separates them in staged, reversible steps. The Kyverno policy that enforces the split ships in `adhar-policy-packs`, which is disabled by default.
-
-- **Control plane** (the management cluster) is the brain of the fleet. It runs:
-  - GitOps (ArgoCD, Gitea)
-  - IaC (Crossplane)
-  - identity (Keycloak)
-  - the secrets root (OpenBao + External Secrets)
-  - the observability hub (Grafana with Mimir, Loki and Tempo)
-  - the shared registry (Harbor)
-  - fleet controllers
-- **Data plane** (a workload cluster) is where applications run. It gets a thin set of agents from the workload ApplicationSet:
-  - metrics-server
-  - Kyverno and its policies
-  - Alloy collectors that ship telemetry to the hub
-  - an External Secrets agent that resolves secrets from the control plane
-
-  The control plane's ArgoCD delivers the data plane's applications.
+In the target design, **application workloads run only on data planes, and the control plane runs only fleet and platform services**. This is a mode you switch on, not the default. A fresh platform is a single cluster that plays both roles.
 
 ```diagram
-cc-fleet-topology
+ncc-planes
 ```
 
-A first-class **`DataPlane` API** (`platform.adhar.io/v1alpha1`) manages a workload cluster's lifecycle. It provisions the cluster, registers it with ArgoCD, applies the agent profile and joins it to the mesh. It reports progress through the status conditions `InfraReady`, `Registered`, `AgentsReady`, `MeshJoined`, `FleetJoined` and `Ready`.
+- `adhar upgrade split-planes` separates the two roles in staged, reversible steps.
+- The Kyverno policy that enforces the split ships in `adhar-policy-packs`, which is disabled by default.
+- The **`DataPlane` API** (`platform.adhar.io/v1alpha1`) manages a workload cluster's lifecycle: it provisions the cluster, registers it with ArgoCD, applies the agent profile and joins it to the mesh. It reports progress through the conditions `InfraReady`, `Registered`, `AgentsReady`, `MeshJoined`, `FleetJoined` and `Ready`.
 
-## Three topologies
+### Three topologies
 
 Moving from one topology to the next is a configuration change, not a redesign.
 
-| Topology | Shape | Status |
+| Topology | Shape | When you get it |
 |---|---|---|
-| **T1 — Local** | Single Kind cluster; the controller runs in the CLI and exits after convergence; curated local core; self-signed TLS | Default path in Local |
-| **T2 — Single-cluster production** | One cloud cluster runs platform and workloads; HA mode; the in-cluster controller keeps reconciling the foundation | Default for Cloud providers |
-| **T3 — Management + workload clusters** | A control plane governs a fleet of data planes | Opt-In while creating platform |
+| **T1 — Local** | One Kind cluster. The controller runs in the CLI and exits after convergence. Curated local core, self-signed TLS | Default on Kind |
+| **T2 — Single-cluster production** | One cloud cluster runs platform and workloads. HA mode. The in-cluster controller keeps reconciling the foundation | Default on cloud providers |
+| **T3 — Management + workload clusters** | A control plane governs a fleet of data planes | Opt-in |
 
-For local–production parity, `adhar upgrade split-planes` can stand up a local data plane as a vcluster (a virtual cluster inside the host cluster) on the same Kind node. Apps then live inside the vcluster and platform services live on the host, so the logical split holds even on a laptop. Scaling to T3 means *adding* physical data planes, not changing the architecture.
+For local–production parity, `adhar upgrade split-planes` can create a local data plane as a vcluster (a virtual cluster inside the host cluster) on the same Kind node. Applications then live in the vcluster and platform services on the host, so the logical split holds on a laptop. Scaling to T3 means *adding* physical data planes, not changing the architecture.
 
-## Reconciliation controllers
+## Controllers
 
-The platform's own CRDs are run by controller-runtime reconcilers:
+Adhar's own CRDs are reconciled by these controllers:
 
 | Controller | Responsibility |
 |---|---|
 | **AdharPlatform** | Foundation lifecycle, GitOps setup, ApplicationSet apply, Crossplane install, health |
-| **GitRepository** | Manages Git repos across Gitea/GitHub/GitLab/Bitbucket |
-| **CustomPackage** | Delivers user/team workloads as ArgoCD Applications via Gitea |
+| **GitRepository** | Manages Git repositories across Gitea, GitHub, GitLab and Bitbucket |
+| **CustomPackage** | Delivers user and team workloads as ArgoCD Applications through Gitea |
 | **DataPlane** | Provisions, registers and governs workload clusters |
 | **Node autoscaler** | Watches Pods and Nodes and scales the worker pool between `minWorkers` and `maxWorkers` |
 
-Crossplane reconciles everything else — databases, buckets, projects, applications — against the XRDs (the API definitions on the control plane). Adhar's own controllers do not.
+Crossplane reconciles everything else (databases, buckets, projects, applications) against the XRDs, the API definitions on the control plane.
 
-## Day-2 is designed, not discovered
+## Day-2 operations
 
 Backup, upgrade, scaling, cost and removal are part of a capability's definition of done. The control plane ships scheduled Crossplane Operations:
 
@@ -353,40 +323,38 @@ Backup, upgrade, scaling, cost and removal are part of a capability's definition
 - nightly lakehouse maintenance
 - a monthly reconstructability drill, measured against a one-hour rebuild target
 
-See [Production](/docs/operations/production) for the runbooks.
+Schedules are listed in [Control Plane](/docs/core-concepts/control-plane#day-2-operations); runbooks are in [Production](/docs/operations/production).
 
-## Extensibility
+## Extend the platform
 
 Because the platform is data, most extension is declarative:
 
-- **Turn a package on or off** — `adhar stack enable <pkg>`, then `adhar upgrade`.
-- **Change a package's values** — edit `values.yaml`, re-render, commit.
-- **Add your own package** — drop a directory with a marketplace contract, or deliver it as a `CustomPackage`.
-- **Add a self-service API** — write an XRD and Composition on the [Control Plane](/docs/core-concepts/control-plane).
-- **Add a cloud provider** — implement the provider interface.
+| To | Do this |
+|---|---|
+| Turn a package on or off | `adhar stack enable <pkg>`, then `adhar upgrade` |
+| Change a package's values | Edit `values.yaml`, re-render, commit |
+| Add your own package | Add a directory with a marketplace contract, or deliver it as a `CustomPackage` |
+| Add a self-service API | Write an XRD and a Composition on the [Control Plane](/docs/core-concepts/control-plane#extend-it-add-a-self-service-api) |
+| Add a cloud provider | Implement the provider interface |
 
 Full walkthroughs are in [Customization](/docs/operations/customization).
 
-## The IDP critical pillars
+## The eight pillars
 
-Every addition to Adhar is tested against eight pillars:
+Every addition to Adhar is tested against eight pillars. A change that violates one needs an ADR (architecture decision record) that justifies the exception.
 
-1. **One command, whole platform.**
-2. **Git is the only write path.**
-3. **Self-service with guardrails.**
-4. **Local–production parity is sacred.**
-5. **Secure by default, not by add-on.**
-6. **Observable by construction.**
-7. **Day-2 is designed, not discovered.**
-8. **100% open source, no lock-in.**
+1. One command, whole platform.
+2. Git is the only write path.
+3. Self-service with guardrails.
+4. Local–production parity is sacred.
+5. Secure by default, not by add-on.
+6. Observable by construction.
+7. Day-2 is designed, not discovered.
+8. 100% open source, no lock-in.
 
-A change that violates a pillar needs an ADR (architecture decision record) that justifies the exception.
+## Next steps
 
-
-## Keep reading
-
-- [Control Plane](/docs/core-concepts/control-plane) — the Crossplane self-service engine in depth
-- [The 6 D's Framework](/docs/core-concepts/ds-framework) — the delivery methodology
-- [Platform Services](/docs/core-concepts/platform-services) — the full package catalogue
-- [Run a Multi-Cluster Fleet](/docs/guides/run-a-fleet) — T3 in practice
-- [Cloud Providers](/docs/providers/overview) · [Production](/docs/operations/production)
+- [Control Plane](/docs/core-concepts/control-plane) — the Crossplane self-service APIs in depth
+- [Platform Services](/docs/core-concepts/platform-services) — the package catalogue and how to change it
+- [The 6 D's Framework](/docs/core-concepts/ds-framework) — the delivery lifecycle the platform supports
+- [Run a Multi-Cluster Fleet](/docs/guides/run-a-fleet) — the T3 topology in practice

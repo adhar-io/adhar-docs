@@ -11,18 +11,18 @@ import {
 
 const DbBinding = () => (
   <Flow
-    label="A Database request in the team namespace is composed by database-local-cnpg into a CloudNativePG Cluster. CNPG generates the orders-db-app Secret, and the application's Deployment reads it through secretKeyRef."
-    caption="Only the Database and the Deployment are yours to write; everything between them is composed or generated."
+    label="adhar application deploy with the go-web-service template and withDatabase=true scaffolds the Gitea repository adhar/orders. Its deploy/base directory declares a CloudNativePG Cluster named orders-db. In each environment CNPG generates the orders-db-app Secret, and the orders Rollout reads its uri key as DATABASE_URL."
+    caption="One command scaffolds the database and its wiring into Git; the Secret is generated in the cluster and never committed."
     nodes={[
-      { title: "Database", lines: ["orders-db", "platform.adhar.io"], tone: "primary" },
-      { title: "Composition", lines: ["database-local-cnpg", "provider: local"] },
+      { title: "Template", lines: ["go-web-service", "withDatabase=true"], tone: "primary" },
+      { title: "Git repo", lines: ["adhar/orders", "deploy/base"] },
       { title: "CNPG Cluster", lines: ["orders-db", "Service orders-db-rw"] },
       { title: "Secret", lines: ["orders-db-app", "uri · host · password"], tone: "accent" },
-      { title: "Deployment", lines: ["orders", "env: secretKeyRef"], tone: "primary" },
+      { title: "Rollout", lines: ["orders", "DATABASE_URL"], tone: "primary" },
     ]}
     edges={[
-      { label: "selects" },
-      { label: "renders" },
+      { label: "scaffolds" },
+      { label: "declares" },
       { label: "generates" },
       { label: "read by", tone: "primary" },
     ]}
@@ -31,14 +31,14 @@ const DbBinding = () => (
 
 const DbGuideSteps = () => (
   <Pipeline
-    label="The guide in six stages: create a namespace, request the database, scaffold the service, bind the credentials in Git, verify end to end, tear down."
+    label="The guide in six stages: scaffold the service with a database, read the wiring in Git, watch it land in dev, verify end to end, change the wiring with a commit, tear down."
     caption="Every stage ends with a check; do not move on until it passes."
     stages={[
-      { name: "namespace", detail: "kubectl", guarantee: "a home for\nboth halves" },
-      { name: "Database", detail: "XR applied", guarantee: "READY=True,\nSecret exists", tone: "primary" },
-      { name: "scaffold", detail: "golden path", guarantee: "repo in Gitea,\nArgoCD app" },
-      { name: "bind", detail: "git commit", guarantee: "env from\nthe Secret", tone: "primary" },
+      { name: "scaffold", detail: "golden path", guarantee: "repo in Gitea,\nApplication", tone: "primary" },
+      { name: "read", detail: "git clone", guarantee: "database and\nenv in deploy/" },
+      { name: "dev", detail: "build + sync", guarantee: "Cluster healthy,\nSecret exists", tone: "primary" },
       { name: "verify", detail: "psql + curl", guarantee: "app talks\nto Postgres" },
+      { name: "change", detail: "git commit", guarantee: "new env from\nthe Secret" },
       { name: "teardown", detail: "delete", guarantee: "nothing\norphaned", tone: "muted" },
     ]}
   />

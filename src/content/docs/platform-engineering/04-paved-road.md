@@ -7,138 +7,153 @@ path: "/docs/platform-engineering/paved-road"
 
 # The Paved Road to Production
 
-The paved road is the path from a commit to a running production workload. It is built so that **the safety checks are part of the road itself, not gates staffed by people**. A review checklist that relies on someone remembering to use it is not a control. It is a hope with a document attached.
+The *paved road* is the path from a commit to a running production workload, built so that **the safety checks are part of the road, not gates staffed by people**. A checklist that relies on someone remembering it is not a control.
 
-This page is about the machinery. Its neighbour, [Golden Paths](/docs/platform-engineering/golden-paths), is about the offer a platform team makes to a product team: the supported, opinionated route they choose. The road is what that route runs on. A team can be on a golden path or off it. Either way, if its code reaches production, it travels the road. The road's guarantees hold no matter which path brought the commit.
+This page explains the principle, the stages, and how to introduce policy without breaking teams. Then it shows the road Adhar builds.
 
-## At a glance
+A [golden path](/docs/platform-engineering/golden-paths) is the route a team chooses. The road is the pipeline every route runs on. A team can leave a golden path; if its code reaches production, it still travels the road.
 
-| | |
-|---|---|
-| **What it is** | The commit-to-production pipeline, with guarantees built into each stage |
-| **Core principle** | Guardrails are properties of the road, not checkpoints with humans at them |
-| **What it guarantees** | Provenance (where an image came from), scanning, signing, admission, reversible rollout, telemetry |
-| **What it does not do** | Decide what you build, or forbid leaving the road |
-| **Progression** | Audit first, enforce once the audit data is clean — never enforce on day one |
-| **Relation to golden paths** | The [path](/docs/platform-engineering/golden-paths) is the route offered; the road is the pipeline it runs on |
+## How it works
 
-## Where the metaphor comes from
-
-Netflix has used "paved road" for years to describe the supported, well-used route through its internal tooling. Thoughtworks writing about delivery platforms uses it in the same sense.
-
-The metaphor is honest about choice. A paved road does not forbid driving across the field. It makes the road faster, smoother and better lit, so most traffic chooses it. And when someone does go off-road, everyone knows it, including them.
-
-The second half is the important part. A road is not a fence.
-
-## Guardrails are properties, not gates
-
-There are two ways to make a policy hold. You can put a person in the path of the change. Or you can build the rule into the system, so that breaking it is not an available action.
-
-| | Gate | Property of the road |
-|---|---|---|
-| **Mechanism** | A human reviews and approves | The pipeline or the cluster refuses |
-| **Fails** | Open — under deadline pressure, the check is skipped | Closed — the deploy does not happen |
-| **Scales** | With headcount | With CPU |
-| **Evidence** | A ticket saying someone looked | A signature, a digest, an admission record |
-| **Cost to developer** | Waiting, usually for an unpredictable time | Nothing, until the rule is actually broken |
-| **Honest about drift** | No — the artifact can change after approval | Yes — the check runs on the artifact being deployed |
-
-Gates are not useless. Human review is the right tool for judgement: is this the right change, is this design sound? It is the wrong tool for anything a machine can check. "Did someone remember to scan the image?" is something a machine can check. Asking a person to confirm it adds delay and makes the result less reliable.
-
-Here is a practical test. Imagine everyone involved is tired, distracted, and shipping a hotfix at 23:00. If the control still holds, it is a property. If not, it is a gate dressed up as a policy.
-
-## The road, stage by stage
-
-Each stage exists because it adds a guarantee the next stage can rely on. The value builds up. By the time a workload is admitted, the cluster can say where the image came from, what was in it, who built it, and that nothing has changed it since.
+Each stage adds a guarantee the next stage relies on. By the time a workload is admitted, the cluster can say where the image came from, what is in it, who built it, and that nothing has changed it since.
 
 ```diagram
 paved-road
 ```
 
-Two details are often missed.
+Two details are often missed:
 
-**The thing that moves along the road is a digest, not a tag.** A digest is a hash that identifies exact image contents. Tags can change: `app:v1.4.2` can point at a different image tomorrow. Signing and admitting by digest makes a statement about a specific set of bytes. Admitting by tag makes a statement about a label.
+- **A digest moves along the road, not a tag.** A *digest* is a hash of exact image contents. A tag such as `app:v1.4.2` can point at a different image tomorrow. Sign and admit by digest.
+- **Promotion moves the artifact; it does not rebuild it.** If staging and production each build from source, they test different bytes. Build once, promote the digest, and change only configuration.
 
-**Promotion should move the artifact, not rebuild it.** If staging and production each build from source, they test different bytes. Then every guarantee earned in staging is only a guess about production. Build once, promote the digest, and change only the configuration.
+A road is not a fence. It does not forbid driving across the field. It makes the road faster and better lit, so most traffic chooses it — and when someone goes off-road, everyone knows.
 
-## Why "shift left" fails, and when it works
+## Guardrails are properties, not gates
 
-"Shift left" means moving checks earlier in the delivery process. It is a good idea with a poor track record.
+You can make a policy hold in two ways: put a person in the path of the change, or build the rule into the system so that breaking it is not an available action.
 
-It fails when a platform responsibility becomes developer homework. Picture seven new scanners, a policy language to learn, a compliance spreadsheet, and a linter that fails the build on Friday afternoon with an error nobody can act on. Security moved left, and the work moved left with it. Nothing got safer, because the people now holding the work have less context and no time.
+| | Gate | Property of the road |
+|---|---|---|
+| **Mechanism** | A human reviews and approves | The pipeline or the cluster refuses |
+| **Fails** | Open — under deadline pressure the check is skipped | Closed — the deploy does not happen |
+| **Scales with** | Headcount | CPU |
+| **Evidence** | A ticket saying someone looked | A signature, a digest, an admission record |
+| **Cost to the developer** | Waiting | Nothing, until the rule is broken |
+| **Honest about drift** | No — the artifact can change after approval | Yes — the check runs on the artifact being deployed |
 
-It works when shifting left means **the safe thing is the default thing** — what happens when a developer does nothing special:
+Human review is the right tool for judgement: is this the right change, is this design sound? It is the wrong tool for anything a machine can check.
 
-- The platform chooses and patches base images, so the default container is already up to date.
-- The standard deployment shape injects secrets from a secrets manager. Writing a secret into a manifest becomes the awkward route, not the easy one.
-- Network policy, resource limits and non-root execution come from the template and the admission layer, so the default workload is already constrained.
-- Telemetry is on by default, so instrumenting takes work away instead of adding it.
+> **Tip:** Imagine everyone involved is tired and shipping a hotfix late at night. If the control still holds, it is a property. If not, it is a gate dressed up as a policy.
 
-The key question: did your shift-left programme add steps to a developer's day? Or did it remove steps while improving the result? The first kind wears away. The second kind holds.
+## Shift left by changing the default
+
+"Shift left" means moving checks earlier. It fails when a platform responsibility becomes developer homework: new scanners, a policy language to learn, a linter failing the build with an error nobody can act on.
+
+It works when **the safe thing is what happens when a developer does nothing special**:
+
+- The platform chooses and patches base images.
+- The standard deployment shape injects secrets from a secrets manager, so writing a secret into a manifest is the awkward route.
+- Network policy, resource limits and non-root execution come from the template and the admission layer.
+- Telemetry is on by default.
+
+The test: did the programme add steps to a developer's day, or remove them?
 
 ## Audit before enforce
 
-Every policy engine has at least two modes: report violations, or reject them. The order you use them in matters more than the policy itself.
+A policy engine can report violations or reject them. The order matters more than the policy.
 
 | Mode | What it does | What it is for |
 |---|---|---|
-| **Audit** | Records violations, allows the resource | Finding out what your fleet actually looks like, and sizing the migration |
-| **Enforce** | Rejects the resource | Making the guarantee real, once the violation count is near zero |
+| **Audit** | Records violations, allows the resource | Learning what your fleet looks like and sizing the migration |
+| **Enforce** | Rejects the resource | Making the guarantee real, once violations are near zero |
 
-Starting with enforce is the most common way to lose the organisation's support. On an existing (brownfield) estate, the first enforced policy blocks a deploy nobody expected it to block, usually during an incident. The lasting result is not a safer fleet. It is a culture that sees the platform as an obstacle, plus a standing exemption that never expires.
+Enforcing first blocks a deploy nobody expected, usually during an incident. The lasting result is a team that sees the platform as an obstacle, plus a standing exemption.
 
-The sequence that works:
+Roll a policy out in this order:
 
-1. **Ship the policy in audit mode.** Leave it there long enough to see a representative sample of deploys.
-2. **Publish the violation list per team**, with the fix included. Do not present it as a scoreboard.
-3. **Fix the common cases in the golden path**, so most teams become compliant by upgrading rather than by editing.
-4. **Enforce for new workloads first.** Let existing ones continue until a deadline, so nothing running breaks on the day of the switch.
-5. **Enforce everywhere**, with the exception process already built and documented — not invented during the first outage.
+1. **Ship it in audit mode** and leave it until you have seen a representative sample of deploys.
+2. **Publish the violations per team**, with the fix. Not as a scoreboard.
+3. **Fix the common cases in the golden path**, so most teams comply by upgrading.
+4. **Enforce for new workloads first.** Give existing ones a deadline.
+5. **Enforce everywhere**, with the exception process already documented.
 
-The audit period is also your evidence that the policy is correct. A rule that would have blocked a long list of legitimate deploys is a bad rule. You would rather learn that from a report than from a sev-1 (a top-severity incident).
+The audit period also tests the rule. One that would have blocked a long list of legitimate deploys is a bad rule, and a report is the cheap place to learn that.
 
-## Exceptions, or people route around the road
+## Exceptions
 
-Some workload will have a legitimate reason to break a rule. It might be a vendor image you cannot rebuild, a legacy service that needs a privileged mount, or a latency-sensitive path that cannot take the sidecar.
+Some workload will have a legitimate reason to break a rule: a vendor image you cannot rebuild, a legacy service that needs a privileged mount. Without an approved route, the team gets a blanket waiver or builds a parallel environment you cannot see.
 
-With no approved way to handle that, one of two things happens. Both are worse than an exception:
+A workable exception is:
 
-- The team gets a blanket waiver that quietly covers everything it ever deploys.
-- The team builds a parallel environment outside the road, where none of your guarantees apply and you cannot see it.
+| Property | Meaning |
+|---|---|
+| **Scoped** | Limited to a namespace, a workload or one rule — never "this team is exempt" |
+| **Expiring** | An exception with no end date is a policy change made by whoever asked loudest |
+| **Visible** | A security engineer can read it without filing a request |
+| **Cheap to request, expensive to renew** | Renewal is where you discuss fixing the underlying problem |
 
-A workable exception process has four properties:
-
-- **Scoped.** Limited to a namespace, a workload, or a specific rule — never "this team is exempt."
-- **Expiring.** An exception with no end date is a policy change made by whoever asked loudest.
-- **Visible.** A security engineer can read it without filing a request. The exception register describes your real risk more accurately than the policy set does.
-- **Cheap to request, expensive to renew.** Put the friction at renewal. That is where the conversation about fixing the underlying problem can happen.
-
-> An empty exception register does not mean you have no exceptions. It means they are happening somewhere you cannot see.
+> **Note:** An empty exception register does not mean you have no exceptions. It means they are happening somewhere you cannot see.
 
 ## How Adhar does this
 
-Adhar builds the road as a supply chain inside the cluster. The enforcement point is admission to the cluster, not a review step.
+Adhar builds the road as a supply chain inside the cluster. The enforcement point is admission, not a review step.
 
-**Build and sign.** Tekton pipelines build source code with Cloud Native Buildpacks. That makes the base image and its patching a platform concern, not a `Dockerfile` in each repository. The pipeline scans the result, signs it with Cosign, and pushes it to Harbor. The pipeline produces the signature, which is what makes the later admission check meaningful. The signature shows that this digest came out of that build, not that a person vouched for it.
+```diagram
+npe-adhar-road
+```
 
-**Admit.** Kyverno is the policy engine, and admission works in two layers:
+| Stage | Adhar component | What it does |
+|---|---|---|
+| Build | Tekton `app-ci` with Cloud Native Buildpacks | A Gitea webhook starts the pipeline on every push. Buildpacks make the base image and its patching a platform concern |
+| Scan | Tests, gitleaks, Trivy, Syft | Scans the source and the image and produces an SBOM |
+| Sign and store | Cosign, Harbor | The pipeline signs the digest and pushes it to Harbor. The signature shows that this digest came out of that build, not that a person vouched for it |
+| Admit | Kyverno | Verifies the signature at admission — see the two layers below |
+| Roll out | Argo CD, Argo Rollouts | Argo CD syncs the change from Git; a rollout can shift traffic in steps |
+| Promote | Kargo | Promotes the same artifact between environments. Production waits for approval, and every promotion is a Git commit — see [Promote Across Environments](/docs/guides/promote-across-environments) |
+| Observe | Prometheus and Grafana; Loki, Tempo and Mimir in the production profile | Telemetry without per-service setup — see [Observability](/docs/operations/observability) |
 
-- **In every profile**, the `verify-supply-chain-images` policy (shipped by the `adhar-supply-chain` package) runs in Enforce mode for images from Harbor's `library/*` project in workload namespaces. An unsigned image pushed there by hand does not run. That is not because someone noticed. It is because the admission webhook rejected it. Images from upstream registries are not matched by this policy.
-- **In the production profile**, the `security/adhar-supply-chain-policies` packs add a registry allowlist, a rule against `:latest` tags, and signature checks for workload namespaces. Both the audit pack and the enforce pack are on in production; both are off locally.
+### Admission in two layers
 
-**Policy as a package.** Because supply-chain rules ship as packages, the audit-before-enforce sequence is something you run through configuration. Turn on the audit pack first, read its PolicyReports, then turn on the enforce pack once the violation list is short. You see the violation list before it becomes an outage. Adhar's own Pod Security Standards policies (`adhar-kyverno-policies`) follow the same idea: they ship in Audit mode, for you to promote.
+| Layer | Profile | Package | What it enforces |
+|---|---|---|---|
+| Signature check | Every profile | `adhar-supply-chain` (policy `verify-supply-chain-images`) | Enforce mode for images from Harbor's `library/*` project in workload namespaces. An unsigned image pushed there by hand does not run. Images from upstream registries are not matched |
+| Supply-chain packs | Production only | `security/adhar-supply-chain-policies` | A registry allowlist, no `:latest` tags, and signature checks for workload namespaces. Both the audit pack and the enforce pack are on in production; both are off locally |
 
-**Reconciliation, so the road reasserts itself.** ArgoCD continuously reconciles the platform from the in-cluster Gitea, with self-heal enabled. Reconciling means it keeps restoring what Git declares. So a `kubectl edit` against a managed object is put back.
+How tightly the road is closed depends on the layers you turn on. The registry allowlist, for example, is production-only.
 
-This is the strongest form of property-not-gate. The cluster does not ask anyone to avoid manual changes. It does not detect them later for a report. It keeps restoring the declared state. Drift is not an incident to investigate; it is a condition the system removes.
+### Audit before enforce, as configuration
 
-As a result, changing what ArgoCD runs means changing what is in Git. That route goes through the pipeline, so the guarantees above apply by design. How tightly the road is closed beyond that depends on the admission layers you have turned on: the registry allowlist, for example, is production-only.
+The supply-chain rules ship twice: an audit pack and an enforce pack with identical policies.
 
-One thing Adhar does not claim: there is no SPIFFE/SPIRE workload identity. Identity comes from Keycloak (OIDC) at the application layer. Secrets come from OpenBao with External Secrets. If your threat model needs cryptographic workload attestation between services, that is a gap you must close yourself, not a property to assume.
+```diagram
+npe-audit-then-enforce
+```
 
-## See also
+1. Turn on the audit pack.
+2. Read its PolicyReports.
+3. Fix what they show.
+4. Turn on the enforce pack.
 
-- [Golden Paths](/docs/platform-engineering/golden-paths) — the supported route this road carries
-- [Security Best Practices](/docs/security/security-best-practices) — the concrete policy and hardening surface
-- [Production](/docs/operations/production) — the production profile and what it enables
-- [Measuring Platform Success](/docs/platform-engineering/measuring-success) — DORA metrics and service scorecards
+Adhar's Pod Security Standards policies (`adhar-kyverno-policies`) work the same way: they ship in Audit mode for you to promote. Opt-in CIS- and SOC2-oriented packs also ship in Audit mode.
+
+```bash
+adhar stack list                 # which packs your profile enables, and their live state
+adhar compliance --failures-only # failing policy results across the cluster
+```
+
+### Reconciliation: the road reasserts itself
+
+Argo CD continuously reconciles the platform from the in-cluster Gitea, with self-heal on. A `kubectl edit` on a managed object is put back.
+
+The cluster does not ask anyone to avoid manual changes, and it does not report them later. It restores the declared state. So changing what Argo CD runs means changing Git, and that route goes through the pipeline.
+
+### What Adhar does not provide
+
+There is no SPIFFE/SPIRE workload identity. Identity comes from Keycloak (OIDC) at the application layer, and secrets from OpenBao with External Secrets. If your threat model needs cryptographic workload attestation between services, close that gap yourself.
+
+## Next steps
+
+- [Golden Paths](/docs/platform-engineering/golden-paths) — the supported route this road carries.
+- [Security Best Practices](/docs/security/security-best-practices) — the policy and hardening surface.
+- [Production](/docs/operations/production) — the production profile and what it enables.
+- [Measuring Platform Success](/docs/platform-engineering/measuring-success) — DORA metrics and service scorecards.

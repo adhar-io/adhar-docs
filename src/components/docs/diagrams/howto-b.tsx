@@ -131,23 +131,6 @@ function FleetTopology() {
   );
 }
 
-const ClusterProvisioning = () => (
-  <Ladder
-    label="Provisioning a workload cluster: a committed Cluster XR is composed by Crossplane into a DOKS cluster, its kubeconfig is published, an ArgoCD cluster Secret is created with the adhar.io labels, and the thin workload profile lands on it."
-    heading={["what happens", "what you can observe"]}
-    width={790}
-    boxW={246}
-    caption="Live-verified on DigitalOcean: apply → Ready in ~11 min, thin profile Healthy ~3 min later."
-    rungs={[
-      { name: "Cluster XR in Git", detail: "platform.adhar.io/v1alpha1", adds: ["kind Cluster, provider DIGITALOCEAN_DOKS,", "composition picked by the provider label"], tone: "primary" },
-      { name: "Crossplane composes", detail: "cluster-digitalocean-doks", adds: ["DOKS Cluster + NodePool managed resources;", "the XR moves Pending → Provisioning → Available"] },
-      { name: "kubeconfig published", detail: "<name>-kubeconfig", adds: ["Secret in adhar-system, re-rendered on every reconcile", "(DOKS credentials expire; this keeps them fresh)"] },
-      { name: "ArgoCD registration", detail: "Secret cluster-<name>", adds: ["labels adhar.io/cluster, adhar.io/dataplane,", "adhar.io/dataplane-mode=composite"] },
-      { name: "thin profile lands", detail: "adhar-workload-clusters", adds: ["one Application per agent, named <cluster>-<package>"], tone: "accent" },
-    ]}
-  />
-);
-
 /* ------------------------------------------------------------------ *
  * Upgrade the Platform
  * ------------------------------------------------------------------ */
@@ -163,7 +146,7 @@ const UpgradePhases = () => (
       { name: "adhar upgrade --diff-only", detail: "changes nothing", adds: ["clones packages + environments from Gitea and", "diffs them against your local stack directory"], tone: "primary" },
       { name: "phase 1 · foundation", detail: "server-side apply", adds: ["gateway-api-crds → cilium → gateway → (cnpg, HA) →", "argocd → gitea → crossplane → controller-manager"] },
       { name: "phase 2 · stack", detail: "force-push on confirm", adds: ["pushes the stack, re-applies the ApplicationSet,", "requests an ArgoCD refresh"] },
-      { name: "OutOfSync storm", detail: "~10 min (5–15)", adds: ["every app tracks the packages monorepo, so every", "app re-compares after any push — expected"] },
+      { name: "OutOfSync storm", detail: "expected, transient", adds: ["every app tracks the packages monorepo, so every", "app re-compares after any push — expected"] },
       { name: "Healthy / Synced", detail: "adhar get status", adds: ["judge health only after the storm drains"], tone: "accent" },
     ]}
   />
@@ -208,7 +191,6 @@ export const howto_b: Record<string, ComponentType> = {
   "hb-restore-drill": RestoreDrill,
   "hb-cnpg-recovery": CnpgRecovery,
   "hb-fleet-topology": FleetTopology,
-  "hb-cluster-provisioning": ClusterProvisioning,
   "hb-upgrade-phases": UpgradePhases,
   "hb-preview-matrix": PreviewMatrix,
   "hb-preview-lifecycle": PreviewLifecycle,

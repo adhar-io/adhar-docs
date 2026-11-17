@@ -7,45 +7,33 @@ path: "/docs/guides/deploy-a-function"
 
 # Deploy a Function
 
-This guide takes a function from template to production. You will:
-
-- create it in the Console and follow its first build into dev
-- call it over HTTPS, and watch it scale up under load and back to zero
-- give it a schedule and an event trigger
-- change its scale for one environment through a pull request
-- promote it to test and prod
+This guide takes a function from template to production. You create it in the Console, call it over HTTPS, watch it scale to zero and back, add a schedule and an event trigger, and promote it to test and prod.
 
 It is for developers shipping their first function, and for platform engineers checking that Functions work end to end. [Functions](/docs/core-concepts/functions) explains the model behind every step, and the [Function API reference](/docs/reference/function-api) lists every field.
 
-## What you will build
+## What you'll build
+
+```diagram
+nsv-function-guide
+```
 
 - A Go function, `thumbnails`, in its own Gitea repository, with tests and an OpenAPI contract.
 - An HTTPS endpoint in each environment that scales from zero to ten pods and back.
 - A nightly schedule and a CloudEvent trigger on the same function.
-- The same signed image running in dev, test and prod, with prod reached only through a Release.
-
-**Prerequisites**
-
-| Requirement | How to check |
-|---|---|
-| The Functions engine (`knative`). It is on in the production profile and off locally | `kubectl -n knative-serving get knativeserving knative-serving` shows `READY True` |
-| The `Function` API | `kubectl get xrd functions.platform.adhar.io` shows `ESTABLISHED True` |
-| Promotion: `kargo`, `cert-manager`, `argo-rollout`, on in production | `adhar stack status kargo` |
-| A Project with environments. The default project `adhar` has `dev`, `test` and `prod` | `kubectl -n adhar-system get projects.platform.adhar.io` |
-| Permission to create from templates in the Console | **New function** is enabled under Console → Develop → Functions |
-| `curl`, `jq` and `git` on your machine | `curl --version && jq --version` |
-
-On a laptop, turn on what is missing with `adhar stack enable knative dapr cert-manager kargo argo-rollout` and then run `adhar upgrade`. Read [Enable the engine](/docs/core-concepts/functions#enable-the-engine) first, because Knative needs room on the node.
-
-## How it works
-
-The function travels the same road as every application. A template scaffolds a repository. Every push builds and signs an image. Kargo promotes the image's digest from environment to environment, and in each environment the Function becomes a Knative Service:
-
-```diagram
-fn-delivery
-```
+- The same signed image in dev, test and prod, with prod reached only through a Release.
 
 You only ever edit two things: the handler, and the Function in `deploy/`. Everything else is derived from them.
+
+## Prerequisites
+
+- **The Functions engine (`knative`).** It is on in the production profile and off locally. `kubectl -n knative-serving get knativeserving knative-serving` shows `READY True`.
+- **The `Function` API.** `kubectl get xrd functions.platform.adhar.io` shows `ESTABLISHED True`.
+- **Promotion: `kargo`, `cert-manager` and `argo-rollout`**, on in production. Check with `adhar stack status kargo`.
+- **A Project with environments.** The default project `adhar` has `dev`, `test` and `prod`. Check with `kubectl -n adhar-system get projects.platform.adhar.io`.
+- **Permission to create from templates.** **New function** is enabled under Console → **Develop → Functions**.
+- **`curl`, `jq` and `git`** on your machine.
+
+On a laptop, turn on what is missing with `adhar stack enable knative dapr cert-manager kargo argo-rollout`, then run `adhar upgrade`. Read [Enable the engine](/docs/core-concepts/functions#enable-the-engine) first, because Knative needs room on the node.
 
 ## Step 1 — Create the function
 
@@ -62,25 +50,16 @@ In the Console, open **Develop → Functions** and select **New function**. You 
 | Repository | Repository Location | `adhar/thumbnails` on the platform's Gitea |
 | Operations | Lifecycle, Tier, Runbook URL, On-call, Availability SLO | Your own. They go into `catalog-info.yaml` and feed the scorecard |
 
-The wizard runs six steps and reports each one:
+The wizard creates the repository, renders and commits the template, registers `catalog-info.yaml`, sets up the `app-ci` build, and registers an Application of type `function`. It ends with a **Manage in Functions** link.
 
-1. Create repository
-2. Render template skeleton
-3. Commit rendered files
-4. Register catalog-info.yaml
-5. Build the image on push (`app-ci`: buildpacks → Harbor)
-6. Register the Application (type `function`): a Function per environment, scale-to-zero
-
-It ends with a **Manage in Functions** link.
-
-**Verify:**
+**Check:**
 
 ```bash
 kubectl -n adhar-system get applications.platform.adhar.io thumbnails \
   -o jsonpath='{.spec.parameters.type}{"\n"}'
 ```
 
-**Expected:** `function`. Under Develop → Functions, `thumbnails` shows **Not deployed yet** until its first build reaches dev.
+The output is `function`. Under Develop → Functions, `thumbnails` shows **Not deployed yet** until its first build reaches dev.
 
 ## Step 2 — Look at what you got
 
@@ -90,7 +69,7 @@ go test ./...
 cat deploy/base/function.yaml
 ```
 
-**Expected:** three passing tests (`TestHealthz`, `TestInvoke`, `TestCloudEvent`). The Function looks like this, with the template's comments removed:
+**Check:** three tests pass (`TestHealthz`, `TestInvoke`, `TestCloudEvent`). The Function looks like this, with the template's comments removed:
 
 ```yaml
 apiVersion: platform.adhar.io/v1alpha1
@@ -116,7 +95,7 @@ spec:
     application: thumbnails
 ```
 
-This one file serves every environment. `deploy/envs/<env>/kustomization.yaml` places it in that environment's namespace (`dev`, `test` or `prod`), and gives Kargo an `images:` entry to pin. `:latest` is only a stand-in: no environment ever runs it, because every promotion replaces it with a signed digest.
+This one file serves every environment. `deploy/envs/<env>/kustomization.yaml` places it in that environment's namespace (`dev`, `test` or `prod`) and gives Kargo an `images:` entry to pin. `:latest` is only a stand-in: no environment ever runs it, because every promotion replaces it with a signed digest.
 
 The handler is `handler.go`. `GET /healthz` reports health. Every other path and method invokes the function and returns JSON describing the call, including the CloudEvent type when an event invoked it. Run it with `go run .` and call `curl -s localhost:8080/` to see the response.
 
@@ -129,24 +108,22 @@ kubectl -n adhar-system get pipelineruns -l adhar.io/app=thumbnails \
   --sort-by=.metadata.creationTimestamp
 ```
 
-You can also follow it in the Console, on the function's **Builds** tab.
-
-**Expected:** a run that succeeds within a few minutes. It builds the image with buildpacks, runs `go test`, scans and signs the image, and pushes `library/thumbnails:<commit sha>` to Harbor.
+You can also follow it on the function's **Builds** tab in the Console. The run builds the image with buildpacks, runs `go test`, scans and signs the image, and pushes `library/thumbnails:<commit sha>` to Harbor.
 
 Kargo then picks up the signed build as Freight and promotes it into dev:
 
-- it pins the digest in `deploy/envs/dev`
-- it renders the overlay to the branch `stage/dev`
-- Argo CD syncs that branch into the `dev` namespace
+1. It pins the digest in `deploy/envs/dev`.
+2. It renders the overlay to the branch `stage/dev`.
+3. Argo CD syncs that branch into the `dev` namespace.
 
-Watch it on the **Delivery** tab, or:
+**Check:** the pipeline run succeeds. Then watch the **Delivery** tab, or run:
 
 ```bash
 kubectl -n adhar-system get applications.platform.adhar.io thumbnails \
   -o jsonpath='{range .status.conditions[*]}{.type}={.status} {.reason}{"\n"}{end}'
 ```
 
-**Expected:** `Overlays=True Seeded`, and the Application turning `Healthy` once dev runs the function.
+The output includes `Overlays=True Seeded`, and the Application turns `Healthy` once dev runs the function.
 
 ## Step 4 — Check the Function in dev
 
@@ -156,7 +133,7 @@ kubectl -n dev get functions.platform.adhar.io thumbnails \
   -o jsonpath='{range .status.conditions[*]}{.type}={.status} {.reason}{"\n"}{end}'
 ```
 
-**Expected:** the `URL` column shows `https://thumbnails.dev.<your domain>`, and the `Revision` column shows `thumbnails-00001`. The conditions read:
+**Check:** the `URL` column shows `https://thumbnails.dev.<your domain>`, and the `Revision` column shows `thumbnails-00001`. The conditions read:
 
 ```text
 ServiceReady=True RevisionReady
@@ -167,7 +144,7 @@ Ready=True …
 Synced=True …
 ```
 
-See what the composition created for it:
+To see what the composition created for it:
 
 ```bash
 kubectl -n dev get ksvc thumbnails --show-labels
@@ -178,13 +155,7 @@ kubectl -n dev get networkpolicy thumbnails-from-knative
 kubectl -n dev get ksvc thumbnails -o jsonpath='{.spec.template.spec.containers[0].image}{"\n"}'
 ```
 
-**Expected:**
-
-- A Knative Service labelled `networking.knative.dev/visibility=cluster-local`.
-- One Ready Revision.
-- A DomainMapping named after the host, and an HTTPRoute for it.
-- The NetworkPolicy `thumbnails-from-knative`.
-- An image pinned by digest (`…/thumbnails@sha256:…`), not `:latest`.
+You get a Knative Service labelled `networking.knative.dev/visibility=cluster-local`, one Ready Revision, a DomainMapping named after the host with an HTTPRoute for it, the NetworkPolicy, and an image pinned by digest (`…/thumbnails@sha256:…`), not `:latest`. [How it works](/docs/core-concepts/functions#how-it-works) explains each object.
 
 ## Step 5 — Call it
 
@@ -195,7 +166,9 @@ curl -sk "$URL/" | jq
 curl -sk -X POST "$URL/resize" -H 'content-type: application/json' -d '{"w": 320}' | jq
 ```
 
-**Expected:** `{"ok":true,"at":"…"}` from `/healthz`. The POST returns something like:
+On a local platform the URL is `https://thumbnails.dev.adhar.localtest.me:8443`.
+
+**Check:** `/healthz` returns `{"ok":true,"at":"…"}`. The POST returns something like:
 
 ```json
 {
@@ -207,22 +180,20 @@ curl -sk -X POST "$URL/resize" -H 'content-type: application/json' -d '{"w": 320
   "path": "/resize",
   "event": null,
   "received": 10,
-  "at": "2026-10-30T09:14:02Z"
+  "at": "…"
 }
 ```
 
-On a local platform the URL is `https://thumbnails.dev.adhar.localtest.me:8443`.
+> **Tip:** The Console's **Invoke** tab sends the same request from the Console server, as you, and shows the status, headers, body and duration. Use it when you cannot reach the Gateway from your machine.
 
-**From the Console.** The **Invoke** tab sends the same request from the Console server, as you, and shows the status, headers, body and duration. Use it when you cannot reach the Gateway from your machine.
-
-**Measure a cold start.** Leave the function idle for about two minutes, so that it scales to zero, then:
+**See a cold start.** Leave the function idle until the Console shows **Scaled to zero**, then time two requests:
 
 ```bash
 curl -sk -o /dev/null -w 'cold: %{time_total}s\n' "$URL/"
 curl -sk -o /dev/null -w 'warm: %{time_total}s\n' "$URL/"
 ```
 
-**Expected:** the first request takes noticeably longer than the second. The difference is the cold start: Knative's activator held the request while a pod started. If that is too slow for your callers, set `minScale: 1` (Step 8 shows how to change it for one environment).
+The first request takes noticeably longer than the second. The difference is the cold start: Knative's activator held the request while a pod started. If that is too slow for your callers, set `minScale: 1`. Step 8 shows how to change it for one environment.
 
 ## Step 6 — Watch it scale
 
@@ -238,10 +209,10 @@ In another, send 5,000 requests, 200 at a time:
 seq 5000 | xargs -P 200 -I{} curl -sk -o /dev/null "$URL/"
 ```
 
-**Expected:**
+**Check:**
 
-- **Under load:** pods are added as in-flight requests climb past the target of 100 per pod, up to `maxScale` (10) and no further. The Console's **Scale** tab shows "Running now", "Wanted" and the bounds.
-- **When the load stops:** after about 90 seconds without traffic (Knative's 60-second stable window plus a 30-second grace period), the last pod terminates. The Console shows **Scaled to zero**.
+- **Under load,** pods are added as in-flight requests climb past the target of 100 per pod, up to `maxScale` (10) and no further. The Console's **Scale** tab shows "Running now", "Wanted" and the bounds.
+- **When the load stops,** the last pod terminates after Knative's 60-second stable window plus a 30-second grace period. The Console shows **Scaled to zero**.
 
 Each pod has two containers: `user-container`, which runs your code, and `queue-proxy`, Knative's sidecar. Read your logs with:
 
@@ -276,14 +247,14 @@ spec:
 git commit -am "Run thumbnails nightly and on uploads" && git push
 ```
 
-The push builds a new image, and Kargo promotes it to dev with the changed overlay. When the Function updates, check its triggers:
+The push builds a new image, and Kargo promotes it to dev with the changed overlay.
+
+**Check:** when the Function updates, look at its triggers:
 
 ```bash
 kubectl -n dev get functions.platform.adhar.io thumbnails -o jsonpath='{.status.triggers}' | jq
 kubectl -n dev get pingsources,triggers,brokers
 ```
-
-**Expected:**
 
 - `TriggersReady=True Ready`, and `status.triggers` lists `nightly` (`PingSource`) and `uploads` (`Trigger`), both ready.
 - A PingSource `thumbnails-nightly`, a Trigger `thumbnails-uploads`, and the namespace Broker `default`, which is created because it did not exist yet.
@@ -300,9 +271,9 @@ curl -s -X POST http://localhost:8081/dev/default \
 kubectl -n dev logs -l serving.knative.dev/service=thumbnails -c user-container --tail=5
 ```
 
-**Expected:** the function scales up if it was at zero, and logs a `POST /events` request whose `event` is `com.acme.media.uploaded`.
+The function scales up if it was at zero, and logs a `POST /events` request whose `event` is `com.acme.media.uploaded`.
 
-> **Which trigger to use.** The Broker is in-memory, and neither cron nor CloudEvent deliveries are retried. For events that must not be lost, use a `topic` trigger: Dapr retries with backoff for about a minute, then sends the message to `deadLetterTopic`. A topic trigger keeps one pod running. See [Triggers](/docs/core-concepts/functions#triggers).
+> **Note:** Cron and CloudEvent deliveries are not retried, and the Broker is in-memory. For events that must not be lost, use a `topic` trigger, which retries and then dead-letters. See [Triggers](/docs/core-concepts/functions#triggers).
 
 ## Step 8 — Change scale for one environment
 
@@ -314,7 +285,7 @@ In the Console, open the function, switch to the **prod** environment, and open 
 2. adds it to the overlay's `patches:`
 3. opens a pull request from the branch `functions/thumbnails-prod-<stamp>`
 
-To do the same by hand:
+To do the same by hand, add the patch, list it as `- path: function-thumbnails.patch.yaml` under `patches:` in `deploy/envs/prod/kustomization.yaml`, and open the pull request yourself:
 
 ```yaml
 # deploy/envs/prod/function-thumbnails.patch.yaml
@@ -327,32 +298,23 @@ spec:
     minScale: 1
 ```
 
-Add `- path: function-thumbnails.patch.yaml` under `patches:` in `deploy/envs/prod/kustomization.yaml`, then open the pull request yourself.
+Merge the pull request. **The change reaches prod with the next promotion into prod**, not when the pull request merges. Argo CD syncs the rendered branch `stage/prod`, which only a promotion rewrites.
 
-**The change reaches prod with the next promotion into prod**, not when the pull request merges. Argo CD syncs the rendered branch `stage/prod`, which only a promotion rewrites.
-
-Never put secrets in `env`. Values in the overlay sit in Git in plain text.
+> **Warning:** Never put secrets in `env`. Values in the overlay sit in Git in plain text.
 
 ## Step 9 — Promote to test and prod
 
-**Test is automatic.** A build that passes dev's verification moves to test on its own and is verified again there. The checks are:
+**Test is automatic.** A build that passes dev's verification moves to test on its own and is verified again there. [Delivery](/docs/core-concepts/functions#delivery) lists the checks.
 
-- Argo CD reports the Function healthy
-- its Revision pods are ready
-- nothing restarts
-- the activator's 5xx rate stays low
-
-Watch both environments on the **Delivery** tab:
+**Check:** the **Delivery** tab shows both environments, and test runs the same digest as dev at `https://thumbnails.test.<your domain>`:
 
 ```bash
 kubectl -n test get functions.platform.adhar.io thumbnails
 ```
 
-**Expected:** the same digest as dev, now at `https://thumbnails.test.<your domain>`.
-
 **Prod needs a Release.** Prod takes only Freight that test has verified, and only through a `Release`, which is a manual approval recorded as an object. Create one as described in [Promote to prod with a Release](/docs/guides/promote-across-environments#step-4--promote-to-prod-with-a-release), or start it from the Delivery tab's **Promote** link.
 
-**Verify:**
+**Check:**
 
 ```bash
 kubectl -n prod get functions.platform.adhar.io thumbnails
@@ -360,31 +322,9 @@ kubectl -n prod get ksvc thumbnails \
   -o jsonpath='{.spec.template.metadata.annotations.autoscaling\.knative\.dev/min-scale}{"\n"}'
 ```
 
-**Expected:** Ready at `https://thumbnails.prod.<your domain>`, with min-scale `1` from Step 8. One pod stays running in prod even when idle.
+The Function is Ready at `https://thumbnails.prod.<your domain>`, with min-scale `1` from Step 8. One pod stays running in prod even when idle.
 
 **Roll back** the way you would any application: create a Release that names the previous Freight. Knative switches traffic back once that Revision is Ready.
-
-## Step 10 — Clean up
-
-In the Console, open the function and go to **Delete**. A delivered function cannot be deleted on its own, because Argo CD would put it back from Git. So the tab deletes its **Application** instead. Type the name to confirm. Tick **Also delete its repository** only if you no longer want the code.
-
-```bash
-kubectl -n adhar-system get applications.platform.adhar.io thumbnails   # NotFound
-kubectl get functions.platform.adhar.io -A | grep thumbnails              # nothing
-```
-
-**Expected:** the Function, its Knative Service, Revisions, route and triggers are gone from every environment. The Broker `default` stays, because other functions in the namespace may use it. The images in Harbor stay too.
-
-## Limits to know
-
-| Not provided | What to do instead |
-|---|---|
-| `bucket` triggers | Have whatever writes the object publish an event; use `cloudevent` or `topic` |
-| Retries for cron and CloudEvent deliveries; a durable Broker | Use a `topic` trigger for events that must not be lost |
-| CPU, memory or a service account per function | Functions get the namespace's defaults (100m / 128Mi requested, 500m / 512Mi limit). Use a service template for anything bigger |
-| Authentication on function URLs | Check a token or signature in the handler, or set `visibility: cluster` |
-| Traffic splits between Revisions | Knative serves the latest Ready Revision. Roll back with a Release |
-| Preview environments for function pull requests | The function templates do not ship `preview/` |
 
 ## Troubleshooting
 
@@ -398,17 +338,31 @@ kubectl get functions.platform.adhar.io -A | grep thumbnails              # noth
 | `EdgeReady=False RouteNotReady` | The Gateway did not accept the HTTPRoute, or cannot reach Kourier | `kubectl -n dev describe httproute thumbnails`, and check the ReferenceGrant in `knative-serving` |
 | `TriggersReady=False Unsupported` | A `bucket` trigger is set | Remove it, or replace it with `cloudevent` or `topic` |
 | A topic trigger stays `Waiting` | Dapr is off, or the namespace has no `pubsub` component | Enable `dapr`; check `kubectl -n dev get components.dapr.io` |
-| Requests fail after `timeoutSeconds` | The handler ran too long | Make it faster, or raise `timeoutSeconds` (600 at most). Move longer work to a service or a pipeline |
+| Requests fail after `timeoutSeconds` | The handler ran too long | Make it faster, or raise `timeoutSeconds` (600 at most). Move longer work to a service or a [batch job](/docs/core-concepts/batch) |
 | The first request after idle is slow | Cold start | `minScale: 1` for latency-sensitive environments; keep the image small |
 | The function never scales to zero | `minScale` above 0, a topic trigger, or something calling it regularly | Check `minScale` and the triggers, then the Metrics tab |
 | Java pods are `OOMKilled` | The handler needs more than the namespace's 512Mi default limit | Reduce memory use. Functions cannot set their own limits |
 | The Metrics tab shows no data | The function served no traffic, or the queue-proxy's per-pod metrics are not scraped | Send it traffic; ask a platform engineer to add a PodMonitor for queue-proxy |
 | A config change merged but has not reached prod | Argo CD syncs `stage/prod`, which only a promotion rewrites | Create a Release |
 
+For what Functions do not provide, such as `bucket` triggers, per-function CPU and memory, and authentication on function URLs, see [Limits](/docs/core-concepts/functions#limits). The function templates also ship no `preview/` overlay, so function pull requests get no preview environment.
+
+## Clean up
+
+In the Console, open the function and go to **Delete**. A delivered function cannot be deleted on its own, because Argo CD would put it back from Git. So the tab deletes its **Application** instead. Type the name to confirm. Tick **Also delete its repository** only if you no longer want the code.
+
+**Check:**
+
+```bash
+kubectl -n adhar-system get applications.platform.adhar.io thumbnails   # NotFound
+kubectl get functions.platform.adhar.io -A | grep thumbnails              # nothing
+```
+
+The Function, its Knative Service, Revisions, route and triggers are gone from every environment. The Broker `default` stays, because other functions in the namespace may use it. The images in Harbor stay too.
+
 ## Next steps
 
 - **[Functions](/docs/core-concepts/functions)** — the model: placement, request path, triggers, scaling and security
 - **[Function API reference](/docs/reference/function-api)** — every field, condition and `adhar function` flag
 - **[Promote Across Environments](/docs/guides/promote-across-environments)** — Freight, Stages, Releases and rollbacks in depth
-- **[Observability](/docs/operations/observability)** — logs, metrics and traces
 - **[Your First Service](/docs/getting-started/first-service)** — when a long-running service fits better

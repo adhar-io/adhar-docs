@@ -11,14 +11,7 @@ A **Function** is the smallest thing you can run on Adhar: one HTTP handler in a
 
 You write the handler. A template gives you everything else: the repository, the tests, the `Function` resource, the build, and the promotion from dev to test to prod.
 
-This page explains how Functions work and why they behave as they do:
-
-- the resource, and where a function runs
-- how a request reaches your code
-- triggers and scaling
-- delivery, the Console, security and observability
-
-It is for developers deciding whether a Function fits their workload, and for platform engineers who run the engine behind it. [Deploy a Function](/docs/guides/deploy-a-function) walks through the same ground hands-on. The [Function API reference](/docs/reference/function-api) lists every field, condition and command.
+This page explains the model, for developers deciding whether a Function fits their workload and for platform engineers who run the engine behind it. To build one, follow [Deploy a Function](/docs/guides/deploy-a-function). For every field, condition and command, see the [Function API reference](/docs/reference/function-api).
 
 ## At a glance
 
@@ -42,14 +35,14 @@ A Function and a service template both run your container from Git, through the 
 | Choose a **Function** when | Choose a **service** ([Your First Service](/docs/getting-started/first-service)) when |
 |---|---|
 | Traffic is bursty, rare or event-driven: webhooks, scheduled jobs, event and queue consumers | Traffic is steady, or every request must be answered instantly |
-| Each request finishes within ten minutes | Requests stream, hold long connections or run for longer |
+| Each request finishes within `timeoutSeconds`, at most 600 | Requests stream, hold long connections or run for longer |
 | The handler is stateless; state lives in a database, cache or bucket | The workload keeps state in memory or needs a persistent volume |
 | A cold start on the first request after idle is acceptable | Latency targets rule out cold starts (or set `minScale: 1`; see [Cold starts](#cold-starts)) |
 | The defaults (100m CPU, 128Mi requested; 500m, 512Mi limit) are enough | You need to size CPU and memory, mount volumes or run as a specific service account |
 
 **Idle functions cost nothing.** A function at zero runs no pods. Knative's activator is shared by every function and waits for its next request.
 
-## The model
+## How it works
 
 You declare a `Function`. The composition `function-local-knative` renders it into Kubernetes objects, and Knative runs the result:
 
@@ -68,7 +61,7 @@ The composition creates these objects:
 
 Every change to the Function's image or configuration creates a new **Revision**, an immutable snapshot. Knative routes traffic to the newest Revision only once it is Ready. Until then, the previous one keeps answering.
 
-The composition writes the outcome back to the Function. `status.url`, `status.readyRevision` and `status.triggers` tell you what is serving. The conditions `ServiceReady`, `EdgeReady`, `TriggersReady` and `Placement` tell you why something is not. They are listed in the [reference](/docs/reference/function-api#conditions).
+The composition writes the outcome back to the Function. `status.url`, `status.readyRevision` and `status.triggers` tell you what is serving. The conditions `ServiceReady`, `EdgeReady`, `TriggersReady` and `Placement` tell you why something is not. The [reference](/docs/reference/function-api#conditions) lists every reason.
 
 > **Two kinds of "function".** Crossplane also has *composition functions* (`pkg.crossplane.io/v1` `Function`, such as `function-go-templating`), which the control plane uses to render compositions. They are unrelated to this page. On a platform cluster, plain `kubectl get functions` is ambiguous, so always write `kubectl get functions.platform.adhar.io`.
 
@@ -223,7 +216,7 @@ spec:
 |---|---|---|---|
 | `cron` | Knative `PingSource` | A CloudEvent on each tick of `schedule` (crontab syntax, in `timezone`, default UTC). Each tick carries `data` | Not retried. The next tick runs as scheduled |
 | `cloudevent` | Knative `Trigger` on a `Broker` in the namespace (`default` unless you name one) | Every event whose attributes exactly match `filter` | Not retried. The Broker is in-memory: an event in flight is lost if the dispatcher restarts |
-| `topic` | Dapr `Subscription` | Every message on `topic` of the pub/sub component (`pubsub` unless you name one) | Retried with exponential backoff, up to 15 seconds apart and 10 times (about a minute), then sent to `deadLetterTopic` if set |
+| `topic` | Dapr `Subscription` | Every message on `topic` of the pub/sub component (`pubsub` unless you name one) | Retried with exponential backoff, up to 15 seconds apart and 10 times, then sent to `deadLetterTopic` if set |
 | `bucket` | Nothing | Accepted but **not implemented**: `TriggersReady` reports `Unsupported`, and the function is served over HTTP only | — |
 
 **Topic triggers keep one pod warm.** Dapr delivers topic messages through a sidecar in the function's own pod, and a function at zero has no sidecar. A topic trigger therefore raises `minScale` to 1.
@@ -237,6 +230,10 @@ The older one-trigger shorthand, `trigger` plus `eventSource`, still works. The 
 ## Scaling
 
 Knative's autoscaler scales each Revision on the requests in flight:
+
+```diagram
+nsv-function-scaling
+```
 
 | Parameter | Default | What it does |
 |---|---|---|
@@ -254,11 +251,11 @@ The platform sets no autoscaler overrides, so Knative's own defaults apply. A Re
 
 ### Cold starts
 
-The first request after idle pays a **cold start**. The pod is scheduled, the image is pulled if the node does not have it, and your process starts. This ranges from well under a second (Go or Node.js, image already on the node) to several seconds (Java, image not yet pulled). The activator holds the request meanwhile; it is not dropped.
+The first request after idle pays a **cold start**: the pod is scheduled, the image is pulled if the node does not have it, and your process starts. The activator holds the request meanwhile; it is not dropped. Go and Node.js functions with the image already on the node start fastest. A Java function whose image must be pulled starts slowest.
 
 | Lever | Effect |
 |---|---|
-| `minScale: 1` | Keeps one warm pod. Use it for user-facing paths with tight latency targets. It costs one pod around the clock |
+| `minScale: 1` | Keeps one warm pod. Use it for user-facing paths with tight latency targets. It costs one pod that never scales away |
 | A small image that boots fast | Go and Node.js start fastest. Do no heavy work at start-up |
 | A high enough `maxScale` | Stops a burst from queueing behind too few pods |
 
@@ -282,7 +279,7 @@ fn-delivery
 
 **The same digest runs everywhere.** Nothing is rebuilt between environments, so what you verified in test is byte for byte what reaches prod.
 
-**Configuration changes ride with promotions.** Argo CD syncs `stage/<env>`, not `main`. A change you commit to `deploy/base` or `deploy/envs/prod` reaches prod with the next promotion into prod. In dev it arrives within minutes, because the same push also builds a new image.
+**Configuration changes ride with promotions.** Argo CD syncs `stage/<env>`, not `main`. A change you commit to `deploy/base` or `deploy/envs/prod` reaches prod with the next promotion into prod. Dev needs no extra step, because the same push also builds a new image and promotes it.
 
 **Missing overlays are reported.** If the repository lacks an environment's overlay, the Application's `Overlays` condition says `OverlayMissing` and names the overlay. It does not crash-loop.
 
@@ -352,7 +349,7 @@ The `knative` package is marked `localSafe: false` because of its footprint. Run
 **How the package is laid out:**
 
 - **Where it runs.** The operator runs in `adhar-system`. Serving and Eventing run in their own namespaces, `knative-serving` and `knative-eventing`, which is an exception to the shared-namespace rule.
-- **No ConfigMap clash with Tekton.** That namespace isolation is what removed the old clash with Tekton over `config-logging` and `config-observability`.
+- **No ConfigMap clash with Tekton.** Both projects ship ConfigMaps named `config-logging` and `config-observability`. Knative's own namespaces keep them apart.
 - **Ingress.** Kourier is the ingress, as a ClusterIP service, and is reached only through the platform Gateway.
 - **Domain and DNS.** Knative's domain is rewritten to the platform host when the stack is seeded. Domain claims are created automatically.
 - **Eventing scope.** Eventing installs the in-memory Broker, PingSource, ApiServerSource, ContainerSource and SinkBinding. KafkaSource and the Kafka-backed Broker are not installed; topics go through Dapr instead.
@@ -374,7 +371,5 @@ The `knative` package is marked `localSafe: false` because of its footprint. Run
 
 - **[Deploy a Function](/docs/guides/deploy-a-function)** — create, call, scale, trigger and promote a function, step by step
 - **[Function API reference](/docs/reference/function-api)** — every field, condition, composed object and `adhar function` flag
-- **[Promote Across Environments](/docs/guides/promote-across-environments)** — Freight, Stages and Releases in depth
 - **[Your First Service](/docs/getting-started/first-service)** — when a long-running service fits better
-- **[Batch Jobs](/docs/core-concepts/batch)** — when the work is a Spring Batch job that runs for minutes or hours
-- **[Observability](/docs/operations/observability)** — logs, metrics and traces
+- **[Batch Jobs](/docs/core-concepts/batch)** — when the work is a long-running Spring Batch job
