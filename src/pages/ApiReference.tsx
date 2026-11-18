@@ -90,9 +90,6 @@ const ApiReference = () => {
               Complete reference for the ADHAR platform API endpoints and authentication.
             </p>
             <div className="flex items-center gap-4">
-              <Badge variant="secondary" className="bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300">
-                v2.1.0
-              </Badge>
               <Badge variant="outline" className="bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-300">
                 REST API
               </Badge>

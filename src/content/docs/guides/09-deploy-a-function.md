@@ -28,12 +28,12 @@ You only ever edit two things: the handler, and the Function in `deploy/`. Every
 
 - **The Functions engine (`knative`).** It is on in the production profile and off locally. `kubectl -n knative-serving get knativeserving knative-serving` shows `READY True`.
 - **The `Function` API.** `kubectl get xrd functions.platform.adhar.io` shows `ESTABLISHED True`.
-- **Promotion: `kargo`, `cert-manager` and `argo-rollout`**, on in production. Check with `adhar stack status kargo`.
+- **Promotion: `kargo`, `cert-manager` and `argo-rollout`**, on in both profiles. Check with `adhar stack status kargo`.
 - **A Project with environments.** The default project `adhar` has `dev`, `test` and `prod`. Check with `kubectl -n adhar-system get projects.platform.adhar.io`.
 - **Permission to create from templates.** **New function** is enabled under Console → **Develop → Functions**.
 - **`curl`, `jq` and `git`** on your machine.
 
-On a laptop, turn on what is missing with `adhar stack enable knative dapr cert-manager kargo argo-rollout`, then run `adhar upgrade`. Read [Enable the engine](/docs/core-concepts/functions#enable-the-engine) first, because Knative needs room on the node.
+On a laptop, turn on the Functions engine with `adhar stack enable knative dapr`, then run `adhar upgrade`. Read [Enable the engine](/docs/core-concepts/functions#enable-the-engine) first, because Knative needs room on the node.
 
 ## Step 1 — Create the function
 

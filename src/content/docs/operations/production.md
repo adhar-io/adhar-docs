@@ -9,7 +9,7 @@ path: "/docs/operations/production"
 
 This page is for the platform engineer who has run Adhar on a laptop and now has to put it in front of real teams. It covers choosing a topology, what HA mode changes, sizing, the edge, hardening, backup and upgrades. By the end you can write a production `config.yaml`, bring it up, and prove it is ready with the go-live checklist.
 
-> **Status:** Adhar is in active development (v0.1.x). Validate each control in your own environment before you rely on it. See the [Roadmap](/docs/reference/roadmap).
+> **Status:** Adhar is in active development. Validate each control in your own environment before you rely on it. See the [Roadmap](/docs/reference/roadmap).
 
 ## At a glance
 

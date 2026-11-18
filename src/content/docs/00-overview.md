@@ -11,7 +11,7 @@ path: "/docs"
 
 This page explains what Adhar is, how it works, and where to go next.
 
-> **Active development.** Adhar is at v0.1.x and changing quickly. Try it on a non-critical environment first, and check the [Roadmap](/docs/reference/roadmap) for what is planned.
+> **Active development.** Adhar is in active development and changing quickly. Try it on a non-critical environment first, and check the [Roadmap](/docs/reference/roadmap) for what is planned.
 
 ## At a glance
 
@@ -88,6 +88,7 @@ Every capability below is on in the *production profile*, which cloud installs u
 | **Identity and SSO** | Keycloak (OIDC) for every service and the Kubernetes API | Yes |
 | **Secrets** | External Secrets Operator and OpenBao, a Vault-compatible store. Secret values never go in Git | External Secrets only |
 | **Observability** | Prometheus and Grafana (metrics), Loki (logs), Tempo (traces), Mimir (long-term metrics), Hubble (network flows) | Prometheus and Grafana only |
+| **Promotion** | Kargo moves each signed image digest dev → test → prod; Argo Rollouts runs it | Yes |
 | **Secure supply chain** | Tekton and buildpacks build, Cosign signs, Harbor stores, Kyverno rejects unsigned Harbor `library/*` images | Yes. The wider policy packs are production-only |
 | **Developer portal** | Adhar Console (built on Backstage): catalogue, golden paths, cloud shell, production-readiness scorecards | Yes, without scorecards |
 | **Backup and rotation** | Scheduled Velero backups (daily and weekly) and bootstrap-credential rotation | No |

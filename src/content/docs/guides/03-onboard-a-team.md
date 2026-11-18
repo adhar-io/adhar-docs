@@ -31,8 +31,8 @@ nga-onboard-steps
 - `cluster-admin`, or membership of `platform-admin`: `kubectl auth can-i '*' '*'`.
 - Keycloak admin access, for the group and its members: `adhar get secrets -p keycloak`.
 - The seeded organisation: `kubectl -n adhar-system get organisations.platform.adhar.io` lists `adhar`.
-- For quotas: the `adhar-tenant-quotas` package and cert-manager. Both are on in production and off locally. Check with `adhar stack status adhar-tenant-quotas`.
-- For promotion: Kargo, on in production and off locally. Check with `adhar stack status kargo`.
+- For quotas: the `adhar-tenant-quotas` package, on in production and off locally, and cert-manager, on in both profiles. Check with `adhar stack status adhar-tenant-quotas`.
+- For promotion: Kargo, on in both profiles. Check with `adhar stack status kargo`.
 
 ## How access is granted
 
@@ -194,10 +194,10 @@ data:
     projects: 10
 ```
 
-Converge with `adhar upgrade`. On a local platform, first turn on the package and cert-manager, which injects the webhook's CA certificate:
+Converge with `adhar upgrade`. On a local platform, first turn on the package. cert-manager, which injects the webhook's CA certificate, is already on:
 
 ```bash
-adhar stack enable cert-manager adhar-tenant-quotas
+adhar stack enable adhar-tenant-quotas
 ```
 
 **Check:**
@@ -408,7 +408,7 @@ Two follow-ups:
 | `Forbidden` for a member who should have access | The token predates their group membership | `adhar auth login … --force` for a fresh token |
 | Project denied: `exceeds the … team's tenant quota` | The team's allowance is used up | Raise the team's entry in `allowances.yaml`, or lower the project's quotas |
 | Tenant quota never denies anything | The package is off, there is no entry for the team and no `default`, cert-manager is missing (no serving certificate), or the controller is down (fails open) | `adhar stack status adhar-tenant-quotas`; `adhar stack status cert-manager`; check the ConfigMap |
-| Project `READY=False`, events name `kargo.akuity.io` kinds | Kargo is not installed (off in the local profile) | Namespaces, quotas and RBAC are still created; `adhar stack enable kargo` for promotion |
+| Project `READY=False`, events name `kargo.akuity.io` kinds | Kargo is not installed or not yet healthy, for example after it was disabled | Namespaces, quotas and RBAC are still created; `adhar stack enable kargo` for promotion |
 | Team member sees nothing in ArgoCD | No ArgoCD role is mapped for team groups | Use the Console for sync and health |
 | Member cannot push to the repository in Gitea | Gitea team membership and repository grants are manual for team groups | Add the user to team `payments`; grant the repository |
 | A Service in `payments-dev` is unreachable from another team namespace | Default-deny ingress admits only the same namespace, `adhar-system` and the Gateway | Add a NetworkPolicy in the target namespace for that source |

@@ -48,15 +48,14 @@ cc-layer-stack
 
 ### Foundation components
 
-The foundation is pre-rendered, embedded in the `adhar` binary and applied with Server-Side Apply. Bootstrap fetches nothing from an upstream chart repository, so an unreachable repository cannot break it. The embedded manifests under `platform/controllers/adharplatform/resources/` are the authority for versions.
+The foundation is pre-rendered, embedded in the `adhar` binary and applied with Server-Side Apply. Bootstrap fetches nothing from an upstream chart repository, so an unreachable repository cannot break it. The embedded manifests under `platform/controllers/adharplatform/resources/` pin every component.
 
-| Component | Version | Role |
-|---|---|---|
-| Kubernetes (default) | `v1.37.0` | The cluster |
-| **Cilium** | `v1.20.0` | CNI (eBPF), kube-proxy replacement, Gateway API, Hubble, network policy |
-| **ArgoCD** | `v3.6.1` | GitOps engine |
-| **Gitea** | `1.27.0` | In-cluster Git server, the source of truth |
-| **Crossplane** | `v2.4.2` | Namespaced self-service infrastructure APIs |
+| Component | Role |
+|---|---|
+| **Cilium** | CNI (eBPF), kube-proxy replacement, Gateway API, Hubble, network policy |
+| **ArgoCD** | GitOps engine |
+| **Gitea** | In-cluster Git server, the source of truth |
+| **Crossplane** | Namespaced self-service infrastructure APIs |
 
 Cilium is the whole network layer: the CNI, north-south routing through Gateway API (there is no separate ingress controller), flow observability (Hubble) and network policy. Transparent WireGuard encryption is available but **not** enabled by the shipped configuration; see [Security Best Practices](/docs/security/security-best-practices). Nothing can be scheduled until Cilium is installed, which is why it comes first.
 

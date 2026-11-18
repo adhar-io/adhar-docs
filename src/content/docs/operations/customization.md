@@ -169,7 +169,7 @@ Every package change moves through the same stages. Everything before `adhar upg
 do-package-change
 ```
 
-This example runs cert-manager with two replicas and a stricter DNS-01 resolver. cert-manager is on in the production profile and off locally.
+This example runs cert-manager with two replicas and a stricter DNS-01 resolver. cert-manager is on in both profiles.
 
 1. Edit the values.
 

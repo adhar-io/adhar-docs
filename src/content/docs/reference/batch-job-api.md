@@ -7,7 +7,7 @@ path: "/docs/reference/batch-job-api"
 
 # BatchJob API Reference
 
-This page lists every field, status condition, composed object, alert, policy and `adhar batch` command of the `BatchJob` resource. Use it when you write or debug a `BatchJob` by hand. [Batch Jobs](/docs/core-concepts/batch) explains the model.
+This page lists every field, status condition, composed object, run name, event, alert, policy and `adhar batch` command of the `BatchJob` resource. Use it when you write or debug a `BatchJob` by hand. [Batch Jobs](/docs/core-concepts/batch) explains the model.
 
 ## At a glance
 
@@ -20,7 +20,6 @@ This page lists every field, status condition, composed object, alert, policy an
 | **Composition** | `batchjob-kubernetes` (default; labels `feature: batchjob`, `provider: kubernetes`), a pipeline of `function-go-templating` and `function-auto-ready` |
 | **Printer columns** | `Schedule` (`.spec.parameters.schedule.cron`), `Scheduler` (`.status.scheduler`), `Last-Success` (`.status.lastSuccessfulTime`), `Held` (`.status.held.reason`) |
 | **Required** | `spec.parameters.job`, `spec.parameters.image`, `spec.parameters.database.secretRef` |
-| **Since** | v0.1.68 |
 
 ## A complete example
 
@@ -60,7 +59,16 @@ spec:
       - secretRef: { name: importer-inbound-bucket }
     sla:
       maxDuration: 3h
+      finishBy: "06:00"                   # business deadline, in schedule.timeZone
+    dependsOn:
+      - batchJob: fx-rates                # start after fx-rates succeeds for the same businessDate
+    smoke:
+      parameters:                         # the verification run in test
+        businessDate: "2026-01-02"
+        source: inbound/sample.csv
 ```
+
+This job runs on its schedule. Adding `dependsOn` also makes the batch observer start it once for a business date after `fx-rates` succeeds for that date. A job that should run only after its dependencies leaves out `schedule`.
 
 ## spec.parameters
 
@@ -75,11 +83,11 @@ spec:
 | `imagePullSecrets` | list of strings | `[harbor-dockercfg]` | The run pod's pull secrets. An empty list names none |
 | `serviceAccountName` | string | the composed `<name>-batch` | Run under an existing ServiceAccount instead. It is still bound to the job's Role |
 | `mode` | `single` or `partitioned` | `single` | `single` runs the job in one pod. `partitioned` runs one manager and `workers` workers that share its partitions through the JobRepository database. `status:in-progress` |
-| `workers` | integer, `1`–`64` | `4` | The worker pods of a partitioned run, besides its manager. Ignored in single mode |
+| `workers` | integer, `1`–`64` | `2` | The worker pods of a partitioned run, besides its manager. Ignored in single mode. Two fit a default run (3 CPU, 3 × 1536Mi) inside an environment's default 4 CPU / 8Gi quota |
 | `gridSize` | integer, `1`–`1024` | 4 × `workers` | How many partitions the manager splits a partitioned run into |
 | `scheduler` | `auto`, `kubernetes` or `volcano` | `auto` | `kubernetes` is plain Kubernetes. `auto` runs on Volcano where it is installed and the team's queue is open, and on plain Kubernetes otherwise. `volcano` insists: without Volcano or the queue, the job reports `PrerequisitesReady=False` and its schedule is suspended |
 
-Volcano is off in every profile, so `auto` resolves to `kubernetes` unless a platform engineer enables the `volcano` and `adhar-batch-volcano` packages.
+The `volcano` and `adhar-batch-volcano` packages are on in the production profile and off locally, so `auto` resolves to `volcano` on a cloud or on-prem platform and to `kubernetes` on Kind.
 
 ### Schedule
 
@@ -92,6 +100,7 @@ Leave `schedule` out for an on-demand job.
 | `schedule.startingDeadlineSeconds` | integer, at least `60` | `3600` | A fire missed by longer than this is skipped, and `BatchScheduleMissed` says so |
 | `schedule.concurrencyPolicy` | `Forbid` or `Allow` | `Forbid` | Whether runs may overlap. `Replace` is refused |
 | `schedule.suspend` | boolean | `false` | Pauses the schedule from Git. To pause without a commit, use a [hold](#holds) |
+| `schedule.calendar` | string, a DNS subdomain | — | The [business calendar](#business-calendars) the runs follow. `status:in-progress` |
 
 ### Job parameters
 
@@ -158,6 +167,8 @@ Leave `schedule` out for an on-demand job.
 | Field | Type | Default | Description |
 |---|---|---|---|
 | `sla.maxDuration` | duration, such as `3h` or `90m` | `timeouts.activeDeadlineSeconds` | A run longer than this raises `BatchRunTooLong`. `activeDeadlineSeconds` stays the hard stop |
+| `sla.finishBy` | `HH:MM` | — | The time of day by which a run must have succeeded. The batch observer publishes `deadline.endangered` when the forecast end passes it, and `deadline.missed` when it passes with no success |
+| `sla.timeZone` | string, an IANA zone | `schedule.timeZone`, else `UTC` | The time zone of `finishBy` |
 | `alerts.enabled` | boolean | `true` | `false` composes no PrometheusRule |
 | `alerts.staleAfter` | duration | `26h` | `BatchNoRecentSuccess` fires when the last success is older than this. Set it above the job's cadence |
 | `alerts.severity` | `auto`, `warning` or `critical` | `auto` | `auto` is critical in prod and warning elsewhere |
@@ -169,9 +180,52 @@ Leave `schedule` out for an on-demand job.
 | `organisation`, `team`, `project` | string | Never needed. The namespace's labels decide, and a value that disagrees is reported on `Placement` |
 | `environment` | `dev`, `test` or `prod` | The same |
 
-### Fields not accepted yet
+### Dependencies
 
-The schema is strict, so these `status:planned` fields are **refused, not ignored**: `schedule.calendar`, `sla.finishBy`, `sla.timeZone`, `dependsOn`, `retention` and `smoke`.
+`dependsOn` lists at most 16 jobs that must have succeeded first. Once every one has, the batch observer starts this job once for that business date, with trigger `dependency`. It decides from the run objects in the cluster, not from the event bus.
+
+| Field | Type | Default | Description |
+|---|---|---|---|
+| `dependsOn[].batchJob` | string, a DNS label of at most 40 characters | — | **Required.** The BatchJob that must succeed first |
+| `dependsOn[].namespace` | string | this job's namespace | Its namespace |
+| `dependsOn[].sameBusinessDate` | boolean | `true` | Whether it must have succeeded for the **same** business date. `false` waits only for its latest run to have succeeded |
+
+The job must declare a business-date parameter: `businessDate`, or a `date` its schedule supplies. A dependency run that a full ResourceQuota refuses is retried, from 30 seconds doubling to 10 minutes, for up to 26 hours. A refusal that cannot pass by itself, such as run integrity or a LimitRange, is a Warning Event on the BatchJob.
+
+### Retention
+
+`status:in-progress` — passed to every run; the housekeeping needs an adhar-kit runner that performs it.
+
+| Field | Type | Default | Description |
+|---|---|---|---|
+| `retention.days` | integer, `1`–`3650` | `90` | After a completed run, delete JobRepository metadata older than this. Passed as `ADHAR_BATCH_RETENTION_DAYS` |
+| `retention.keepLast` | integer, `0`–`10000` | `30` | Always keep the newest this many job instances, and the newest restartable `FAILED` or `STOPPED` one. Passed as `ADHAR_BATCH_RETENTION_KEEP_LAST` |
+
+Neither value can be changed on one run: the run-integrity policy compares them with the template.
+
+### Smoke run
+
+| Field | Type | Default | Description |
+|---|---|---|---|
+| `smoke.parameters` | map of strings | — | Values for declared parameters; the rest take their defaults. Setting `smoke` at all turns on the [smoke gate](/docs/core-concepts/batch#the-smoke-gate) in test-tier environments |
+
+A promotion into a test environment is verified only once `<name>-smoke-<sha7>` succeeds there, where `sha7` is the first seven hex characters of the image digest. Verifying the same build again reuses its run.
+
+### Business calendars
+
+`status:in-progress` — the platform resolves, copies and mounts the calendar. Skipping a non-business day needs an adhar-kit runner that reads it.
+
+`schedule.calendar` names a ConfigMap labelled `adhar.io/batch-calendar: "true"` with a `calendar.yaml`:
+
+| Key | Default | Meaning |
+|---|---|---|
+| `name` | — | The calendar's name, the ConfigMap's |
+| `timeZone` | the job's `schedule.timeZone` | The zone business dates are read in |
+| `weekendDays` | `[SATURDAY, SUNDAY]` | Days that are never business days |
+| `holidays` | `[]` | ISO dates that are not business days |
+| `businessDays` | `[]` | ISO dates that **are**, overriding `weekendDays`, such as a working Saturday |
+
+The composition looks in the job's namespace first, then in `adhar-system`, which ships `weekdays`. It copies the calendar into `<name>-calendar` and mounts it read-only at `/etc/adhar/batch/calendar/calendar.yaml`. On a day that is not a business day, a `schedule`, `dependency` or `backfill` run exits `0` as skipped with reason `calendar`. A missing or invalid file is exit `2`, never a silent run.
 
 ## Holds
 
@@ -185,6 +239,7 @@ The annotation `adhar.io/batch-hold` on the BatchJob holds it. Its value is the 
 | `queue` | The Volcano queue the runs are bound to, when they run on Volcano |
 | `runTemplate` | The ConfigMap runs start from: `<name>-run` |
 | `cronJob` | The CronJob, when the job has a schedule |
+| `calendar` | The calendar ConfigMap (`<namespace>/<name>`) that `schedule.calendar` resolved to |
 | `lastScheduleTime`, `lastSuccessfulTime` | From the CronJob |
 | `activeRuns` | The names of the runs in progress, from the CronJob |
 | `held.reason`, `held.since` | Present while the job is held. `since` is set once and kept |
@@ -196,10 +251,11 @@ Crossplane supplies `Synced` and `Ready`. The composition adds:
 
 | Type | Status | Reason | Meaning |
 |---|---|---|---|
-| `PrerequisitesReady` | True | `Met` | The job's PriorityClass exists |
+| `PrerequisitesReady` | True | `Met` | The job's PriorityClass exists, and its calendar resolved. The message names the calendar's source |
 | | False | `PriorityClassMissing` | The `core/adhar-batch` package is not installed. The schedule is suspended until it is |
 | | False | `SchedulerUnavailable` | `scheduler: volcano` was asked for, and Volcano is not installed |
 | | False | `QueueUnavailable` | `scheduler: volcano` was asked for, and the team's queue is missing or closed |
+| | False | `CalendarUnresolvable` | No ConfigMap of the `schedule.calendar` name, labelled as a calendar, in the job's namespace or `adhar-system`. The schedule is suspended |
 | `TemplateReady` | True | `Published` | Runs start from `<name>-run` |
 | | Unknown | `Creating` | The run template is not created yet |
 | `ScheduleReady` | True | `OnDemand` | No schedule; the job runs when started |
@@ -247,6 +303,9 @@ Everything is created in the BatchJob's namespace.
 | ConfigMap | `<name>-run` | Always | The run template, below |
 | CronJob | `<name>` | With `schedule` | `schedule`, `timeZone`, `startingDeadlineSeconds`, `concurrencyPolicy`, the history limits, and `suspend` when the schedule is suspended in Git, the job is held or a prerequisite is missing. Its job template is the run template's Job, with the trigger `schedule`. A partitioned job on Volcano gets a `batch.volcano.sh/v1alpha1` CronJob instead |
 | PrometheusRule | `<name>-batch` | `alerts.enabled` | The [alerts](#alerts) |
+| ConfigMap | `<name>-calendar` | `schedule.calendar` resolves | A copy of the calendar, annotated `adhar.io/batch-calendar-source: <namespace>/<name>`. Kept while its source is missing |
+
+The batch observer also writes ConfigMap `<name>-observer`, owned by the BatchJob: its record of what it has published, so each transition is announced once. It is internal; do not edit it.
 
 ### The run template
 
@@ -259,7 +318,7 @@ The ConfigMap `<name>-run` holds:
 | `kind` | `Job` for `mode: single`. For `mode: partitioned`, `IndexedJob` on plain Kubernetes or `VolcanoJob` on Volcano |
 | `naming` | `v1`: the Console names a run `<name>-` and the first eight hex characters of a SHA-256 of the identifying parameters' canonical JSON |
 
-A run created from it may change only its name, its `adhar.io/batch-trigger` label, and the environment variables `ADHAR_BATCH_PARAMS`, `ADHAR_BATCH_TRIGGER`, `ADHAR_BATCH_RESTART_OF`, `ADHAR_BATCH_COMMAND` and `ADHAR_BATCH_EXECUTION_ID`.
+A run created from it may change only its name, its `adhar.io/batch-trigger` label, `spec.suspend`, and the environment variables `ADHAR_BATCH_PARAMS`, `ADHAR_BATCH_TRIGGER`, `ADHAR_BATCH_RESTART_OF`, `ADHAR_BATCH_COMMAND` and `ADHAR_BATCH_EXECUTION_ID`.
 
 ### The run Job
 
@@ -286,7 +345,7 @@ A partitioned run on plain Kubernetes is an Indexed Job with `completions` and `
 | `terminationGracePeriodSeconds` | `timeouts.terminationGracePeriodSeconds` |
 | `enableServiceLinks` | `false` |
 | `securityContext` | `runAsNonRoot: true`, `seccompProfile: RuntimeDefault` |
-| Volumes | `tmp`, an `emptyDir` limited to `resources.tmpSize`, mounted at `/tmp` |
+| Volumes | `tmp`, an `emptyDir` limited to `resources.tmpSize`, mounted at `/tmp`. With `schedule.calendar`, `calendar`, the calendar copy, mounted read-only at `/etc/adhar/batch/calendar` |
 | Annotations | `adhar.io/batch-actor` (filled in by Kyverno); `cluster-autoscaler.kubernetes.io/safe-to-evict: "false"` with `disruption: avoid` |
 | Container `batch` | `allowPrivilegeEscalation: false`, every capability dropped. Requests `resources.cpu` and `resources.memory`. Limits `resources.memory`, and `resources.cpuLimit` or else the CPU request |
 
@@ -298,10 +357,13 @@ The container's environment:
 | `ADHAR_BATCH_NAME` | The BatchJob's name |
 | `ADHAR_BATCH_ROLE` | `single`. In a partitioned run: `indexed` on plain Kubernetes, `manager` or `worker` on Volcano |
 | `ADHAR_BATCH_PARTITION_TRANSPORT`, `_GRIDSIZE`, `_TIMEOUT` | Partitioned runs only: `jdbc`, `gridSize`, and the deadline less 300 seconds (or half the deadline, when that is longer) |
-| `ADHAR_BATCH_TRIGGER` | `schedule` or `manual` |
+| `ADHAR_BATCH_TRIGGER` | `schedule` on the CronJob's runs. A client sets `manual`, `restart`, `backfill`, `dependency`, `workflow`, `smoke` or `ops` |
 | `ADHAR_BATCH_PARAMS` | `{}`, replaced with the run's parameters on a manual run |
 | `ADHAR_BATCH_TIME_ZONE` | `schedule.timeZone` |
 | `ADHAR_BATCH_REPOSITORY_SCHEMA` | `database.schema` |
+| `ADHAR_BATCH_CALENDAR` | `/etc/adhar/batch/calendar/calendar.yaml`, with `schedule.calendar` |
+| `ADHAR_BATCH_RETENTION_DAYS`, `ADHAR_BATCH_RETENTION_KEEP_LAST` | `retention.days` and `retention.keepLast`, or their defaults |
+| `ADHAR_BATCH_RESTART_OF`, `ADHAR_BATCH_COMMAND`, `ADHAR_BATCH_EXECUTION_ID` | Set by a client on a restart or an ops run |
 | `ADHAR_BATCH_SHUTDOWN_TIMEOUT` | The grace period minus 30 seconds, at least 10 seconds: `90s` by default |
 | `ADHAR_BATCH_K8S_JOB` | The Job's name, from the label `batch.kubernetes.io/job-name` |
 | `ADHAR_BATCH_ACTOR` | The user who created the run, from the annotation `adhar.io/batch-actor` |
@@ -328,13 +390,27 @@ Every composed object carries:
 | `adhar.io/workload` | `batch` |
 | `adhar.io/batch-job` | The BatchJob's name |
 
-Runs and their pods also carry `adhar.io/batch-role` (the value of `ADHAR_BATCH_ROLE`), `adhar.io/batch-trigger` (`schedule` or `manual`), `adhar.io/component: app`, and `adhar.io/scale-up: "true"` when `scaleUp` is set.
+Runs and their pods also carry `adhar.io/batch-role` (the value of `ADHAR_BATCH_ROLE`), `adhar.io/batch-trigger` (the trigger), `adhar.io/component: app`, and `adhar.io/scale-up: "true"` when `scaleUp` is set. A workflow's run is annotated `adhar.io/batch-workflow: <workflow>`, and a backfill's held-back run `adhar.io/batch-queued: backfill` until it is released.
+
+## Run names
+
+A run's name is its identity: asking for a name that exists finds that run instead of starting another.
+
+| Trigger | Started by | Name |
+|---|---|---|
+| `schedule` | The CronJob | `<name>-<timestamp>`, chosen by the CronJob |
+| `manual`, `backfill`, `dependency`, `workflow` | A person, `adhar batch backfill`, the batch observer, an Argo Workflows step | `<name>-<hash8>`: the first eight hex characters of a SHA-256 of the identifying parameters' canonical JSON (naming `v1`) |
+| `restart` | `adhar batch restart`, the Console | `<run>-r<n>`, with the same identity, at most 99 times |
+| `smoke` | Kargo's verification in test | `<name>-smoke-<sha7>`, the first seven hex characters of the template's image digest |
+| `ops` | `adhar batch recover`, `abandon`, `dlq --replay` | `<name>-ops-<verb>-<executionId>`, trimmed to fit 63 characters with its retries |
+
+The CLI, the Console, the kit and the observer compute the same name from the same rule.
 
 ## Exit codes
 
 | Code | Meaning | Counts toward `backoffLimit` |
 |---|---|---|
-| `0` | Completed, or there was nothing to do | — |
+| `0` | Completed, or skipped: `already-complete`, `duplicate` or `calendar` | — |
 | `1` | The JVM failed before the run started | Yes |
 | `2` | Invalid request | No: the run fails at once |
 | `3` | Failed, and retrying will not help | No: the run fails at once |
@@ -347,7 +423,7 @@ Runs and their pods also carry `adhar.io/batch-role` (the value of `ADHAR_BATCH_
 
 A pod lost to a disruption, such as a node drain, does not count either way: it is replaced.
 
-When it exits, the runner writes a one-line JSON termination summary to `/dev/termination-log` and stdout. Treat every field in it as optional.
+When it exits, the runner writes a one-line JSON termination summary (`"v":1`) to `/dev/termination-log` and stdout: job, instance and execution ids, status, exit code, outcome and its reason, trigger, business date, item counts (`read`, `written`, `skipped`, `deadLettered`, `filtered`) and steps. Treat every field as optional.
 
 ## Validation
 
@@ -366,8 +442,12 @@ These fail the render. The BatchJob reports `Synced=False` with the message show
 | A runner-owned name in `env` | `env … is owned by the runner's contract` |
 | `resources.cpuLimit` below a CPU request | The message names both values |
 | `mode: partitioned` whose pods together exceed the namespace's ResourceQuota `<namespace>-quota` | The message names every quota key that is over |
+| `smoke.parameters` naming a parameter the job does not declare | The message names the parameter |
+| `dependsOn` naming the job itself | The message names the job |
+| `dependsOn` on a job with no business-date parameter | `dependsOn …: the batch observer starts this job for a business date, and the job declares no businessDate parameter …` |
+| A smoke or dependency run that could not fill a required parameter: one with no default, schedule-supplied but not a date, or given a value outside `allowed` or of the wrong `type` | The message names the parameter |
 
-The API server also enforces the schema's types, patterns and ranges, and refuses the [fields that are not accepted yet](#fields-not-accepted-yet).
+The API server also enforces the schema's types, patterns and ranges.
 
 ## Alerts
 
@@ -386,7 +466,56 @@ The alerts read run labels from kube-state-metrics, which the platform's `kube-p
 
 A partitioned job on Volcano also gets `BatchGangQueueRejected` (its queue has not admitted the run for 30m) and `BatchGangPending` (admitted, but the cluster has had no room for all of its pods for 30m). It gets no `BatchScheduleMissed`.
 
+Four alerts read series that exist only in Mimir: the kit's OTLP meters and the batch observer's deadline gauges. They are loaded into the Mimir ruler once, cluster-wide, in the production profile, and route through the platform Alertmanager like the rest:
+
+| Alert | Fires when | For |
+|---|---|---|
+| `BatchNoProgress` | A running run has committed no chunk for 30 minutes | — |
+| `BatchDeadLetterGrowing` | A step has dead-lettered items in every 10-minute window | 15m |
+| `BatchDeadlineEndangered` | The forecast end of a business date's run passes `sla.finishBy` | — |
+| `BatchDeadlineMissed` | `sla.finishBy` passed with no success for that business date. Resolves once the date succeeds | — |
+
+Their severity is critical in prod and warning elsewhere.
+
 The `core/adhar-batch` package adds two platform-wide alerts: `BatchRunAdmittedUnchecked` (the API server admitted a run without asking the run-integrity policy) and `BatchRunIntegrityUnenforced` (Kyverno's admission controller is gone).
+
+## Events
+
+The batch observer, in the platform's long-running controller manager, publishes what happens to runs as CloudEvents on the topic `adhar.batch`, kept 90 days. The kit never publishes itself, so a run that dies without a word (OOM, SIGKILL, a lost node) still produces an event.
+
+| Type | When |
+|---|---|
+| `io.adhar.batch.run.requested` | A run appeared with a trigger other than `schedule`; `data.run.actor` is who asked |
+| `io.adhar.batch.run.started` | The run's first attempt is Running |
+| `io.adhar.batch.run.succeeded` | The run completed, with its item counts |
+| `io.adhar.batch.run.failed` | The run failed; `data.outcome` has the exit code and reason (`BackoffLimitExceeded`, `DeadlineExceeded` or the kit's reason) |
+| `io.adhar.batch.run.skipped` | Exit 0 with outcome `skipped` (`already-complete`, `duplicate`, `calendar`), **instead of** `succeeded` |
+| `io.adhar.batch.run.stopped`, `run.resumed` | Each stop and resume |
+| `io.adhar.batch.run.lost` | One attempt ended with no summary (`OOMKilled`, `NodeLost`, `PodVanished`), or the run was deleted before it ended (`Vanished`) or while no observer ran (`Unobserved`, which satisfies no `dependsOn`) |
+| `io.adhar.batch.schedule.held`, `schedule.released` | The hold annotation appeared or went |
+| `io.adhar.batch.schedule.missed` | A cron slot passed 10 minutes ago with no run |
+| `io.adhar.batch.deadline.endangered` | The forecast end (start or slot, plus the p90 of the last 20 durations) passes `sla.finishBy`, before the deadline |
+| `io.adhar.batch.deadline.missed` | `sla.finishBy` passed without a success |
+
+- **Subject and order.** `subject` is `<namespace>/<batchjob>`, the record key, so one job's events stay in order. `adharcorrelationid` is the run's UID, or the BatchJob's for a hold or a missed slot.
+- **Hierarchy.** Organisation, team, project and environment come from the namespace's labels, never from the run.
+- **Data.** `batchJob`, `namespace`, `application`; `run` (name, kind, uid, trigger, actor, scheduler, queue); `springBatch` (job, instance and execution ids, status, business date, identifying parameters, with sensitive values masked); `counts`; `start`, `end`, `durationSeconds`; `outcome`; and by type `pod`, `schedule`, `deadline` or `dependency`. Treat every field as optional.
+- **Exactly once per transition.** The observer writes what it has said to ConfigMap `<name>-observer` before handing events to the publisher. A crash between the two can lose an event, never send one twice.
+- **Advisory.** Publishing never blocks or fails anything. With no bus (the local profile) or a bus outage, events are dropped; `dependsOn` and deadlines carry on, because they are decided from cluster objects.
+
+The observer also serves two gauges, read by the Mimir ruler for the deadline alerts: `adhar_batch_deadline_seconds_remaining` (`finishBy` less now, per business date not yet succeeded; negative once passed) and `adhar_batch_deadline_projected_slack_seconds` (`finishBy` less the forecast end). Both carry `k8s_namespace_name`, `adhar_batch_job`, `adhar_application`, `adhar_environment`, `adhar_team` and `business_date`.
+
+### Cost
+
+The `adhar-cost-governance` package records what batch runs cost from OpenCost's own allocation (the larger of request and usage, at the node's price), not from requests, which a finished run's pod keeps reporting until its TTL:
+
+| Series | Per |
+|---|---|
+| `adhar:batch_run_cost_usd:hourly` | Run |
+| `adhar:batch_job_cost_usd:hourly`, `:hourly_total` | BatchJob |
+| `adhar:batch_team_cost_usd:hourly_total` | Organisation and team |
+
+The Observability → Cost dashboard shows them in its Batch row.
 
 ## Permissions
 
@@ -408,7 +537,7 @@ The `core/adhar-batch` package adds two platform-wide alerts: `BatchRunAdmittedU
 | `adhar-batch-critical-prod-only` | Enforce | `adhar-batch-critical`, `adhar-batch-volcano-critical` and `adhar.io/scale-up: "true"` only in prod namespaces |
 | `adhar-batch-volcano-classes` | Enforce | The two Volcano priority classes only on pods that name `schedulerName: volcano` |
 | `adhar-batch-hold-only` | Enforce | Anyone but Argo CD and Crossplane may change only `adhar.io/batch-hold` on a BatchJob |
-| `adhar-batch-pod-standards` | Audit | Memory request equals limit, `restartPolicy: Never`, a batch PriorityClass, no PVC, a deadline and a TTL |
+| `adhar-batch-pod-standards` | Enforce, fails open | Memory request equals limit, `restartPolicy: Never`, a batch PriorityClass, no PVC, a deadline and a TTL. Checked on Jobs and on CronJobs whose job template is a run, so a bad schedule is refused when it is defined. Runs admitted before enforcement can still be stopped and resumed |
 
 The `adhar-batch-volcano` package adds the Volcano halves, where Volcano is enabled:
 
@@ -419,28 +548,51 @@ The `adhar-batch-volcano` package adds the Volcano halves, where Volcano is enab
 | `adhar-batch-run-integrity-volcano` | Enforce, fails closed | A Volcano Job labelled `adhar.io/batch-job` and created by a person must match the run template in every task |
 | `adhar-batch-volcano-prod-jobs-name-a-batchjob` | Enforce | In prod, a Volcano Job a person creates must name a BatchJob |
 | `adhar-batch-volcano-prod-only` | Enforce | `adhar.io/scale-up: "true"` and `adhar-batch-volcano-critical` only in prod namespaces |
-| `adhar-batch-volcano-pod-standards` | Audit | Holds Volcano runs to the pod standards |
+| `adhar-batch-volcano-pod-standards` | Enforce, fails open | Holds Volcano runs and Volcano CronJobs to the pod standards and the Volcano classes |
 
 ## Command line
 
 `adhar batch` (aliases `batchjob`, `batchjobs`) runs and operates batch jobs. Every command acts as you, on the same objects the Console uses.
 
+### Inspect
+
 | Command | What it does | Flags |
 |---|---|---|
 | `list` (alias `ls`) | Lists BatchJobs: `NAME`, `APPLICATION`, `SCHEDULE`, `NEXT RUN`, `LAST RUN`, `LAST SUCCESS`, `HELD`, `STATUS` | `-A/--all-namespaces` |
 | `describe <job>` | Shows a job's definition, parameters, schedule, conditions and last runs | |
-| `run <job>` | Starts a run from the run template, named `<job>-<hash8>` for its identifying parameters. An existing run of that name is shown instead | `-p/--param key=value` (repeatable), `--wait`, `--follow` (implies `--wait`), `--timeout` (default: `activeDeadlineSeconds` plus ten minutes) |
 | `runs <job>` | Lists a job's runs with trigger, actor, business date and exit code | `--status` (`pending`, `running`, `stopping`, `stopped`, `succeeded`, `failed`), `--limit` (default `20`, `0` for all) |
 | `logs <run>` | Prints the run's pod logs | `-f/--follow`, `--role` (`manager`, `worker`), `--index` |
+| `history <job>` | The job's events from `adhar.batch`, beyond the Jobs' TTL. Needs the event bus | `--since` (`30d`, `12h`, `90m`), `--limit` (default `200`, `0` for all), `--bridge` |
+| `queues` | Lists the Volcano queues with their share and usage | `--team <org>-<team>` |
+| `schedules` | Lists the in-service schedules that services report (Quartz engine) | `-A/--all-namespaces` |
+
+### Run
+
+| Command | What it does | Flags |
+|---|---|---|
+| `run <job>` | Starts a run from the run template, named for its identifying parameters. An existing run of that name is shown instead; with `--wait`, a failed one is restarted as the next `-r<n>` | `-p/--param key=value` (repeatable), `--wait`, `--follow` (implies `--wait`), `--smoke`, `--timeout` (default: `activeDeadlineSeconds` plus ten minutes) |
+| `backfill <job>` | One run per business date from `--from` to `--to`, inclusive, at most 366. On plain Kubernetes, never more than `--parallel` in flight; on Volcano, the queue decides | `--from`, `--to` (`yyyy-mm-dd`), `--parallel` (default `1`), `-p/--param`, `--wait` (exit `1` when any run failed), `--timeout` |
 | `stop <run>` | Stops a run at its next chunk boundary | |
 | `resume <run>` | Resumes a stopped run from its last commit | |
 | `restart <run>` | Restarts a failed run as `<run>-r<n>` with the same identifying parameters | |
 | `hold <job>` | Holds a job's schedule without a commit | `--reason` (required) |
 | `release <job>` | Releases a held job's schedule | |
-| `queues` | Lists the Volcano queues with their share and usage | `--team <org>-<team>` |
-| `schedules` | Lists the schedules that services report for jobs they run in-process. In-service jobs are `status:planned` | `-A/--all-namespaces` |
 
-Persistent flags:
+`run --smoke` starts the job's smoke run, `<job>-smoke-<sha7>`, with `smoke.parameters`. It is what the smoke gate runs; run it yourself to check a build before promoting it.
+
+### Repair an execution
+
+`status:in-progress` — these start an ops Job; each takes effect once the adhar-kit runner implements its command.
+
+| Command | What it does | Flags |
+|---|---|---|
+| `dlq <job>` | Dead-lettered item counts per execution, from the runs' summaries and the `adhar.batch` events. `--replay` re-processes them, one ops Job per execution | `--replay`, `--execution <id>`, `--wait`, `--no-events`, `--timeout`, `--bridge` |
+| `recover <run>` | Recovers an execution left `STARTED` by a dead owner | `--execution <id>` (default: the one the run's summary names), `--wait`, `--timeout` |
+| `abandon <run>` | Marks an execution `ABANDONED`, so its identity can be run anew | `--execution <id>`, `--wait`, `--timeout` |
+
+An ops Job is the deployed run template with `ADHAR_BATCH_COMMAND` and `ADHAR_BATCH_EXECUTION_ID` set and trigger `ops`, so run integrity admits it like any run. With `--wait`, a failed ops Job is retried as `-r<n>`.
+
+### Persistent flags
 
 | Flag | Default | Meaning |
 |---|---|---|
@@ -449,14 +601,14 @@ Persistent flags:
 | `--project` | `adhar` | The Project whose environments `--env` names |
 | `-o/--output` | `table` | `table`, `json` or `yaml` |
 
-With `--wait`, `adhar batch run` exits with the run's exit code, and with `4` for a stopped run.
+With `--wait`, `adhar batch run` exits with the run's exit code: `0` includes skipped, and `4` means stopped.
 
 ```bash
 adhar batch list --env prod
 adhar batch run importer --env prod -p businessDate=2026-11-03 --wait --follow
+adhar batch backfill importer --env prod --from 2026-11-01 --to 2026-11-07 --parallel 2 --wait
 adhar batch runs importer --env prod --status failed
-adhar batch logs importer-09932cb3 --env prod -f
-adhar batch restart importer-09932cb3 --env prod
+adhar batch history importer --env prod --since 7d -o json | jq -r '.[].type'
 adhar batch hold importer --env prod --reason "quarter-end freeze"
 ```
 
@@ -468,7 +620,20 @@ kubectl -n prod describe batchjobs.platform.adhar.io importer  # status and cond
 kubectl -n prod get jobs -l adhar.io/batch-job=importer        # its runs
 ```
 
-[Starting a run by hand](/docs/core-concepts/batch#starting-a-run-by-hand) shows how to create a run from the template with `kubectl`.
+[Starting runs by hand](/docs/core-concepts/batch#by-hand) shows how to create a run from the template with `kubectl`.
+
+### From a workflow
+
+The `ClusterWorkflowTemplate` `adhar-batch-steps`, template `run`, starts a run from an Argo Workflows step and waits for it. It takes two inputs, `batchJob` and `parameters` (a JSON object of the job's parameters), and is exactly `adhar batch run <batchJob> -n <namespace> --wait -o json`:
+
+| The run of that name | The step |
+|---|---|
+| Completed | Succeeds; nothing re-runs |
+| Still running | Waits for it |
+| Failed | Restarts it as the next `-r<n>`. A retry of the step itself reports the failure instead of restarting a run this workflow started |
+| Stopped | Fails, exit `4` |
+
+The step's exit code is the run's, and its stdout is the `-o json` document (`outputs.result`). It runs as the workflow's ServiceAccount (`adhar-workflow` by default), which needs create, get, list, watch and delete on `jobs` and get on `batchjobs`, `configmaps` and `pods` in the job's namespace. `--timeout` is the job's `activeDeadlineSeconds` plus ten minutes, and the workflow's own deadline still applies.
 
 ## Next steps
 

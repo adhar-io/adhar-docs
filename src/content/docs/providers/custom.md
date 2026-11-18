@@ -219,7 +219,7 @@ The catalogue keeps converging after the CLI returns; that is expected. `--apps-
 | Resolver hardening | `/etc/resolv.conf` pinned to real upstreams, so image pulls do not depend on the local `systemd-resolved` stub |
 | The cluster | `kubeadm init` with **kube-proxy skipped**, workers joined, kubelet `maxPods` raised to 250 |
 | Cilium | `kubeProxyReplacement`; also the Gateway data path, on the host network at :80/:443 |
-| Storage | The local-path provisioner (v0.0.31), with `local-path` as the default StorageClass |
+| Storage | The local-path provisioner, with `local-path` as the default StorageClass |
 | The platform | ArgoCD, Gitea, the GitOps stack and the package catalogue, as on every provider |
 
 It leaves alone your machines, firewall and iptables rules (including after a reset), load balancers, block storage, DNS zones and certificates.

@@ -28,16 +28,7 @@ Nothing is rebuilt between environments, so what you tested is byte-for-byte wha
 - **An application repository in the `adhar` Gitea organisation, built by `app-ci`.** This guide uses `adhar/checkout`. You need a green `app-ci` PipelineRun for it, because Kargo watches the image CI publishes to Harbor.
 - **Access to the Kargo UI (`https://kargo.<host>`) or the `kargo` CLI**, to inspect Freight.
 
-All three packages are on in the **production** profile and off in the local one. On a laptop, turn them on:
-
-```bash
-adhar stack export ./stack && export ADHAR_STACK_DIR=$PWD/stack   # once: an editable copy of the built-in stack
-adhar stack enable cert-manager kargo argo-rollout
-adhar upgrade --diff-only          # review what changed
-adhar upgrade
-```
-
-`adhar stack enable` is a file edit, not a cluster call. It edits the profile's ApplicationSet file and its mirrored environment config in the stack directory (`ADHAR_STACK_DIR`, or `--stack-dir`), then stops. `adhar upgrade` converges the cluster. Enabling a package in the local profile also enables it in production, because the local set must stay a subset of production, so the diff shows both files. See [Platform Services](/docs/core-concepts/platform-services).
+All three packages are on in both the local and the production profile, so a fresh platform, including one on a laptop, can promote with no extra setup.
 
 ## How it works
 

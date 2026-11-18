@@ -1,5 +1,5 @@
 import type { ComponentType } from "react";
-import { Flow, Ladder, Pipeline, Split } from "@/components/docs/diagram-kit";
+import { Flow, Ladder, Pipeline } from "@/components/docs/diagram-kit";
 
 /** New diagrams from the docs rewrite. Every key is prefixed "nsv-". */
 
@@ -52,33 +52,73 @@ const BatchModel = () => (
   />
 );
 
-/* The two ways a run starts, and what guards each. */
+/* Every way a run starts: the trigger, who starts it, and the run's name. */
 const BatchRunPaths = () => (
-  <Split
-    label="Two ways a batch run starts. Scheduled: the CronJob fires on schedule.cron in schedule.timeZone, skips a fire that is later than startingDeadlineSeconds or that would overlap a running one, names the run itself and marks it with trigger schedule. Manual: a person uses Run now in the Console or adhar batch run; the Job is created from the run template ConfigMap, named <job>-<hash8> after its identifying parameters so the same identity never runs twice, checked against the template by the Kyverno policy adhar-batch-run-integrity, and marked with trigger manual."
-    caption="Both paths create the same Job from the same template: same image, resources and command."
-    left={{
-      heading: "Scheduled run",
-      tone: "primary",
-      items: [
-        "CronJob fires on schedule.cron, in timeZone",
-        "Skipped if later than startingDeadlineSeconds",
-        "Skipped while a run is active (Forbid)",
-        "Suspended by a hold or schedule.suspend",
-        "ADHAR_BATCH_TRIGGER=schedule",
-      ],
-    }}
-    right={{
-      heading: "Manual run",
-      tone: "accent",
-      items: [
-        "Run now in the Console, or adhar batch run",
-        "Job created from ConfigMap <name>-run",
-        "Named <job>-<hash8>: same identity runs once",
-        "Kyverno refuses a run that differs from it",
-        "ADHAR_BATCH_TRIGGER=manual",
-      ],
-    }}
+  <Ladder
+    label="The eight triggers of a batch run. schedule: the CronJob fires on schedule.cron. manual: a person uses Run now in the Console or adhar batch run; the run is named <job>-<hash8> after its identifying parameters. restart: adhar batch restart creates <run>-r<n> with the same identity. backfill: adhar batch backfill creates one run per business date, each named for its identity, released at most --parallel at a time. dependency: the batch observer starts a run once every job in dependsOn has succeeded for a business date. workflow: an Argo Workflows step, adhar-batch-steps/run, starts the run as adhar batch run would. smoke: Kargo's verification in a test environment runs <job>-smoke-<sha7 of the image digest>. ops: adhar batch recover, abandon and dlq --replay start <job>-ops-<verb>-<executionId>. Every run except a scheduled one is created from the run template and checked against it by Kyverno."
+    heading={["trigger", "started by → run name"]}
+    width={820}
+    boxW={190}
+    caption="Every run is the same Job from the same template. The name is the identity, so asking twice never runs twice."
+    rungs={[
+      { name: "schedule", detail: "the CronJob", adds: ["fires on schedule.cron in schedule.timeZone → named by the CronJob"], tone: "primary" },
+      { name: "manual", detail: "a person", adds: ["Run now, or adhar batch run → <job>-<hash8>"] },
+      { name: "restart", detail: "a person", adds: ["adhar batch restart <run> → <run>-r<n>, same identity"] },
+      { name: "backfill", detail: "a person", adds: ["adhar batch backfill, one per business date → <job>-<hash8>"] },
+      { name: "dependency", detail: "the batch observer", adds: ["every dependsOn job succeeded for the date → <job>-<hash8>"] },
+      { name: "workflow", detail: "an Argo Workflows step", adds: ["adhar-batch-steps/run → <job>-<hash8>"] },
+      { name: "smoke", detail: "Kargo, in test", adds: ["spec.parameters.smoke → <job>-smoke-<sha7 of the digest>"] },
+      { name: "ops", detail: "a person", adds: ["recover, abandon, dlq --replay → <job>-ops-<verb>-<executionId>"], tone: "accent" },
+    ]}
+  />
+);
+
+/* A nightly chain: one business date flows through a schedule, a dependency and a deadline. */
+const BatchBusinessDate = () => (
+  <Flow
+    label="A nightly chain keyed on one business date. At 01:30 Singapore time the extract job's CronJob fires, and its businessDate parameter is derived from the slot, 2026-11-03. When extract succeeds, the batch observer sees that every job in load's dependsOn has a succeeded run for that date and starts load once, with trigger dependency and the same businessDate. Load has sla.finishBy 06:00: the observer predicts its end from the p90 of its last 20 runs and emits deadline.endangered before 06:00 if the forecast passes it, and deadline.missed if 06:00 passes with no success."
+    caption="The business date is the chain's key: it names every run, and dependsOn waits on it."
+    nodes={[
+      { title: "01:30 slot", lines: ["businessDate", "2026-11-03"], tone: "primary" },
+      { title: "extract", lines: ["trigger schedule", "succeeds"] },
+      { title: "batch observer", lines: ["every dependsOn job", "succeeded for the date"] },
+      { title: "load", lines: ["trigger dependency", "same businessDate"] },
+      { title: "finishBy 06:00", lines: ["endangered: forecast", "missed: no success"], tone: "accent" },
+    ]}
+    edges={[{ label: "starts" }, { label: "reports" }, { label: "starts" }, { label: "checked by" }]}
+    gap={34}
+  />
+);
+
+/* What the batch observer reads and what it produces. */
+const BatchObserver = () => (
+  <Ladder
+    label="The batch observer runs in the platform's long-running controller manager. It watches every run (Jobs and Volcano Jobs labelled adhar.io/workload=batch), their pods' termination summaries and the BatchJobs. It has four duties: it publishes each run transition as an adhar.batch CloudEvent on the event bus, which keeps 90 days; it starts the runs dependsOn asks for, deciding from Kubernetes objects rather than the bus; it forecasts each run's end against sla.finishBy and exposes two deadline gauges; and it records what it has said in ConfigMap <batchjob>-observer so each transition is published once, across restarts."
+    heading={["duty", "what it does"]}
+    width={820}
+    boxW={190}
+    caption="Events are advisory: a bus outage drops them, but never changes what runs. dependsOn never reads the bus."
+    rungs={[
+      { name: "Events", detail: "adhar.batch topic", adds: ["each run transition as a CloudEvent, kept 90 days;", "read by adhar batch history and dlq"], tone: "primary" },
+      { name: "Dependencies", detail: "dependsOn", adds: ["starts a dependency run once its upstream jobs succeeded;", "decided from cluster objects, so it works without the bus"] },
+      { name: "Deadlines", detail: "sla.finishBy", adds: ["forecast = start + p90 of the last 20 runs;", "deadline.endangered before, deadline.missed after; two gauges"] },
+      { name: "Record", detail: "<batchjob>-observer", adds: ["what has been published, written first:", "each transition is said once, never twice"], tone: "accent" },
+    ]}
+  />
+);
+
+/* The smoke run gate between test and prod. */
+const BatchSmokeGate = () => (
+  <Pipeline
+    label="The smoke gate for a batch application. A push builds and signs an image. Kargo promotes the digest into dev, then into test. When the BatchJob sets spec.parameters.smoke, Kargo's verification in test runs adhar batch run --smoke, which starts <job>-smoke-<first 7 hex of the image digest> with the smoke parameters and waits for it. Only a build whose smoke run succeeded is verified in test and can be promoted to prod by a Release. Verifying the same build again finds its existing run."
+    caption="A build whose smoke run fails never reaches prod. The same build verified twice reuses its run."
+    stages={[
+      { name: "Build", detail: "app-ci", guarantee: "signed image\ndigest", tone: "primary" },
+      { name: "dev", detail: "Kargo", guarantee: "on demand:\nschedule suspended" },
+      { name: "test", detail: "Kargo", guarantee: "the real cron\n+ verification" },
+      { name: "smoke run", detail: "<job>-smoke-<sha7>", guarantee: "smoke.parameters,\nmust exit 0" },
+      { name: "prod", detail: "Release", guarantee: "only verified\nFreight", tone: "accent" },
+    ]}
   />
 );
 
@@ -106,4 +146,7 @@ export const rw_serverless: Record<string, ComponentType> = {
   "nsv-batch-model": BatchModel,
   "nsv-batch-run-paths": BatchRunPaths,
   "nsv-batch-run-lifecycle": BatchRunLifecycle,
+  "nsv-batch-business-date": BatchBusinessDate,
+  "nsv-batch-observer": BatchObserver,
+  "nsv-batch-smoke-gate": BatchSmokeGate,
 };

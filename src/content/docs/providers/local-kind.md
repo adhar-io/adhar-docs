@@ -185,7 +185,7 @@ sudo security add-trusted-cert -d -r trustRoot -k /Library/Keychains/System.keyc
 
 A Kind cluster is one node. There are no workers to add and no autoscaler. Capacity is whatever your container engine allows.
 
-The curated core exists because the full catalogue does not fit on one Kind node: it wants far more PersistentVolumes and memory than a laptop has. Some packages stay wired but disabled: production delivery, CI infrastructure and the heavy JVM services (Kafka, Nexus, Dapr, the Loki/Tempo/Mimir pipelines, preview environments).
+The curated core exists because the full catalogue does not fit on one Kind node: it wants far more PersistentVolumes and memory than a laptop has. The core includes what a scaffolded service needs end to end: CI (Tekton, buildpacks, Harbor), Nexus and the kit libraries for Java and Node builds, and promotion (Kargo, Argo Rollouts, cert-manager). Heavier services stay wired but disabled: Kafka, Dapr, Knative, the Loki/Tempo/Mimir pipelines and preview environments.
 
 You can enable extra packages locally, but doing so is the usual cause of a Kind cluster that never converges. Check `kubectl top nodes` before and after, and see [Customization](/docs/operations/customization).
 

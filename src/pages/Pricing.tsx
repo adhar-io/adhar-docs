@@ -47,7 +47,7 @@ const faqs = [
   },
   {
     q: "Is Adhar production-ready?",
-    a: "Adhar is at v0.1.x and in active development. The local and single-cluster production paths are verified end to end; the provider pages in the docs say how far each cloud has been verified."
+    a: "Adhar is in active development. The local and single-cluster production paths work end to end, and each provider page in the docs shows its status."
   }
 ];
 

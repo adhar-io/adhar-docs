@@ -18,7 +18,7 @@ This page explains the model, for developers deciding whether a Function fits th
 | | |
 |---|---|
 | **The resource** | `Function` in `platform.adhar.io/v1alpha1`: a namespaced Crossplane composite resource, rendered by the composition `function-local-knative` |
-| **What runs it** | Knative Serving and Eventing, from the `knative` package (Knative Operator v1.23.1), with Kourier as the in-cluster ingress behind the platform Gateway. Dapr handles topic triggers |
+| **What runs it** | Knative Serving and Eventing, from the `knative` package (the Knative Operator), with Kourier as the in-cluster ingress behind the platform Gateway. Dapr handles topic triggers |
 | **Templates** | Go, Node.js, Python, Java and Deno, each a tested, runnable repository with an OpenAPI contract |
 | **Invoked by** | HTTP, always; plus schedules (`cron`), CloudEvents (`cloudevent`) and pub/sub topics (`topic`) |
 | **Scaling** | From `minScale` (default `0`, so scale-to-zero) to `maxScale`, at a target of 100 in-flight requests per pod |
@@ -332,13 +332,13 @@ This section is for platform engineers. Functions need these packages:
 | `knative` | Knative Operator, Serving and Eventing | off | on |
 | `dapr` | `topic` triggers and the optional Dapr sidecar | off | on |
 | `kafka-operator` | Kafka as the Dapr pub/sub backend. Without it, Redis streams are used | off | on |
-| `kargo`, `cert-manager`, `argo-rollout` | Promotion across environments | off | on |
+| `kargo`, `cert-manager`, `argo-rollout` | Promotion across environments | on | on |
 | `tekton`, `adhar-supply-chain`, `harbor` | `app-ci` and the registry | on | on |
 
 On a laptop, turn the engine on and apply the change:
 
 ```bash
-adhar stack enable knative dapr cert-manager kargo argo-rollout
+adhar stack enable knative dapr
 adhar upgrade
 kubectl -n knative-serving get knativeserving knative-serving   # READY True
 kubectl get xrd functions.platform.adhar.io                      # ESTABLISHED True

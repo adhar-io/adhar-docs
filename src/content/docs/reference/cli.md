@@ -463,15 +463,15 @@ Runs and operates [batch jobs](/docs/core-concepts/batch). Aliases: `batchjob`, 
 | Command | What it does | Key flags |
 |---|---|---|
 | `batch list` / `describe <job>` | List BatchJobs / show one job's definition, schedule and last runs | `-A/--all-namespaces` on `list` |
-| `batch run <job>` | Start a run, named for its identifying parameters | `-p/--param key=value`, `--wait`, `--follow`, `--smoke`, `--timeout` |
+| `batch run <job>` | Start a run, named for its identifying parameters. `--smoke` starts the job's smoke run | `-p/--param key=value`, `--wait`, `--follow`, `--smoke`, `--timeout` |
 | `batch runs <job>` | List a job's runs | `--status`, `--limit` (default `20`) |
 | `batch logs <run>` | Print a run's pod logs | `-f/--follow`, `--role manager\|worker`, `--index` |
 | `batch stop <run>` / `resume <run>` / `restart <run>` | Stop at the next chunk boundary / resume from the last commit / restart a failed run as `<run>-r<n>` | — |
 | `batch hold <job>` / `release <job>` | Hold or release a job's schedule | `--reason` (required on `hold`) |
-| `batch backfill <job>` | Run once per business date in a range | `--from`, `--to` (`yyyy-mm-dd`), `--parallel` (default `1`), `-p/--param`, `--wait` |
-| `batch history <job>` | Run history from the event stream | `--since`, `--limit` (default `200`) |
-| `batch dlq <job>` | Dead-lettered items per execution | `--replay`, `--execution`, `--wait` |
-| `batch recover <run>` / `abandon <run>` | Recover or abandon an execution left `STARTED` by a dead owner | `--execution`, `--wait` |
+| `batch backfill <job>` | Run once per business date in a range, at most 366 dates | `--from`, `--to` (`yyyy-mm-dd`), `--parallel` (default `1`), `-p/--param`, `--wait` |
+| `batch history <job>` | 90 days of the job's `adhar.batch` events. Needs the event bus (production profile) | `--since`, `--limit` (default `200`) |
+| `batch dlq <job>` | Dead-lettered item counts per execution; `--replay` re-processes them (`status:in-progress`) | `--replay`, `--execution`, `--wait` |
+| `batch recover <run>` / `abandon <run>` | Recover an execution left `STARTED` by a dead owner / mark one `ABANDONED` so its identity can run again (`status:in-progress`) | `--execution`, `--wait` |
 | `batch queues` / `schedules` | Volcano queues / schedules that services report | `--team <org>-<team>` on `queues`; `-A` on `schedules` |
 
 Persistent flags: `-n/--namespace` (default: the `dev` environment), `--env dev|test|prod`, `--project` (default `adhar`), `-o table|json|yaml`.

@@ -9,7 +9,7 @@ path: "/docs/reference/roadmap"
 Roadmap
 ```
 
-Adhar is in active development (v0.1.x) and grows in phases. This page lists every capability under its phase with its current status, so you can tell whether a feature is ready for you and how to try the ones that are not finished.
+Adhar is in active development and grows in phases. This page lists every capability under its phase with its current status, so you can tell whether a feature is ready for you and how to try the ones that are not finished.
 
 **This page shows direction, not commitment.** The order of work follows community needs.
 
@@ -114,8 +114,11 @@ do-roadmap-phases
 | Both bring-up profiles | `status:complete` | Kind gets the local development core; cloud and on-prem get the full catalogue |
 | Golden paths | `status:complete` | Service, frontend, data-pipeline and ML skeletons, scaffolded from the Console to a signed, running workload |
 | Functions | `status:complete` | The `Function` API on Knative: HTTP, cron, CloudEvent and Dapr topic triggers, five templates, Kargo delivery |
-| [Batch jobs](/docs/core-concepts/batch) | `status:in-progress` | The `BatchJob` API for Spring Batch: scheduled and on-demand runs, holds, the Console page, alerts and policies. The batch template and an `adhar batch` command are still to come |
-| Volcano batch scheduling | `status:planned` | Queues, gang scheduling and partitioned jobs with workers. Volcano ships as an opt-in package, but BatchJobs do not use it yet |
+| [Batch jobs](/docs/core-concepts/batch) | `status:complete` | The `BatchJob` API for Spring Batch: scheduled and on-demand runs, holds, restarts and backfill; the Spring Batch templates; `adhar batch`; the Console page, alerts and policies |
+| Batch chains and deadlines | `status:complete` | `dependsOn` chains keyed on the business date, `sla.finishBy` forecasts and alerts, the smoke-run gate in test, Argo Workflows steps, and `adhar.batch` events with `adhar batch history` |
+| In-service batch jobs | `status:complete` | adhar-kit's Quartz engine: sub-minute and business-hours schedules inside a service, exactly once across replicas |
+| Batch calendars, retention and repair | `status:in-progress` | The platform composes business calendars and JobRepository retention, and `adhar batch recover`, `abandon` and `dlq --replay` start their ops Jobs. Each waits on adhar-kit runner support |
+| Volcano batch scheduling | `status:complete` | Queues, gang scheduling and partitioned jobs, with the partitioned template. On in the production profile, off locally |
 | Team workflows | `status:planned` | Argo Workflows runs the platform's own maintenance tasks today. Workflows that teams write and run themselves come later |
 | Scorecards | `status:complete` | Every service graded 0–100 from live signals, shown in the Console |
 | Package marketplace | `status:complete` | Every package carries a validated contract; the Console switches packages on and off |

@@ -140,7 +140,7 @@ $ adhar version
 
 ╭──────────────────────────────────────────────────╮
 │                                                  │
-│   Version: v0.1.45                               │
+│   Version: <version>                             │
 │   Git Commit: e0e2af9                            │
 │   Build Date: 2026-10-21T04:50:56Z               │
 │   Go Version: go1.27.1                           │

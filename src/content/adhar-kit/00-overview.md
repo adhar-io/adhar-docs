@@ -17,7 +17,6 @@ path: "/adhar-kit"
 |---|---|
 | What it is | A Maven library (29 modules) you add to a Java service |
 | groupId | `com.adhar.kit` |
-| Current version | `0.1.0` |
 | Entry point | `com.adhar.kit.starter.AdharFacade` |
 | Java | 25 or later (enforced by the build) |
 | Maven | 3.9+ to consume, 3.8+ enforced when building the kit |

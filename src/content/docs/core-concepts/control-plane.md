@@ -69,7 +69,7 @@ kubectl explain databases.platform.adhar.io.spec.parameters  # the full request 
 
 ## What changed from Crossplane v1
 
-Adhar runs Crossplane **v2.4.2** and uses its namespaced model everywhere. If you know Crossplane v1, these are the differences that matter. `platform/controlplane/CONVENTIONS.md` enforces every one of them:
+Adhar runs Crossplane v2 and uses its namespaced model everywhere. If you know Crossplane v1, these are the differences that matter. `platform/controlplane/CONVENTIONS.md` enforces every one of them:
 
 | v1 habit | How Adhar uses it |
 |---|---|
@@ -199,13 +199,13 @@ managementPolicies = ["Observe", "Create", "Update", "LateInitialize"] if _retai
 
 Five functions are installed with the control plane (`configuration/functions/functions.yaml`). Reference them by `functionRef.name`:
 
-| Function | Version | Used for |
-|---|---|---|
-| `function-kcl` | v0.12.1 | Cloud resources — RDS, Cloud SQL, Azure SQL — where logic and status mapping are easier in a typed language |
-| `function-go-templating` | v0.12.1 | Most in-cluster Compositions: CNPG, Valkey, RustFS, Argo CD Applications |
-| `function-patch-and-transform` | v0.10.7 | Declarative patching where a template would be overkill |
-| `function-auto-ready` | v0.6.5 | Derives the XR's `Ready` from its composed resources; ends most pipelines |
-| `function-python` | v0.4.0 | The day-2 Operations (backups, rotation, drift, drills) |
+| Function | Used for |
+|---|---|
+| `function-kcl` | Cloud resources — RDS, Cloud SQL, Azure SQL — where logic and status mapping are easier in a typed language |
+| `function-go-templating` | Most in-cluster Compositions: CNPG, Valkey, RustFS, Argo CD Applications |
+| `function-patch-and-transform` | Declarative patching where a template would be overkill |
+| `function-auto-ready` | Derives the XR's `Ready` from its composed resources; ends most pipelines |
+| `function-python` | The day-2 Operations (backups, rotation, drift, drills) |
 
 > **Note:** Use the name `function-go-templating`, not the legacy `fn-go-templating`.
 
