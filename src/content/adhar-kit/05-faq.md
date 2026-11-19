@@ -60,7 +60,7 @@ The `AdharFacade` calls stay the same; the bootstrap, the build and framework-na
 
 ### Does it work with GraalVM native image?
 
-Not verified. The kit ships no GraalVM reachability metadata or Spring AOT runtime hints, its build does not compile a native image, and the facades load adapters reflectively (`Class.forName`). Test a native build of your service before relying on it.
+The kit has no native-image support yet. It ships no GraalVM reachability metadata or Spring AOT runtime hints, its build does not compile a native image, and the facades load adapters reflectively (`Class.forName`). Test a native build of your service before relying on it.
 
 ## Usage
 

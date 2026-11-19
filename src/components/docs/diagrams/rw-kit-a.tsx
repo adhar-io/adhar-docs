@@ -265,9 +265,9 @@ const RewritePaths = () => (
       heading: "In code: RewriteFacade",
       tone: "accent",
       items: [
-        "dryRun / apply: write rewrite.yml, return the command",
+        "dryRun / apply: write rewrite.yml + the command",
         "runInProcess: run recipes on in-memory sources",
-        "RewriteImpactReport: per-file diffs, Markdown or JSON",
+        "Impact report: per-file diffs, Markdown or JSON",
         "validateCatalog: list names that do not resolve",
       ],
       note: "adhar.getRewrite() needs adhar.kit.modules.rewrite=true",
