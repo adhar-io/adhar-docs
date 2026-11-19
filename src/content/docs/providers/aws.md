@@ -343,7 +343,7 @@ After the first nodes join, compute mode installs these over SSH on the control 
 - the `adhar-block` gp3 StorageClass (the chart also adds a non-default `gp3` class)
 - the CSI startup-taint toleration
 
-The CLI finishes with a panel of platform URLs and warns if TLS is still self-signed. **The catalogue keeps converging after the CLI returns**, and the autoscaler adds workers while it does. `--apps-timeout` (default 15m) limits only how long the CLI waits; ArgoCD keeps going either way.
+The CLI finishes with a panel of platform URLs and warns if TLS is still self-signed. **The catalogue keeps converging after the CLI returns**, and the autoscaler adds workers while it does. `--apps-timeout` (default 45m on a cloud) limits only how long the CLI waits; ArgoCD keeps going either way.
 
 > **Note:** Without `--env`, `adhar up -f config.yaml` builds **one** cluster for every `isolation: namespace` environment, sized from the production-type environment, and creates the `dev`, `test` and `prod` namespaces on it. Each `isolation: cluster` environment gets a cluster of its own.
 

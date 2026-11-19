@@ -7,38 +7,31 @@ path: "/adhar-kit/modules/metrics"
 
 # Metrics
 
-`adhar-kit-metrics` is a framework-agnostic metrics layer on Micrometer. It provides:
-
-- annotation-driven and programmatic collection
-- automatic HTTP request metrics
-- SLO/error-budget tracking
-- Prometheus export
-- Kubernetes-aware tagging
-
-It solves two problems at once. It **gets useful numbers out of a service without instrumenting every method by hand. And it keeps those numbers from blowing up Prometheus** through unbounded label cardinality (too many distinct label values).
+`adhar-kit-metrics` puts Micrometer metrics into a service with little hand instrumentation: a per-request HTTP timer with a bounded `uri` tag, annotation-driven method meters, a programmatic `MetricsFacade`, SLO error-budget and burn-rate gauges, JVM and container gauges, and Prometheus and OTLP export defaults. Use it on any service that Prometheus scrapes, or that pushes metrics over OTLP, when you want RED metrics and SLOs without high-cardinality labels (too many distinct label values) filling the metrics backend.
 
 ## At a glance
 
 | | |
 |---|---|
 | Artifact | `com.adhar.kit:adhar-kit-metrics` |
-| Built on | Micrometer core (required) plus the Prometheus registry, OpenTelemetry API and Fabric8 Kubernetes client (all optional), `adhar-kit-commons` |
-| Entry points | `MetricsFacade`, `AdharMetrics`, `MetricsUtils`, `SloRecorder`, `HttpMetricsFilter` |
-| Auto-configuration | `AdharMetricsAutoConfiguration` (gated on `adhar.metrics.enabled`) |
-| Frameworks | Spring, Quarkus, Micronaut, Helidon, Vert.x adapters |
-| Use it when | You need RED metrics, SLOs, and JVM/system telemetry on a Prometheus-scraped service |
+| Toggle | `adhar.metrics.enabled` (default `true`) removes the auto-configuration and the environment defaults. Facade gate `adhar.kit.modules.metrics` (default `true`); when it is `false`, `adhar.getMetrics()` throws `IllegalStateException` |
+| Facade | `adhar.getMetrics()` → `MetricsFacade` (also `MetricsFacade.getInstance()`). Injectable beans: `SloRecorder`, `TagCardinalityLimiter`, `MetricsUtils`, `AdharMetrics`, `PlatformMetrics`, `HttpMetricsFilter` |
+| Dependencies | Required: `adhar-kit-commons`, `micrometer-core`. Optional (add them yourself): `spring-boot-starter-actuator`, `spring-boot-starter-aspectj` (annotations), `spring-boot-starter-webmvc` (HTTP filter), `micrometer-registry-prometheus`, `micrometer-registry-otlp`, `opentelemetry-api` (trace ids and exemplars) |
+| Frameworks | Spring Boot: full auto-configuration. Quarkus, Micronaut, Helidon, Vert.x: `MetricsFacade` adapters only |
 
 ## How it works
 
-Everything lands in one Micrometer `MeterRegistry`. The module feeds that registry from four directions, then limits what comes out of it.
-
 ```diagram
-kit-metrics-registry
+nkc-metrics-http-path
 ```
 
-The cardinality limiter matters more than it sounds. `HttpMetricsFilter` takes the `uri` tag from the best-matching handler pattern when one is available. Otherwise it normalizes numeric and UUID path segments to `{id}`. The limiter then caps the number of distinct values. Without that, one crawler hitting `/orders/<random>` creates a new time series per request.
+- **HTTP.** `HttpMetricsFilter` records the timer `adhar.http.server.requests` (tags `method`, `status`, `outcome`, `uri`) in a `finally`, so failed requests are timed too; a request whose chain throws is tagged `status=500`. Spring Boot's own `http.server.requests` keeps running alongside it.
+- **Bounded `uri`.** The tag is the Spring MVC handler pattern (`/api/orders/{id}`). Without one (no MVC, a 404, an error dispatch), all-digit and UUID segments become `{id}` and paths are cut at ten segments plus `/**`. `TagCardinalityLimiter` then admits the first `max-uri-tags` distinct values and maps every later one to `other`. The request is still counted.
+- **Methods and code.** `EnhancedMetricsAspect` implements the annotations; `MetricsInterceptor` implements `@Measured` and `@MonitorPerformance` as `adhar.operation.*`. `MetricsFacade` records into Micrometer's `Metrics.globalRegistry`.
+- **SLOs.** The filter calls `SloRecorder.recordHttp(uri, status < 500)` for every request.
+- **Environment defaults.** At startup, at the lowest precedence (your own settings win), the module sets `management.metrics.tags.application` (`spring.application.name`, else `OTEL_SERVICE_NAME`) and `management.metrics.tags.environment`, a percentile histogram plus SLO buckets `50ms,100ms,250ms,500ms,1s,2s,5s` for `http.server.requests`, and `management.endpoints.web.exposure.include=health,info,prometheus`.
 
-## Install
+## Add it
 
 ```xml
 <dependency>
@@ -46,269 +39,176 @@ The cardinality limiter matters more than it sounds. `HttpMetricsFilter` takes t
     <artifactId>adhar-kit-metrics</artifactId>
     <version>0.1.0</version>
 </dependency>
+<!-- Optional dependencies are not transitive: add the ones you use. -->
+<dependency>
+    <groupId>org.springframework.boot</groupId>
+    <artifactId>spring-boot-starter-actuator</artifactId>
+</dependency>
+<dependency>
+    <groupId>io.micrometer</groupId>
+    <artifactId>micrometer-registry-prometheus</artifactId>
+</dependency>
+<dependency>
+    <groupId>org.springframework.boot</groupId>
+    <artifactId>spring-boot-starter-aspectj</artifactId>
+</dependency>
 ```
 
-## Key APIs
+Add `io.micrometer:micrometer-registry-otlp` as well if you push metrics over OTLP.
 
-- **`MetricsFacade`** — the programmatic entry point (`getInstance()`): `counter`, `timer`, `gauge(name, supplier, tags)`, `recordTime(name, supplier)`, `increment(name, tags)`, `increment(name, amount, tags)`. You can also reach it as `AdharFacade.getMetrics()`.
-- **`AdharMetrics` / `MetricsUtils`** — lower-level helpers for building and looking up meters.
-- **`PlatformMetrics`** — the pre-named meters other Adhar Kit modules record into, also reachable as `PlatformMetrics.getInstance()`.
-- **`JvmMetricsCollector`** — Adhar-prefixed JVM gauges refreshed from MXBeans on a 15-second schedule.
-- **`KubernetesMetricsUtils`** — pod, namespace and node tags, plus the `adhar.container.*` gauges. `CgroupMetricsPoller` reads container CPU and memory limits from the cgroup filesystem (v1 and v2), with no Kubernetes API access.
-- **`SloRecorder`** — `record(target, success)`, `recordHttp(uri, success)`, `errorBudgetRemaining(target)`, `burnRate(target)`, `getObjectives()`.
-- **`HttpMetricsFilter`** — the per-request timer. It also feeds the `SloRecorder` and copies the current trace id into the MDC.
-- **`TagCardinalityLimiter`** — `limit(tagKey, value)`, `cardinality(tagKey)`, `reset()`.
-- **Annotations** — `@Timed`, `@Counted`, `@Gauged`, `@Summary`, `@Histogram`, `@MonitorPerformance`, `@CacheMetrics`, `@DatabaseMetrics`, `@ApiMetrics`, `@BusinessMetric`, `@Measured`.
+## Use it
 
-## A realistic service
-
-Use programmatic timing where you need the scope to be explicit, and annotations where you do not. Keep tags to closed sets, never identifiers:
+### Programmatic meters, annotations and an SLO
 
 ```java
+package com.example.orders;
+
 import com.adhar.kit.metrics.MetricsFacade;
 import com.adhar.kit.metrics.annotation.BusinessMetric;
 import com.adhar.kit.metrics.annotation.Timed;
 import com.adhar.kit.metrics.slo.SloRecorder;
 import java.math.BigDecimal;
+import java.util.UUID;
+import org.springframework.stereotype.Service;
 
 @Service
 public class OrderService {
 
     private final MetricsFacade metrics = MetricsFacade.getInstance();
-    private final SloRecorder slo;                 // injected: it owns the gauges
-    private final InventoryClient inventory;
+    private final SloRecorder slo;
 
-    public OrderService(SloRecorder slo, InventoryClient inventory) {
+    public OrderService(SloRecorder slo) {
         this.slo = slo;
-        this.inventory = inventory;
     }
 
-    public Order createOrder(OrderRequest request) {
+    public String placeOrder(String region) {
         boolean ok = false;
         try {
-            Order order = metrics.recordTime("order.creation", () -> process(request));
-            // region is a closed set; order id would not be
-            metrics.increment("orders.created", "region", order.getRegion());
+            String id = metrics.recordTime("order.creation", () -> UUID.randomUUID().toString());
+            metrics.increment("orders.created", "region", region); // a closed set, never an id
             ok = true;
-            return order;
+            return id;
         } finally {
-            slo.record("checkout", ok);            // non-HTTP work must be recorded by hand
+            slo.record("checkout", ok); // non-HTTP work: record it yourself
         }
     }
 
     @Timed(name = "inventory.check", percentiles = {0.5, 0.95, 0.99})
     public boolean inStock(String sku) {
-        return inventory.available(sku) > 0;
+        return !sku.isBlank();
     }
 
-    @BusinessMetric(name = "order.value", category = "revenue", recordValue = true)
-    public BigDecimal totalValue(Order order) {
-        return order.total();
+    // Counter adhar.business.order.value {category, outcome}; summary adhar.business.order.value.value
+    @BusinessMetric(name = "order.value", category = "revenue")
+    public BigDecimal orderValue(String orderId) {
+        return BigDecimal.TEN;
     }
 }
 ```
 
-`@Timed` and `@Counted` take `name = "..."`. There is no implicit `value` attribute. They also take `description`, `tags`, `successOnly` and `autoRegister`, and `@Timed` takes a `percentiles` array. If you omit `name`, the meter is named `<simpleclassname-lowercased>.<methodName>`.
+`MetricsFacade` methods: `counter(name, tags...)`, `timer(name, tags...)`, `gauge(name, supplier, tags...)`, `recordTime(name, supplier)`, `increment(name, tags...)`, `increment(name, amount, tags...)`. Tags are key/value pairs. `AdharMetrics` offers the same operations as static methods, plus builders.
 
-`@BusinessMetric` produces the counter `adhar.business.<name>`, tagged `category` and `outcome`. When `recordValue` is true, it also produces `adhar.business.<name>.value`.
+### Annotations
 
-## How it behaves
-
-**One registry, one process.** `MetricsFacade.getInstance()` is a double-checked singleton that resolves a framework adapter once. On Spring and Micronaut it binds to Micrometer's **`Metrics.globalRegistry`**, not to the `MeterRegistry` bean. So it does not depend on the Spring context lifecycle. That is handy in a static utility, but awkward in tests, where meters from one context are still visible to the next. Inject `MeterRegistry` or `SloRecorder` where you can.
-
-**Meters are cached, not recreated.** `EnhancedMetricsAspect` keeps `ConcurrentHashMap`s of timers, counters, summaries and gauges, keyed on name plus tags. So a hot annotated method does one map lookup per call. Both those caches and Micrometer's own have no size limit. That is exactly why tag discipline matters: every distinct tag combination is a permanent map entry *and* a permanent time series.
-
-**Thread-safety.** Every singleton here is safe to share across request threads: the registry and its meters, `TagCardinalityLimiter`, `SloRecorder`, `PlatformMetrics`, `JvmMetricsCollector`, and the aspect. `HttpMetricsFilter` is a stateless `OncePerRequestFilter`.
-
-**Failure behaviour is a silent no-op.** `HttpMetricsFilter.recordRequest`, `SpanMetricsProcessor` and the Kubernetes pollers all catch errors and log at WARN. Metrics collection never fails a request. That also means a broken meter produces nothing and says nothing. If a dashboard is empty, check the meter name in `/actuator/prometheus` before you assume an export problem.
-
-**Request timing.** `HttpMetricsFilter` records a timer named **`adhar.http.server.requests`** with these tags:
-
-- `method`
-- `status` — the real response status, or `500` if the chain threw
-- `outcome` — `1xx`–`5xx`, or `unknown`
-- `uri`
-
-It records in a `finally`, so a failed request is still timed. Spring Boot's own `http.server.requests` continues alongside it.
-
-**Common tags are applied late.** `metricsCommonTagsPostProcessor` adds `application`, `environment` and your `common-tags` to the registry from a `SmartInitializingSingleton`. That happens after every singleton has been created. Micrometer applies meter filters only to meters registered *after* the filter is added. So a meter created during bean construction does not carry the common tags. Register meters lazily, on first use inside the method, not in a constructor or `@PostConstruct`.
-
-## Cardinality: the thing that kills metrics systems
-
-A Prometheus time series exists for every distinct combination of meter name and label values. One unbounded label — a user id, an order id, a raw URL — turns one metric into millions of series. The cost lands on the scraper and the registry's heap, not on the code that caused it. This module bounds exactly one dimension automatically. The rest is up to you.
-
-**Step 1: URI normalisation.** `HttpMetricsFilter.resolveUri` prefers Spring MVC's best-matching handler pattern (`/api/orders/{id}`), which is already a template. Sometimes no handler pattern is available: there is no Spring MVC, it is an error dispatch, or a 404 never reached a handler. Then it falls back to `normalizePath`. That replaces any segment that is all digits or a canonical UUID with `{id}`, and truncates to ten segments followed by `/**`. A slug or base62 token is *not* normalised and passes through intact.
-
-**Step 2: the limiter.** The resulting value goes through `TagCardinalityLimiter.limit("uri", value)`. The limiter keeps a `ConcurrentHashMap<String, Set<String>>` of admitted values per tag key, bounded by `adhar.metrics.web.max-uri-tags` (default 100).
-
-- A value already admitted passes on a lock-free `contains`.
-- A new value takes a short lock on that key's set. If the set is below the limit, the value is admitted. If the set is at the limit, the value is replaced by the literal string **`other`**.
-
-So you never lose the request: its timing is folded into a `uri="other"` series. Two consequences follow:
-
-- The limit is **first-come, first-served**. Whichever 100 URIs appear first own the budget. An endpoint deployed later may land entirely in `other`.
-- The admitted set is **never evicted**. `reset()` exists, but nothing calls it. That is what makes the bound a real bound.
-
-**Step 3: the Spring Boot meter filter.** Separately, `uriTagLimitFilter` registers `MeterFilter.maximumAllowableTags("http.server.requests", "uri", maxUriTags, MeterFilter.deny())`. That applies to Boot's own timer, not the Adhar one. Its action at the limit is **deny**: the meter is dropped, not relabelled. Same property, two outcomes:
-
-| Meter | Limiter | At the limit |
+| Annotation | Records | Default name |
 |---|---|---|
-| `adhar.http.server.requests` | `TagCardinalityLimiter` | `uri` becomes `other`; the observation is kept |
-| `http.server.requests` | Micrometer `MeterFilter` | the meter is denied; the observation is dropped |
+| `@Timed` | Timer; `percentiles`, `successOnly` | `<simpleclassname lower-cased>.<method>` |
+| `@Counted` | Counter; `recordFailures` adds `<name>.failures` | same |
+| `@Gauged` | Gauge set from the numeric return value | same |
+| `@Summary` / `@Histogram` | Distribution of the return value (or a `valueField`); `@Histogram` times the call by default | same |
+| `@MonitorPerformance` | `<name>.duration`, `.total`, `.errors`, and `adhar.operation.*` | same |
+| `@Measured` | `adhar.operation.duration` / `.count` / `.errors`, tagged `module`, `operation`, `class`, `method` | `<Class>.<method>` |
+| `@BusinessMetric` | Counter `adhar.business.<name>` tagged `category`, `outcome`; with `recordValue` (default `true`) and a `Number` return value, a summary `adhar.business.<name>.value` | as `@Timed` |
+| `@DatabaseMetrics` | `database.query.time`, `database.errors`, `database.slow_queries`, `database.rows` | — |
+| `@ApiMetrics` | `api.request.time`, `api.requests`, `api.payload.size` | — |
+| `@CacheMetrics` | `cache.hits` / `cache.misses` / `cache.requests`, `cache.load.time` | — |
 
-**Everything else is up to you.** `max-uri-tags` bounds the `uri` tag of those two meters and nothing more. A tag you pass to `metrics.increment("orders.created", "customerId", id)` is unbounded. So is an annotation `tags` array filled in from a parameter. Keep tags to closed sets — region, tier, outcome, status class. Put identifiers in logs or span attributes instead.
+The attribute is `name`, not `value`: write `@Timed(name = "x")`. `@Measured` is the exception (`@Measured("x")`).
 
-> `adhar.metrics.web.ignore-patterns` is bound by the properties class, but no code in this module reads it. The filter does not skip actuator or health paths. Those endpoints have low cardinality, so they cost two or three series. But do not rely on the property to exclude anything.
-
-## Meter names
-
-Knowing the real names saves a lot of guessing in Grafana:
-
-| Area | Meters |
-|---|---|
-| HTTP | `adhar.http.server.requests` (timer, from the filter); `adhar.http.request.duration`, `adhar.http.request.count`, `adhar.http.errors` (from `PlatformMetrics`) |
-| SLO | `adhar.slo.error_budget.remaining`, `adhar.slo.burn_rate` — both gauges, tagged `target` and `objective` |
-| JVM | `adhar.jvm.memory.heap.used` / `.committed` / `.max`, `adhar.jvm.memory.nonheap.used` / `.committed`, `adhar.jvm.threads.live` / `.daemon` / `.peak`, `adhar.jvm.classes.loaded` / `.unloaded` / `.loaded.total`, `adhar.jvm.cpu.processors`, `adhar.jvm.cpu.system_load_average`, `adhar.jvm.file_descriptors.open` / `.max`, `adhar.jvm.gc.pause` |
-| Container | `adhar.container.cpu.limit.cores`, `adhar.container.cpu.usage.cores`, `adhar.container.memory.limit.bytes`, `adhar.container.memory.usage.bytes` |
-| Database (`@DatabaseMetrics`) | `database.query.time`, `database.errors`, `database.slow_queries` |
-| API (`@ApiMetrics`) | `api.request.time` |
-| Business (`@BusinessMetric`) | `adhar.business.<name>`, `adhar.business.<name>.value` |
-| Cross-module | `adhar.persistence.*`, `adhar.cache.*`, `adhar.messaging.*`, `adhar.resilience.*`, `adhar.ai.*`, `adhar.operation.*` |
-
-Micrometer's standard JVM and system binders (`jvm.memory.*`, `process.uptime`) are registered too. So the `adhar.jvm.*` gauges sit alongside the conventional names, not instead of them.
-
-## Aspect mechanics
-
-`EnhancedMetricsAspect` implements every annotation. It is registered when `adhar.metrics.application.method-timing` is true (the default). `MetricsInterceptor` covers `@Measured` and `@MonitorPerformance` under the same flag. Both are proxy-based Spring AOP aspects.
-
-> **Self-invocation bypasses the proxy.** A `this.inStock(sku)` call from inside `OrderService` produces no timer, no counter, no error and no log line. The annotation does nothing. Call through an injected reference, or move the method to a collaborator. You get the same silence when `spring-boot-starter-aspectj` is missing or `method-timing` is false.
-
-Two more quiet traps:
-
-- `@Timed` and `@Counted` are declared `@Target({METHOD, TYPE})`, but the pointcuts are `@annotation(...)` only. **A class-level `@Timed` does nothing.**
-- `@Timed(successOnly = true)` never times a method that throws. That is rarely what you want when you are hunting latency on the failure path.
-
-## SLOs and error budgets
-
-`SloRecorder` tracks a rolling success ratio per target against a configured availability objective. The window is `window-seconds` long, divided into 60 buckets. It publishes two gauges:
-
-- `adhar.slo.error_budget.remaining` — the fraction of the budget still unspent, clamped at 0
-- `adhar.slo.burn_rate` — the observed error rate divided by the allowed rate
-
-Alerting on burn rate catches a bad deploy in minutes. Alerting on raw error count does not.
+### SLO targets
 
 ```yaml
 adhar:
   metrics:
     slo:
-      enabled: true
       window-seconds: 3600
       targets:
-        global: 0.99        # the reserved name applied to all traffic
-        checkout: 0.999
+        global: 0.99      # reserved: matches every HTTP request
+        checkout: 0.999   # matches a uri equal to, ending in, or containing /checkout/
 ```
 
-Targets and gauges are fixed at construction. So `record("unknown", false)` is a silent no-op: the name must exist in configuration.
+Each target gets two gauges, tagged `target` and `objective`: `adhar.slo.error_budget.remaining` (the share of the budget left, floored at 0) and `adhar.slo.burn_rate` (observed error rate ÷ allowed error rate). The window is split into 60 buckets. With no traffic they read `1.0` and `0.0`.
 
-`HttpMetricsFilter` calls `recordHttp(uri, status < 500)` automatically. `global` matches every request. Any other target matches when the uri (already templated and limited) does one of these:
+### OTLP push
 
-- equals the target
-- equals `/target`
-- ends with `/target`
-- contains `/target/`
+With `micrometer-registry-otlp` on the classpath, the module maps the standard OpenTelemetry variables onto `management.otlp.metrics.export.*`:
 
-With no traffic, remaining budget reads `1.0` and burn rate reads `0.0`. Memory is fixed at 60 buckets per target, whatever the volume.
+| Variable | Becomes |
+|---|---|
+| `OTEL_EXPORTER_OTLP_METRICS_ENDPOINT`, else `OTEL_EXPORTER_OTLP_ENDPOINT` + `/v1/metrics` | `url` |
+| `OTEL_EXPORTER_OTLP_[METRICS_]HEADERS` | `headers[...]` |
+| `OTEL_METRIC_EXPORT_INTERVAL` (ms) | `step` |
 
-## Export
-
-```yaml
-adhar:
-  metrics:
-    enabled: true
-    common-tags:
-      application: my-service
-      environment: production
-    prometheus:
-      enabled: true
-    web:
-      enabled: true            # the adhar.http.server.requests timer
-      max-uri-tags: 100
-    kubernetes:
-      enabled: true            # pod / namespace / node tags
-      resource-polling:
-        enabled: true
-        interval-seconds: 15
-management:
-  endpoints:
-    web:
-      exposure:
-        include: prometheus,health,info
-```
-
-Exposing the scrape endpoint is Spring Boot's job, not this module's. `adhar.metrics.prometheus.endpoint` and `step` are bound, but the Prometheus post-processor only logs. So set `management.endpoints.web.exposure.include` as shown above.
-
-Likewise, `adhar.metrics.open-telemetry.*` is bound, but no OTLP metric exporter is registered. Use Micrometer's own OTLP registry for that.
-
-Trace *correlation* is wired. When the OpenTelemetry API is present, a `TraceContext` bean appears. With the Prometheus client, it is bridged to a `SpanContext`, so counters and histograms carry exemplars. On the [Adhar Platform](/docs), Prometheus scrapes all of this with no extra wiring.
+Export stays off when there is no endpoint, when `OTEL_METRICS_EXPORTER` does not name `otlp`, or when the protocol is `grpc` (Micrometer's registry speaks `http/protobuf` only). If you set `management.otlp.metrics.export.url` yourself, it is never switched off. Push suits short-lived pods, such as batch runs, that may end before a scrape.
 
 ## Configuration
 
-| Property | Purpose | Default |
-|---|---|---|
-| `adhar.metrics.enabled` | Master switch | `true` |
-| `adhar.metrics.common-tags` | Tags added to every meter | empty |
-| `adhar.metrics.prometheus.enabled` | Prometheus registry post-processing | `true` |
-| `adhar.metrics.web.enabled` | Register `HttpMetricsFilter` and the uri meter filter | `true` |
-| `adhar.metrics.web.max-uri-tags` | Distinct `uri` values retained | `100` |
-| `adhar.metrics.web.record-request-size` / `record-response-size` | Keep Boot's size meters | `true` |
-| `adhar.metrics.application.method-timing` | Register `EnhancedMetricsAspect` and `MetricsInterceptor` | `true` |
-| `adhar.metrics.jvm.enabled` | `JvmMetricsCollector` (15-second schedule) | `true` |
-| `adhar.metrics.jvm.memory` / `gc` / `threads` / `class-loader` | Micrometer JVM binders | `true` |
-| `adhar.metrics.system.processor` / `file-descriptor` / `uptime` / `disk-space` | Micrometer system binders | `true` |
-| `adhar.metrics.kubernetes.enabled` | Pod / namespace / node tags | `false` |
-| `adhar.metrics.kubernetes.resource-polling.enabled` | Poll cgroup CPU/memory limits | `false` |
-| `adhar.metrics.kubernetes.resource-polling.interval-seconds` | Poll interval | `15` |
-| `adhar.metrics.slo.enabled` | Register `SloRecorder` | `true` |
-| `adhar.metrics.slo.window-seconds` | Rolling SLO window | `3600` |
+All keys are under `adhar.metrics`.
 
-## Testing
+| Property | Type | Default | Description |
+|---|---|---|---|
+| `enabled` | boolean | `true` | Master switch for the module |
+| `common-tags` | map | empty | Extra tags applied to the registry |
+| `environment` | string | resolved | The `environment` tag. Unset: `ADHAR_ENVIRONMENT`, then `deployment.environment[.name]` in `OTEL_RESOURCE_ATTRIBUTES` (except `local` inside a pod), then the pod namespace, then the first active profile other than `kubernetes`/`default`, then `local` |
+| `web.enabled` | boolean | `true` | Register `HttpMetricsFilter` and the `uri` meter filter |
+| `web.max-uri-tags` | int | `100` | Distinct `uri` values kept, for both HTTP timers |
+| `web.record-request-size` / `web.record-response-size` | boolean | `true` | `false` denies `http.server.requests` meters with a `request.size` / `response.size` tag |
+| `application.method-timing` | boolean | `true` | Register `EnhancedMetricsAspect` and `MetricsInterceptor` |
+| `jvm.enabled` | boolean | `true` | `JvmMetricsCollector` (`adhar.jvm.*`, refreshed every 15 s) |
+| `jvm.memory` / `gc` / `threads` / `class-loader` | boolean | `true` | Micrometer JVM binders |
+| `system.processor` / `file-descriptor` / `uptime` / `disk-space` | boolean | `true` | Micrometer system binders (disk space for the working directory) |
+| `slo.enabled` | boolean | `true` | Register `SloRecorder` |
+| `slo.targets` | map&lt;string, double&gt; | empty | Availability objective per target |
+| `slo.window-seconds` | long | `3600` | Rolling SLO window (minimum 1 s) |
+| `kubernetes.enabled` | boolean | `false` | Register `KubernetesMetricsUtils` |
+| `kubernetes.include-pod-info` / `include-namespace` / `include-node-info` | boolean | `true` | Tags that `KubernetesMetricsUtils` adds to the meters it records |
+| `kubernetes.resource-polling.enabled` | boolean | `false` | Poll cgroup v1/v2 CPU and memory into `adhar.container.*`; idle when `/sys/fs/cgroup` is absent |
+| `kubernetes.resource-polling.interval-seconds` | long | `15` | Poll interval |
 
-- **Assert on a real registry.** Build a `SimpleMeterRegistry` and pass it to the component under test. Then assert with Micrometer's fluent search: `registry.get("adhar.http.server.requests").tag("status", "200").timer().count()`. No mocks, and no string matching on log output.
-- **Cardinality is directly testable.** Create `new TagCardinalityLimiter(3)` and make four `limit("uri", ...)` calls. The fourth comes back as `"other"`. `cardinality("uri")` reports the budget used, and `reset()` clears it between tests.
-- **URI normalisation without a servlet container.** `HttpMetricsFilter.normalizePath(...)` is package-private and static. Call it from a test in the same package. Or drive the filter with `MockHttpServletRequest` / `MockFilterChain`, and set `BEST_MATCHING_PATTERN_ATTRIBUTE` to simulate a resolved handler.
-- **Deterministic SLOs.** `SloRecorder` has a constructor that takes a `LongSupplier` time source. Drive it with a mutable `long[]` to walk the rolling window across bucket boundaries without sleeping.
-- **Turn it off.**
-  - `adhar.metrics.application.method-timing=false` removes the aspects.
-  - `adhar.metrics.enabled=false` removes the module.
-  - `adhar.metrics.kubernetes.enabled=false` (the default) keeps the Fabric8 client out of a unit test.
-- **Beware the global registry.** `MetricsFacade.getInstance()` holds `Metrics.globalRegistry` for the life of the JVM, so counters build up across test classes. Assert deltas, or inject `MeterRegistry`.
+> **Note:** The conditions behind `method-timing`, `class-loader`, `file-descriptor`, `disk-space`, `record-request-size` and `record-response-size` look up the camelCase name. To switch one off in YAML, write the key in camelCase, for example `adhar.metrics.application.methodTiming: false`, or set the environment variable (`ADHAR_METRICS_APPLICATION_METHODTIMING=false`).
 
-## Interaction with sibling modules
+## Operations
 
-[Tracing](/adhar-kit/modules/tracing)'s `SpanMetricsProcessor` records every finished span into this registry. It records `span.duration` (a timer tagged `span.name`, `span.kind` and `error`) and `span.errors`. That gives you RED metrics from spans alongside the ones from the filter.
+| Area | Meters |
+|---|---|
+| HTTP | `adhar.http.server.requests` (timer: `method`, `status`, `outcome`, `uri`) |
+| SLO | `adhar.slo.error_budget.remaining`, `adhar.slo.burn_rate` |
+| JVM | `adhar.jvm.memory.heap.*`, `adhar.jvm.memory.nonheap.*`, `adhar.jvm.threads.*`, `adhar.jvm.classes.*`, `adhar.jvm.cpu.*`, `adhar.jvm.file_descriptors.*`, `adhar.jvm.gc.pause`, next to Micrometer's `jvm.*` |
+| Container | `adhar.container.cpu.limit.cores`, `.cpu.usage.cores`, `.memory.limit.bytes`, `.memory.usage.bytes` (NaN when unlimited or unknown) |
+| Kubernetes (on call) | `kubernetes.deployment.*` and others, from `KubernetesMetricsUtils.record*` methods |
+| Platform | `PlatformMetrics` families (`adhar.persistence.*`, `adhar.cache.*`, `adhar.messaging.*`, `adhar.resilience.*`, `adhar.http.request.*`, `adhar.ai.*`, `adhar.operation.*`), recorded only when code calls them. [Resilience](/adhar-kit/modules/resilience) does, through its bridge |
 
-In the other direction, `HttpMetricsFilter` puts the current trace id into the SLF4J MDC for the duration of a request. So [Logging](/adhar-kit/modules/logging) output and metrics point at the same trace, without a trace id ever becoming a tag.
+- **Endpoints.** `/actuator/prometheus` needs the actuator and the Prometheus registry on the classpath; the module exposes `health,info,prometheus` by default.
+- **Trace correlation.** With `opentelemetry-api` present, the filter puts the current trace and span ids in the SLF4J MDC for the request, and with the Prometheus client a `SpanContext` bean adds exemplars to counters and histograms. Trace ids never become tags.
+- **Dashboards.** The jar ships Grafana dashboards under `grafana/`: `http-red-dashboard.json`, `jvm-dashboard.json`, `slo-error-budget-dashboard.json`.
+- **Failure behaviour.** Recording errors in the filter are caught and logged at WARN; metrics never fail a request. A broken meter is silent, so check the name in `/actuator/prometheus` before blaming export.
 
-[Resilience](/adhar-kit/modules/resilience), [Cache](/adhar-kit/modules/cache), [Persistence](/adhar-kit/modules/persistence) and [Messaging](/adhar-kit/modules/messaging) record into their matching `PlatformMetrics` families.
+## Limits
 
-## Common pitfalls
+- **Only `uri` is bounded.** A tag value you pass yourself (`increment("x", "customerId", id)`) is unbounded and every combination is a permanent series. Keep tags to closed sets; put ids in logs or spans.
+- **The `uri` budget is first come, first served and never evicted.** Endpoints that appear after the first `max-uri-tags` values report as `uri="other"`. Slugs and base62 tokens are not normalised. At the limit, Boot's `http.server.requests` meter is denied (dropped), not relabelled.
+- **Proxy-based AOP.** A self-call (`this.inStock(...)`) records nothing, and so does a missing `spring-boot-starter-aspectj`. Class-level `@Timed` / `@Counted` do nothing; annotate methods (`@Measured` and `@MonitorPerformance` do work on types).
+- **`@MonitorPerformance` on a method records twice** (both aspects), and `EnhancedMetricsAspect` rethrows a checked exception wrapped in `RuntimeException`.
+- **`@Timed(successOnly = true)`** never times a failing call.
+- **SLO targets are fixed at startup.** `record("unknown", ...)` for a target that is not configured is a silent no-op.
+- **Custom `common-tags` are applied after all singletons are created**, so meters registered during bean construction miss them. `application` and `environment` come from `management.metrics.tags.*` and are on every meter. Register your own meters lazily.
+- **`MetricsFacade` uses the global registry.** In tests, counters accumulate across Spring contexts; assert deltas or inject `MeterRegistry`.
+- **`kubernetes.enabled` does not tag every meter.** The pod, namespace and node tags apply only to meters recorded through `KubernetesMetricsUtils`.
+- **Bound but not read:** `web.ignore-patterns` (actuator paths are still timed), `prometheus.*` (endpoint, step, descriptions), `open-telemetry.*` (use the OTLP variables above), `application.enabled` / `exception-counting` / `cache` / `database`, `system.enabled`, `kubernetes.custom-labels`.
 
-| Symptom | Cause | Fix |
-|---|---|---|
-| `@Timed("name")` does not compile | The attribute is `name`, not `value` | Write `@Timed(name = "name")` |
-| A class-level `@Timed` produces nothing | The aspect matches `@annotation`, i.e. methods only | Annotate the methods |
-| Annotations produce no meters | Self-invocation, or `method-timing` disabled | Call through the proxy; check `adhar.metrics.application.method-timing` |
-| Prometheus memory climbs steadily | High-cardinality tags such as a user or order id | Keep ids out of tags; `max-uri-tags` only bounds `uri` |
-| Most traffic reports `uri="other"` | The first 100 distinct URIs claimed the budget | Raise `max-uri-tags`, or make sure handler patterns resolve |
-| `uri` shows up as `{id}` everywhere | No handler pattern was available, so the path was normalized | Expected outside Spring MVC; the raw path is intentionally not used |
-| Common tags missing from some meters | Those meters were registered before the post-processor ran | Register meters lazily on first use, not in a constructor |
-| `/actuator/prometheus` returns 404 | The endpoint is exposed by Spring Boot, not by this module | Add `prometheus` to `management.endpoints.web.exposure.include` |
-| Error budget stays at 1.0 | No target configured for that name and no `global` target set | Add it under `adhar.metrics.slo.targets` |
-| A latency spike is invisible | `@Timed(successOnly = true)` skips failed calls | Leave `successOnly` false on anything that can fail |
+## Next steps
 
-## See also
-
-- [Logging](/adhar-kit/modules/logging) — the same requests, as structured events
-- [Tracing](/adhar-kit/modules/tracing) — exemplars link a latency spike to a specific trace
-- [Resilience](/adhar-kit/modules/resilience) — bridges circuit-breaker state into this registry
-- [Observability](/docs/operations/observability) — Prometheus and Grafana on the platform
+- [Tracing](/adhar-kit/modules/tracing): spans, and span metrics in the same registry
+- [Logging](/adhar-kit/modules/logging): the trace ids this module puts in the MDC
+- [Resilience](/adhar-kit/modules/resilience): circuit-breaker state bridged into `PlatformMetrics`
+- [Observability](/docs/operations/observability): Prometheus and Grafana on the platform

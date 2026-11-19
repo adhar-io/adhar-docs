@@ -147,7 +147,7 @@ function LocalTopology() {
         no hosts file to edit. The caches survive adhar down, so the next install pulls
       </Caption>
       <Caption x={216} y={332}>
-        its ~90 images from local disk instead of the internet.
+        its images from local disk instead of the internet.
       </Caption>
     </Frame>
   );

@@ -7,32 +7,30 @@ path: "/adhar-kit/modules/tracing"
 
 # Tracing
 
-`adhar-kit-tracing` provides enterprise distributed tracing on OpenTelemetry, exporting to OTLP, Zipkin, or Jaeger. It offers annotation-based spans, a programmatic `AdharTracing` API, W3C baggage propagation, cross-thread context propagation, and trace-to-log correlation.
-
-It answers the question metrics and logs cannot: **where did those 900 milliseconds actually go**, across the five services a single request touched.
+`adhar-kit-tracing` gives a Spring Boot service distributed tracing on the OpenTelemetry SDK with no code: it builds the SDK, supplies the Micrometer `Tracer` and `Propagator` that Spring Boot uses to turn HTTP, Kafka, RabbitMQ and JDBC observations into spans, reads the standard `OTEL_*` environment variables, and exports over OTLP. On top of that you get span annotations, a programmatic API, head or tail sampling, trace IDs in the log MDC, and RED metrics derived from spans. Use it when a request crosses process boundaries and you need to see where its time went.
 
 ## At a glance
 
 | | |
 |---|---|
 | Artifact | `com.adhar.kit:adhar-kit-tracing` |
-| Built on | OpenTelemetry SDK + OTLP exporter, Micrometer Tracing (OTel bridge); Zipkin, Brave and `adhar-kit-commons` optional |
-| Entry points | `AdharTracing`, `TracingFacade`, the span annotations, `TraceContextTaskDecorator` |
-| Auto-configuration | `AdharTracingAutoConfiguration` (needs `Tracer` on the classpath; gated on `adhar.tracing.enabled`) |
-| Frameworks | Spring, Quarkus, Micronaut, Helidon, Vert.x adapters |
-| Use it when | A request crosses a process boundary and you need end-to-end latency attribution |
+| Toggle | `adhar.tracing.enabled` (default `true`). Facade gate `adhar.kit.modules.tracing` (default `true`); when `false`, `adhar.getTracing()` throws `IllegalStateException` |
+| Facade | `adhar.getTracing()` → `TracingFacade`. On Spring Boot the starter backs it with `SpringTracingAdapter` when a Micrometer `Tracer` bean exists; otherwise it is a no-op that still runs your code. Injectable beans: `AdharTracing`, `Tracer`, `OpenTelemetry`, `TraceContextTaskDecorator` |
+| Dependencies | Required: OpenTelemetry API/SDK + OTLP exporter, Micrometer Tracing + OTel bridge, `spring-boot-micrometer-tracing`, `datasource-micrometer` (JDBC spans). Optional: `spring-boot-starter-aspectj` (annotations), `opentelemetry-exporter-zipkin` (Zipkin), Micrometer `MeterRegistry` (span metrics), servlet stack (web filters) |
+| Frameworks | Spring Boot auto-configuration. `TracingService` adapters for Quarkus (CDI bean), Micronaut (bean), Helidon and Vert.x (construct with an OpenTelemetry `Tracer`) |
 
 ## How it works
 
-The auto-configuration builds an `OpenTelemetry` instance and a `Tracer`. It then attaches three kinds of component: ones that *create* spans, ones that *move* context, and ones that *decide* which traces to keep.
-
 ```diagram
-kit-tracing-path
+nkc-tracing-pipeline
 ```
 
-The pipeline is `SdkTracerProvider` → sampler → span processors. Each configured exporter gets a `BatchSpanProcessor` with a maximum export batch of 512 spans and a five-second schedule delay. With tail sampling on, those batch processors sit behind a `TailSamplingSpanProcessor` instead of being registered directly. `SpanMetricsProcessor` is always added as a *separate* processor. So it sees every recorded span, whatever the sampling decision.
+- `AdharTracingAutoConfiguration` runs before Spring Boot's tracer auto-configurations, so Boot's no-op tracer backs off and Boot's observation handlers use the kit's `Tracer` and `Propagator`. Outgoing `RestClient`/`WebClient`/`RestTemplate` calls built from Boot's builders, Kafka and RabbitMQ templates and listeners, Lettuce commands, JDBC connections and queries, and incoming HTTP requests become spans and carry `traceparent`.
+- `OtelEnvironmentPostProcessor` maps `OTEL_*` variables onto `adhar.tracing.*` at the lowest precedence and switches on the Kafka/RabbitMQ observations that Boot leaves off. Anything you set in application config wins.
+- The SDK sampler records spans; in `tail` mode a buffer decides per trace before export. Each exporter gets a `BatchSpanProcessor` (batches of 512, every 5 s). `SpanMetricsProcessor` sees every recorded span, whatever the sampling decision.
+- `TracingServerSpanFilter` creates a `SERVER` span only when no server span is already in progress (a fallback for when Boot's `ServerHttpObservationFilter` is absent). `TraceContextMdcFilter` copies `traceId` and `spanId` into the SLF4J MDC.
 
-## Install
+## Add it
 
 ```xml
 <dependency>
@@ -40,222 +38,200 @@ The pipeline is `SdkTracerProvider` → sampler → span processors. Each config
     <artifactId>adhar-kit-tracing</artifactId>
     <version>0.1.0</version>
 </dependency>
+<!-- Needed for @NewSpan and the other span annotations -->
+<dependency>
+    <groupId>org.springframework.boot</groupId>
+    <artifactId>spring-boot-starter-aspectj</artifactId>
+</dependency>
 ```
 
-## Key APIs
+Point it at a collector. In a pod, the standard variables are enough:
 
-- **`AdharTracing`**: the programmatic API.
-  - Scoped execution: `withinSpan(name, supplier)`, `withinSpan(name, tags, runnable)`, `withinSpanCallable`, `withinSpanAsync`.
-  - Current context: `getCurrentSpan`, `getCurrentTraceId`, `getCurrentSpanId`, `isTracingActive`.
-  - Enrichment: `addTag`, `addTags`, `addEvent`, `recordException`.
-  - Typed spans that carry the right semantic attributes: `createDatabaseSpan(operation, table, statement)`, `createHttpClientSpan(method, url)`, `createMessagingSpan(operation, destination, system)`.
-  - Baggage: `setBaggage`, `getBaggage`, `removeBaggage`, `clearBaggage`, `getAllBaggage`, `injectBaggageIntoHeaders`, `extractBaggageFromHeaders`.
-  - Cross-thread: `wrapWithTraceContext` for `Runnable`, `Supplier`, `Callable`, `Function`, and `Consumer`.
-- **`TracingFacade`**: the thin cross-framework view (`getInstance()`). Offers `spanBuilder`, `executeInSpan`, `getCurrentTraceId`, `addTag`, `addEvent`. This is what `AdharFacade.getTracing()` returns.
-- **Web and async**:
-  - `TraceContextTaskDecorator`: hand it to a Spring `TaskExecutor` so `@Async` work stays in the trace.
-  - `TraceContextMdcFilter`: copies `traceId` / `spanId` into the SLF4J MDC.
-  - `TracingServerSpanFilter`: the inbound server span, honouring `web.skip-patterns`.
-  - `SpanMetricsProcessor`: the bridge from spans to RED metrics.
-- **Annotations**: `@NewSpan`, `@ContinueSpan`, `@DatabaseSpan`, `@HttpClientSpan`, `@MessagingSpan`, `@AsyncSpan`, `@SpanTag`.
+```bash
+OTEL_EXPORTER_OTLP_ENDPOINT=http://alloy.monitoring:4318
+OTEL_EXPORTER_OTLP_PROTOCOL=http/protobuf
+OTEL_SERVICE_NAME=orders
+```
 
-## A realistic service
+| Variable | Maps to |
+|---|---|
+| `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT`, else `OTEL_EXPORTER_OTLP_ENDPOINT` (+ `/v1/traces` for HTTP) | `adhar.tracing.open-telemetry.endpoint` |
+| `OTEL_EXPORTER_OTLP_[TRACES_]PROTOCOL` (default `http/protobuf`) | `adhar.tracing.open-telemetry.use-grpc` |
+| `OTEL_TRACES_EXPORTER=none` | `adhar.tracing.open-telemetry.enabled=false` |
+| `OTEL_SERVICE_NAME` | `adhar.tracing.resource.service-name` |
+| `OTEL_RESOURCE_ATTRIBUTES` | `adhar.tracing.resource.attributes[...]` |
+| `OTEL_TRACES_SAMPLER_ARG` (a value in 0–1) | `adhar.tracing.sampling.probability` |
 
-This example uses annotations where the span is the whole method, and the programmatic API where you need a span around part of one. The error path is recorded, not lost:
+If you set `adhar.tracing.open-telemetry.endpoint` but not `use-grpc`, the protocol follows the endpoint: port `4317` means gRPC, port `4318` or a `/v1/traces` path means HTTP.
+
+## Use it
+
+### Annotate a method
 
 ```java
-import com.adhar.kit.tracing.annotation.DatabaseSpan;
-import com.adhar.kit.tracing.annotation.MessagingSpan;
 import com.adhar.kit.tracing.annotation.NewSpan;
 import com.adhar.kit.tracing.annotation.SpanTag;
 import com.adhar.kit.tracing.util.AdharTracing;
+import org.springframework.stereotype.Service;
 
 @Service
 public class OrderService {
 
     private final AdharTracing tracing;
     private final OrderRepository repository;
-    private final KafkaProducer producer;
 
-    public OrderService(AdharTracing tracing, OrderRepository repository,
-                        KafkaProducer producer) {
+    public OrderService(AdharTracing tracing, OrderRepository repository) {
         this.tracing = tracing;
         this.repository = repository;
-        this.producer = producer;
     }
 
     @NewSpan("order.place")
     public Order place(@SpanTag("order.sku") String sku,
-                       @SpanTag(value = "order.tenant", expression = "tenantId") Profile profile) {
-        tracing.setBaggage("tenant.id", profile.tenantId());  // declared under baggage.remote-fields
-        try {
-            Order order = persist(sku, profile);
-            announce(new OrderPlaced(order.id()));
-            return order;
-        } catch (RuntimeException e) {
-            tracing.recordException(e);     // sets span status ERROR — tail sampling keeps the trace
-            tracing.addTag("order.sku", sku);
-            throw e;
-        }
-    }
-
-    @DatabaseSpan(operation = "INSERT", table = "orders", database = "orders_db")
-    public Order persist(String sku, Profile profile) {
-        return repository.save(Order.of(sku, profile));
-    }
-
-    @MessagingSpan(operation = "publish", destination = "order-events", system = "kafka")
-    public void announce(OrderPlaced event) {
-        producer.send(event);
+                       @SpanTag(value = "order.tenant", expression = "tenantId") Customer customer) {
+        tracing.addTag("order.channel", "web");   // tags the order.place span
+        return repository.save(Order.of(sku, customer));
     }
 }
 ```
 
-Note that `persist` and `announce` are called through `this`. In the code above, those calls **bypass the proxy** and produce no child spans (see the aspect section below). Move them into collaborating beans, or wrap them with `tracing.withinSpan("order.persist", () -> …)` instead.
-
-`@SpanTag` takes a plain name, or `expression` to read a field off the argument. It is a parameter annotation only. Every span annotation except `@SpanTag` targets methods.
-
-## Sampling: the decision that matters most
-
-Sampling is the one setting that changes both your bill and your ability to debug. The module offers two modes. Choose one with `adhar.tracing.sampling.mode`.
-
-### Head-based (`ratio`, the default)
-
-The decision is made from the trace id when the trace starts. At that point nothing is known about how the request will turn out. `probability` maps straight onto the OpenTelemetry sampler:
-
-| `probability` | Sampler |
+| Annotation | Effect |
 |---|---|
-| `<= 0.0` | `Sampler.alwaysOff()`. Nothing recorded at all |
-| `>= 1.0` | `Sampler.alwaysOn()` |
-| anything between | `Sampler.traceIdRatioBased(probability)` |
+| `@NewSpan(value, tags)` | New child span around the method; name defaults to `Class.method` |
+| `@ContinueSpan(tags, startEvent, endEvent)` | No new span; tags and events go on the current span |
+| `@DatabaseSpan(operation, table, statement, database)` | Client span with `db.*` attributes |
+| `@HttpClientSpan(method, url)` | Client span with `http.method`, `http.url` |
+| `@MessagingSpan(operation, destination, destinationType, system)` | Producer span with `messaging.*` attributes |
+| `@AsyncSpan(value, propagateContext)` | Span that ends when a returned `CompletableFuture` completes |
+| `@SpanTag(value, expression)` | On a parameter: tag from its value, or a SpEL `expression` evaluated against it |
 
-It is cheap. An unsampled trace costs almost nothing, because its spans are never recorded. It is also blind. At the default `0.1`, nine errors in ten are discarded, and the one slow request you were paged about is probably not in Tempo. Because the decision comes from the trace id, it is consistent across services. Every service in the path makes the same call.
+`tags` takes key/value pairs: `tags = {"tier", "gold"}`. JDBC, HTTP and messaging calls made through Boot-managed clients are already traced, so the `@DatabaseSpan`/`@HttpClientSpan`/`@MessagingSpan` annotations are for code those observations do not cover.
 
-### Tail-based (`tail`)
-
-The decision waits until the trace has finished, so it can be based on what actually happened. `TailSamplingSpanProcessor` buffers each trace's finished spans. When the root span ends, it schedules a decision `hold-window-ms` later. The window lets late child spans arrive. A trace is kept if, in order:
-
-1. any of its spans ended with status `ERROR`; or
-2. the root span's latency exceeded `latency-threshold-ms`; or
-3. a random draw falls below `keep-rate` (`>= 1.0` keeps everything, `<= 0.0` keeps nothing).
-
-Spans of a kept trace are forwarded to the batch processors. Spans of a dropped trace are discarded. A span that arrives *after* the decision is forwarded or dropped consistently, because the processor keeps a bounded LRU of recent decisions.
-
-**Enabling tail sampling forces the head sampler to `alwaysOn`.** The processor can only judge a trace it has seen. So every span in the process is recorded, attributed and buffered. You pay the full in-process cost of tracing on 100% of traffic, and save only on export and storage. That is the trade-off. Tail sampling gets you every error and every slow request, but you lose the low cost of head sampling.
-
-**Memory is the thing to size.** The hold buffer is a `LinkedHashMap` of at most `max-buffered-traces` pending traces (default 1000). **Each entry holds every finished span of that trace in an `ArrayList`.** So peak heap is roughly `max-buffered-traces × spans-per-trace × span size`. A service emitting fifty spans per request holds fifty thousand span objects at the cap. A second map with the same cap holds trace-id→decision booleans, and it is small.
-
-When the pending map exceeds the cap, the **oldest pending trace is decided immediately**. This can happen before its root span ended. In that case the latency rule cannot fire, and the trace falls through to `keep-rate`. That is how a slow trace gets dropped during a burst.
-
-**Other operational properties.**
-
-- All buffering is guarded by a single `ReentrantLock`. Every span end in the process queues through it, which causes contention at high span rates.
-- Decisions run on one daemon thread named `adhar-tail-sampling`. With `hold-window-ms` set to `0`, the decision is made inline on the thread that ended the root span.
-- `trace-timeout-ms` (default 30s) decides a trace whose root never ends.
-- On shutdown, every still-pending trace goes through the normal decision path. So a clean stop does not drop the buffer.
-
-**Tail sampling here is per process, not global.** `isRoot` treats a span with no parent *or* a remote parent as a root. So each service decides on its own about the part of the trace it saw. A trace that errors only downstream is kept there, but the caller may drop it. That leaves a partial trace in your backend. For whole-trace consistency, do tail sampling centrally in an OpenTelemetry Collector, and leave this set to `ratio`.
-
-## How it behaves
-
-**Lifecycle and scope.** `OpenTelemetry`, `Tracer`, `AdharTracing`, `TracingAspect`, `TraceContextTaskDecorator` and the span processors are singletons built once at startup. Spans are per operation and attached to the thread-local OpenTelemetry context. The whole auto-configuration is skipped if `Tracer` is not on the classpath or `adhar.tracing.enabled` is false. Every annotation then does nothing.
-
-**Export is asynchronous and drops data under pressure.** `BatchSpanProcessor` queues spans and exports them in batches of up to 512 every five seconds. If the collector is down, exports fail and the SDK drops spans. It does not block request threads, and it does not retry forever. Tracing degrades silently. It never becomes the reason a request fails.
-
-**Failure behaviour in the API.** `AdharTracing` catches and logs errors instead of propagating them. `setBaggage` with a null key or value logs a warning and returns. A disabled baggage subsystem logs at debug and returns. `getCurrentTraceId` returns null when no span is active, so use `isTracingActive()` as the guard.
-
-**Context does not cross threads by itself.** The OpenTelemetry context is thread-local, exactly like the MDC. But it is a *different* store from the MDC. So [Core](/adhar-kit/modules/core)'s `ContextPropagatingExecutor`, which carries the MDC, does **not** carry the span. Use `TraceContextTaskDecorator` on a Spring `TaskExecutor`, or wrap the task yourself:
+### Wrap a block in a span
 
 ```java
+import com.adhar.kit.starter.AdharFacade;
+import org.springframework.stereotype.Service;
+
+@Service
+public class ReportService {
+
+    private final AdharFacade adhar;
+    private final ReportRenderer renderer;
+
+    public ReportService(AdharFacade adhar, ReportRenderer renderer) {
+        this.adhar = adhar;
+        this.renderer = renderer;
+    }
+
+    public Report build(ReportRequest request) {
+        return adhar.getTracing().executeInSpan("report.build", () -> renderer.render(request));
+    }
+}
+```
+
+`TracingFacade.executeInSpan` makes the new span current, so spans started inside it (an outgoing HTTP call, a query) become its children. `adhar.traced(name, supplier)` does the same and also records a timer.
+
+### Keep the trace across threads
+
+```java
+import com.adhar.kit.tracing.async.TraceContextTaskDecorator;
+import org.springframework.context.annotation.Bean;
+import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
+
 @Bean
-public Executor reportExecutor(TraceContextTaskDecorator decorator) {
+ThreadPoolTaskExecutor reportExecutor(TraceContextTaskDecorator decorator) {
     ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
-    executor.setTaskDecorator(decorator);
-    executor.initialize();
+    executor.setTaskDecorator(decorator);   // re-attaches the submitter's span
     return executor;
 }
 ```
 
-The decorator captures `tracer.currentSpan()` when the task is submitted. It re-attaches it with a `SpanInScope` while the task runs. With no current span, it returns the runnable untouched.
+For a plain `ExecutorService`, wrap the task: `executor.submit(tracing.wrapWithTraceContext(task))`. `wrapWithTraceContext` has overloads for `Runnable`, `Callable`, `Supplier`, `Function` and `Consumer`.
 
-**Baggage bookkeeping is process-wide.** `setBaggage(key, value)` opens a Micrometer `BaggageInScope`. It stores the handle in a `ConcurrentHashMap` on the singleton `AdharTracing`, **keyed by name alone**, not per thread. The value itself lives in the thread-local context, so `getBaggage` is correct per thread. But two request threads that set the same key race on the handle, and one loses the ability to close its scope cleanly.
+### Pass baggage to a downstream call
 
-Set baggage once at the edge of a request, with a small, fixed set of keys. Declare each key under `baggage.remote-fields`, or it is not serialized across the process boundary.
+The kit's propagators carry trace context only (W3C `traceparent`, B3 or Jaeger), not the W3C `baggage` header. Move baggage explicitly:
 
-## Aspect mechanics
+```java
+tracing.setBaggage("tenant.id", tenantId);        // at the edge of the request
 
-`TracingAspect` implements every span annotation with `@Around("@annotation(...)")` pointcuts. These work at method level only, on a Spring AOP proxy.
+Map<String, String> headers = new HashMap<>();
+tracing.injectBaggageIntoHeaders(headers);         // writes the W3C "baggage" header
+// downstream: tracing.extractBaggageFromHeaders(incomingHeaders);
+```
 
-> **Self-invocation bypasses the proxy.** Calling `this.persist(sku, profile)` from another method of the same bean goes straight to the target object. You get no database span, no attributes, no error and no log line. You see a parent span with a suspicious gap in it, and nothing explains the gap. Call through an injected reference to the bean, move the method to a collaborator, or use `tracing.withinSpan(...)` for a span inside a method.
-
-The aspect needs `spring-boot-starter-aspectj` (or an equivalent AspectJ weaver) on the classpath. Without it, the bean is never created and the annotations do nothing. `@NewSpan` always starts a child span. `@ContinueSpan` does not create a span. It enriches the span that is already current and adds `startEvent` / `endEvent` markers.
+`injectBaggageIntoHeaders` sends only the keys in `baggage.remote-fields` when that list is set, otherwise all baggage. Keys in `baggage.correlation-fields` are also tagged onto the current span as `baggage.<key>`.
 
 ## Configuration
 
-| Property | Purpose | Default |
-|---|---|---|
-| `adhar.tracing.enabled` | Master switch | `true` |
-| `adhar.tracing.sampling.mode` | `ratio` (head-based) or `tail` | `ratio` |
-| `adhar.tracing.sampling.probability` | Head sampling rate | `0.1` |
-| `adhar.tracing.sampling.tail.hold-window-ms` | Wait after the root span ends before deciding | `2000` |
-| `adhar.tracing.sampling.tail.latency-threshold-ms` | Always keep traces slower than this | `1000` |
-| `adhar.tracing.sampling.tail.keep-rate` | Fraction kept when neither error nor latency applies | `0.1` |
-| `adhar.tracing.sampling.tail.max-buffered-traces` | Pending-trace bound before a forced decision | `1000` |
-| `adhar.tracing.sampling.tail.trace-timeout-ms` | Decide a trace whose root never ends | `30000` |
-| `adhar.tracing.open-telemetry.enabled` | OTLP exporter | `true` |
-| `adhar.tracing.open-telemetry.endpoint` | OTLP endpoint | `http://localhost:4317` |
-| `adhar.tracing.open-telemetry.use-grpc` | gRPC rather than HTTP | `true` |
-| `adhar.tracing.open-telemetry.compression` | Exporter compression | `gzip` |
-| `adhar.tracing.zipkin.enabled` / `jaeger.enabled` | Alternative exporters | `false` |
-| `adhar.tracing.propagation.type` | `tracecontext`, `b3`, `jaeger`, `ottrace` | `tracecontext` |
-| `adhar.tracing.baggage.enabled` | Enable baggage | `true` |
-| `adhar.tracing.baggage.remote-fields` | Keys propagated across processes | empty |
-| `adhar.tracing.baggage.correlation-fields` | Keys also tagged onto the current span | empty |
-| `adhar.tracing.web.enabled` | Web instrumentation | `true` |
-| `adhar.tracing.web.mdc-enabled` | Register `TraceContextMdcFilter` | `true` |
-| `adhar.tracing.web.server-spans-enabled` | Register `TracingServerSpanFilter` | `true` |
-| `adhar.tracing.web.skip-patterns` | Paths excluded from tracing | `/actuator/**`, `/health/**`, `/info/**` |
-| `adhar.tracing.database.include-sql-parameters` | Put bind values on the span | `false` |
-| `adhar.tracing.messaging.include-payloads` | Put message bodies on the span | `false` |
-| `adhar.tracing.metrics.enabled` | Register `SpanMetricsProcessor` | `true` |
-| `adhar.tracing.metrics.meter-prefix` | Prefix for the derived RED meters | `span` |
-| `adhar.tracing.resource.service-name` | `service.name` resource attribute | `${spring.application.name:unknown-service}` |
+All keys are under `adhar.tracing`.
 
-## Testing
+| Property | Type | Default | Description |
+|---|---|---|---|
+| `enabled` | boolean | `true` | Turns the whole auto-configuration on or off |
+| `tags` | map | empty | Added to the resource as `adhar.<key>` |
+| `sampling.mode` | string | `ratio` | `ratio` (head-based) or `tail` |
+| `sampling.probability` | double | `1.0` | Head sampling: `<= 0` off, `>= 1` always, else trace-ID ratio |
+| `sampling.tail.hold-window-ms` | long | `2000` | Wait after the root span ends before deciding; `0` decides inline |
+| `sampling.tail.latency-threshold-ms` | long | `1000` | Keep traces whose root span is slower than this |
+| `sampling.tail.keep-rate` | double | `0.1` | Fraction kept when neither error nor latency applies |
+| `sampling.tail.max-buffered-traces` | int | `1000` | Pending traces before the oldest is decided early |
+| `sampling.tail.trace-timeout-ms` | long | `30000` | Decide a trace whose root never ends |
+| `open-telemetry.enabled` | boolean | `true` | OTLP exporter |
+| `open-telemetry.endpoint` | string | `http://localhost:4317` | Collector address; HTTP gets `/v1/traces` appended when the URL has no path |
+| `open-telemetry.use-grpc` | boolean | `true` | gRPC (`true`) or HTTP/protobuf (`false`) |
+| `open-telemetry.timeout` | ISO-8601 duration | `PT30S` | Export timeout |
+| `open-telemetry.headers` | map | empty | Headers sent with each export |
+| `open-telemetry.compression` | string | `gzip` | `gzip` or `none` |
+| `zipkin.enabled` | boolean | `false` | Zipkin exporter; add `io.opentelemetry:opentelemetry-exporter-zipkin` |
+| `zipkin.base-url` / `zipkin.api-path` | string | `http://localhost:9411` / `/api/v2/spans` | Zipkin endpoint |
+| `zipkin.read-timeout` | ISO-8601 duration | `PT10S` | Zipkin read timeout |
+| `jaeger.enabled` | boolean | `false` | Extra OTLP gRPC exporter aimed at Jaeger |
+| `jaeger.grpc-endpoint` | string | `http://localhost:14250` | Target when `jaeger.use-grpc=true` |
+| `jaeger.http-endpoint` | string | `http://localhost:14268/api/traces` | Target when `jaeger.use-grpc=false` (still sent as OTLP gRPC) |
+| `jaeger.timeout` | ISO-8601 duration | `PT30S` | Export timeout |
+| `propagation.type` | string | `tracecontext` | `tracecontext` (or `w3c`), `b3`, `jaeger`; anything else falls back to W3C |
+| `propagation.additional-formats` | string[] | empty | Extra formats: `b3`, `jaeger`, `tracecontext` |
+| `propagation.b3-single-header` | boolean | `false` | Single `b3` header instead of `X-B3-*` |
+| `baggage.enabled` | boolean | `true` | Baggage API; `false` makes it a no-op |
+| `baggage.remote-fields` | string[] | empty | Keys `injectBaggageIntoHeaders` sends (all when empty) |
+| `baggage.correlation-fields` | string[] | empty | Keys also tagged on the current span |
+| `baggage.max-entries` / `baggage.max-value-length` | int | `100` / `1000` | Limits applied by `extractBaggageFromHeaders` |
+| `web.mdc-enabled` | boolean | `true` | Register `TraceContextMdcFilter` |
+| `web.server-spans-enabled` | boolean | `true` | Register `TracingServerSpanFilter` |
+| `web.skip-patterns` | string[] | `/actuator/**`, `/health/**`, `/info/**` | Paths both filters skip |
+| `web.detect-existing-instrumentation` | boolean | `true` | Disable the server-span filter when a class in `web.instrumentation-detection-classes` (OpenTelemetry Java agent, OTel Spring WebMVC) is present |
+| `resource.service-name` | string | `${spring.application.name:unknown-service}` | `service.name` |
+| `resource.service-version` / `service-namespace` | string | `unknown` / `default` | `service.version`, `service.namespace` |
+| `resource.service-instance-id` | string | `${random.uuid}` | `service.instance.id` |
+| `resource.attributes` | map | empty | Extra resource attributes; empty values are skipped |
+| `metrics.enabled` | boolean | `true` | Register `SpanMetricsProcessor` (needs a `MeterRegistry` bean) |
+| `metrics.meter-prefix` | string | `span` | Meter names `<prefix>.duration`, `<prefix>.errors` |
+| `metrics.include-span-kind` / `metrics.record-errors` | boolean | `true` / `true` | Add the `span.kind` tag; record the `error` tag and error counter |
 
-- **Assert on exported spans.** Add `io.opentelemetry:opentelemetry-sdk-testing` as a test dependency. Build an `SdkTracerProvider` around an `InMemorySpanExporter`. Then assert span names, parent/child structure, status and attributes directly.
-- **Make sampling deterministic.** Set `adhar.tracing.sampling.probability=1.0` in the test profile. At the default `0.1`, nine runs in ten record nothing, and assertions fail at random.
-- **Do not point tests at a collector.** `adhar.tracing.open-telemetry.enabled=false` removes the OTLP exporter, so tests do not try to reach `localhost:4317`. `adhar.tracing.enabled=false` removes the module entirely.
-- **Keep tail sampling out of unit tests.** Leave `sampling.mode=ratio`. Tail sampling delays export by `hold-window-ms` on a background thread, so a test that asserts immediately sees nothing. If you must test it, `hold-window-ms: 0` makes the decision inline on the ending thread.
-- **Spans need proxies.** `@NewSpan` and similar annotations only fire through the Spring proxy. Assert them from a `@SpringBootTest`, or call `AdharTracing.withinSpan(...)` explicitly in a plain unit test.
-- **Clean up baggage.** Call `clearBaggage()` in `@AfterEach`. The scope map lives on the singleton and survives the test method.
+These keys bind but nothing reads them, so setting them has no effect: `sampling.rate-limit`, `sampling.per-service`, `sampling.per-operation`, `open-telemetry.interval`, `zipkin.connect-timeout`, `zipkin.sender-type`, `zipkin.kafka-*`, `web.enabled`, `web.trace-http-clients`, `web.trace-http-servers`, `web.include-*`, `web.max-url-tags`, `resource.auto-detect`, and everything under `database.*` and `messaging.*`. JDBC capture is set by datasource-micrometer instead; the kit defaults it to `jdbc.includes=connection,query` and `jdbc.datasource-proxy.include-parameter-values=false`.
 
-## Interaction with sibling modules
+## Operations
 
-**Logging.** `TraceContextMdcFilter` puts `traceId` and `spanId` into the SLF4J MDC. This is what makes [Logging](/adhar-kit/modules/logging) output clickable from a span in Grafana. `AdharLogger` picks up the `Tracer` bean automatically, and `AppLogEventPublisher` adds the same two ids to every structured event.
+- **Metrics.** With a `MeterRegistry`, every recorded span produces a timer `span.duration` (tags `span.name`, `span.kind`, `error`) and, for spans with status `ERROR`, a counter `span.errors`.
+- **Export failures** never fail a request. `BatchSpanProcessor` queues and drops spans when the collector is unreachable. A broken exporter configuration logs an error at startup and that exporter is skipped; with no exporter left, the module logs `No tracing exporters configured`.
+- **Shutdown.** A JVM shutdown hook closes the tracer provider, which flushes pending batches. In tail mode, still-buffered traces go through the normal decision first.
+- **Tail sampling cost.** Tail mode forces the head sampler to `alwaysOn`, so every span is recorded and buffered; you save only on export and storage. Peak heap is roughly `max-buffered-traces × spans per trace`. When the buffer overflows, the oldest trace is decided before its root ends, so the latency rule cannot keep it. Decisions run on one daemon thread, `adhar-tail-sampling`, behind a single lock.
 
-**Metrics.** For [Metrics](/adhar-kit/modules/metrics), `SpanMetricsProcessor` records each finished span as `span.duration` (a timer tagged `span.name`, `span.kind` and `error`) and `span.errors`. Separately, that module's `HttpMetricsFilter` links the current trace id to Prometheus exemplars. This ties a latency spike to a specific trace without a high-cardinality tag.
+## Limits
 
-**Commons and Messaging.** Baggage is the natural carrier for the tenant id that [Commons](/adhar-kit/modules/commons) sets at the edge. `@MessagingSpan` plus header propagation keeps a trace intact across [Messaging](/adhar-kit/modules/messaging).
+- **Error status.** The aspect and `AdharTracing` record exceptions as tags (`success=false`, `error.class`, `error.message`), not as span status `ERROR`. Tail sampling's error rule and `span.errors` see only `ERROR` status, which Boot's observations and `TracingServerSpanFilter` (5xx or exception) set. To mark a span yourself, call `tracer.currentSpan().error(e)` on the Micrometer `Tracer`.
+- **`AdharTracing.withinSpan*` does not make the span current.** Tags added with `addTag` and child spans started inside the block attach to the enclosing span. Use `TracingFacade.executeInSpan` or `@NewSpan` when nesting matters.
+- **Self-invocation bypasses the aspect.** Calling an annotated method through `this` creates no span. Call it through another bean, or use `executeInSpan`.
+- **Tail sampling is per process.** A span with a remote parent counts as a root, so each service decides on its own part of the trace and backends can receive partial traces. For whole-trace decisions, sample in an OpenTelemetry Collector and keep `sampling.mode=ratio`.
+- **Baggage scope handles are shared.** `setBaggage` keeps its scope handle in a map on the singleton keyed by name, not per thread. Set a small, fixed set of keys once per request, and call `clearBaggage()` in test teardown.
+- **Web filters are servlet-only.** A WebFlux-only application gets neither the MDC filter nor the fallback server-span filter.
+- **Jaeger exporter is OTLP gRPC** even with `jaeger.use-grpc=false`. Jaeger accepts OTLP natively, so the simpler option is the default OTLP exporter pointed at Jaeger's OTLP port.
+- **Facade on other runtimes.** `TracingFacade.getInstance()` cannot build the Quarkus, Micronaut, Helidon or Vert.x adapter on its own. Construct the adapter with a `Tracer` and pass it to `new TracingFacade(adapter)`, then `adhar.setTracing(...)`.
 
-## Common pitfalls
+## Next steps
 
-| Symptom | Cause | Fix |
-|---|---|---|
-| No spans anywhere | The auto-configuration needs `Tracer` on the classpath | Confirm the module resolved and `adhar.tracing.enabled` is true |
-| A method's span is missing but its caller's is there | Self-invocation bypassed the proxy | Inject the bean, or use `tracing.withinSpan(...)` |
-| Traces break at an `@Async` boundary | The OpenTelemetry context is thread-local and is not in the MDC | Register `TraceContextTaskDecorator`, or wrap the task with `wrapWithTraceContext` |
-| Errors rarely show up in Tempo | Head sampling drops them at trace start | Switch `sampling.mode` to `tail` |
-| Heap grows after enabling tail sampling | The hold buffer keeps every span of up to `max-buffered-traces` traces | Lower `max-buffered-traces` or `hold-window-ms` |
-| Tail sampling still misses slow traces under load | The buffer overflowed and the oldest trace was decided before its root ended | Raise `max-buffered-traces`, or move tail sampling into a collector |
-| CPU did not drop after lowering `keep-rate` | Tail mode forces the head sampler to `alwaysOn`; only export is reduced | Use `ratio` mode if in-process cost is the problem |
-| Traces stop at a partner service | It speaks B3, not W3C `traceparent` | Set `propagation.type: b3` or add it to `additional-formats` |
-| Baggage does not reach downstream | A key must be declared remote to be serialized | Add it to `baggage.remote-fields` |
-| Span attributes contain PII | SQL parameter or payload capture was enabled | Leave `include-sql-parameters` and `include-payloads` off |
-
-## See also
-
-- [Logging](/adhar-kit/modules/logging) — consumes the `traceId` / `spanId` this module publishes
-- [Metrics](/adhar-kit/modules/metrics) — `SpanMetricsProcessor` feeds span data into the same registry
-- [Messaging](/adhar-kit/modules/messaging) — where `@MessagingSpan` and header propagation pay off
-- [Observability](/docs/operations/observability) — Tempo and Grafana on the platform
+- [Logging](/adhar-kit/modules/logging): uses the `traceId` and `spanId` this module puts in the MDC.
+- [Metrics](/adhar-kit/modules/metrics): the registry that receives `span.duration` and `span.errors`.
+- [Messaging](/adhar-kit/modules/messaging): Kafka and RabbitMQ sends that carry the trace.
+- [Observability](/docs/operations/observability): Tempo and Grafana on the platform.

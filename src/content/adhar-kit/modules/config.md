@@ -7,37 +7,31 @@ path: "/adhar-kit/modules/config"
 
 # Config
 
-`adhar-kit-config` merges configuration from several sources by priority. It adds startup validation, dynamic refresh, and transparent AES/GCM property encryption.
-
-The problem it solves: **a service in production draws settings from four places at once**. These are environment variables, a mounted ConfigMap, Consul or Vault, and a packaged file. Without one merge order and one validation pass, the effective configuration is whatever the last framework to load happened to win.
+`adhar-kit-config` merges configuration from environment variables, files, Vault, Consul, mounted ConfigMaps and Dapr stores into one view ordered by priority, with `ENC(...)` decryption on read, startup validation, change listeners and percentage feature flags. Use it when a service draws settings from more than one place, or carries secrets you do not want in plaintext.
 
 ## At a glance
 
 | | |
 |---|---|
-| Artifact | `com.adhar.kit:adhar-kit-config` |
-| Built on | Spring Boot / Spring Cloud Config, Spring Cloud Vault, Jasypt, `adhar-kit-commons` |
-| Entry points | `ConfigManager`, `ConfigFacade`, `ConfigSource`, `PropertyEncryptor`, `ConfigValidator` |
-| Auto-configuration | `ConfigAutoConfiguration` (gated on `adhar.config.enabled`) |
-| Actuator endpoint | `adharconfig` |
-| Use it when | Configuration arrives from more than one place, or carries secrets |
+| Artifact | `com.adhar.kit:adhar-kit-config` (package `com.adhar.kit.config`) |
+| Module toggle | `adhar.kit.modules.config` (default `true`) gates `adhar.getConfig()` |
+| Module switch | `adhar.config.enabled` (default `true`) gates `ConfigAutoConfiguration` |
+| Facade | `ConfigFacade` (read-only view); `ConfigManager` is the merge engine |
+| Required dependencies | `spring-boot-starter`, `adhar-kit-commons` |
+| Optional dependencies | `adhar-kit-dapr` (Dapr sources), `spring-boot-starter-actuator` (`adharconfig` endpoint), Spring Cloud context (scheduled refresh), Spring Cloud Config / Vault, Jasypt |
+| Frameworks | `ConfigManager` and the sources are plain Java. `ConfigFacade` works anywhere: without a linked `ConfigManager` it reads system properties and environment variables. Source wiring, validation, refresh and the endpoint are Spring Boot auto-configuration |
 
 ## How it works
 
-`ConfigManager` is the single owner of the merged view. Each source registers with a numeric priority. The manager keeps them sorted, and resolves a key from the highest-priority source that has it. If a `PropertyEncryptor` is present, it sits in the read path. So `ENC(...)` values are decrypted at the moment they are read, and never stored in plaintext.
+`ConfigManager` holds a list of `ConfigSource`s sorted by priority. It loads each source's map, lowest priority first, into one merged `ConcurrentHashMap`, so a higher-priority source replaces individual keys. Merging is key-level, not deep. Reads are map lookups; sources are contacted only when a source is added and on refresh.
 
 ```diagram
-kit-config-priority
+nkb-config-sources
 ```
 
-Two things happen around that core:
+`ConfigManager` is a view parallel to Spring's `Environment`, not part of it. It registers no `PropertySource`. So `@Value`, `@ConfigurationProperties` and `Environment` never see the Vault, Consul or ConfigMap sources declared here. In the other direction, `application.yml` is not in `ConfigManager` unless you declare it as a `file` source: `EnvironmentConfigSource` reads `System.getenv()` only.
 
-- At startup, `ConfigValidationRunner` runs `ConfigValidator` over the merged map. It can abort the boot.
-- At runtime, `ConfigRefreshManager` re-reads refreshable sources. It notifies `@RefreshConfig` methods and registered `ConfigChangeListener`s.
-
-**`ConfigManager` is a parallel view, not Spring's `Environment`.** The module registers no `PropertySource`. So `@Value`, `@ConfigurationProperties` and `Environment.getProperty(...)` resolve through Spring's own machinery. They never see a Consul, Vault or ConfigMap source declared here. When you want the merged view, read through `ConfigManager` / `ConfigFacade`. This also defines exactly who sees a refresh — see below.
-
-## Install
+## Add it
 
 ```xml
 <dependency>
@@ -47,52 +41,18 @@ Two things happen around that core:
 </dependency>
 ```
 
-## Key APIs
+## Use it
 
-- **`ConfigManager`** — The merge engine: `addSource`, `removeSource`, `getProperty(key)`, `getProperty(key, type)`, `getProperty(key, type, default)`, `getRequiredProperty`, `getPropertiesWithPrefix`, `containsProperty`, `refreshAll`, `refreshSource`, `addChangeListener`, `removeChangeListener`, `getHealthStatus`, `setEncryptor`.
-- **`ConfigFacade`** — The read-only convenience view (`getInstance()`): `get`, `getOptional`, `getInt`, `getLong`, `getBoolean`, `getDouble`, `getPropertiesWithPrefix`, `containsKey`, `getActiveProfile`, `refresh`, `isRefreshable`. This is what `AdharFacade.getConfig()` returns.
-- **`ConfigSource`** — The extension point.
-  - Implement `getType`, `loadConfig` and `getProperty`.
-  - Optionally implement `getPriority` (default 100), `isEnabled`, `supportsRefresh`, `refresh`, `isHealthy`.
-  - Shipped implementations: `EnvironmentConfigSource`, `FileConfigSource`, `ConsulConfigSource`, `VaultConfigSource`, `ConfigMapConfigSource`, `DaprConfigSource`, `DaprSecretConfigSource`.
-  - A source published as a Spring bean is picked up automatically.
-- **`PropertyEncryptor`** — `encrypt`, `decrypt`, `isEncrypted`, `decryptIfNeeded`.
-- **`ConfigValidator`** (+ `ConfigValidationRunner`) — `addRequiredProperty`, `addPatternRule`, `addRangeRule`, `addCustomRule`, `validate(Map)`, `validateOrThrow(Map)`.
-- **`FeatureFlagService`** / `FeatureFlag` — Percentage rollouts with allow/deny lists.
-- **`ConfigChangeAuditPublisher`** / `ConfigChangeEvent` / `ConfigMasking` — An audit trail of what changed, with secret values masked.
-
-## The source stack
-
-The auto-configuration always adds `EnvironmentConfigSource` first, at priority **200**. So by default an environment variable overrides everything. Declared sources default to **100**. The Dapr configuration and secret sources sit at **150** and **160**.
-
-`EnvironmentConfigSource` lowercases each variable name and turns `_` into `.`. So `DATABASE_URL` resolves the key `database.url`.
-
-```java
-import com.adhar.kit.config.manager.ConfigManager;
-import com.adhar.kit.config.source.impl.EnvironmentConfigSource;
-import com.adhar.kit.config.source.impl.FileConfigSource;
-
-ConfigManager manager = new ConfigManager();
-manager.addSource(new EnvironmentConfigSource());              // priority 200
-manager.addSource(new FileConfigSource("app.yml", 100));
-
-String dbUrl  = manager.getProperty("database.url", String.class);
-Integer pool  = manager.getProperty("database.pool.size", Integer.class, 10);
-String apiKey = manager.getRequiredProperty("api.key", String.class);  // throws if absent
-```
-
-Declaratively, with a Vault source layered over a file:
+Declare sources. Each `adhar.config.sources.<name>` entry has `type`, `location`, `prefix`, `priority` (default `100`), `enabled` and an `auth` map:
 
 ```yaml
 adhar:
   config:
-    application-name: orders
     sources:
       app-file:
         type: file
         location: classpath:app.yml
-        priority: 100
-      platform-vault:
+      orders-vault:
         type: vault
         location: https://vault.internal:8200
         prefix: secret/orders
@@ -102,213 +62,142 @@ adhar:
           kvVersion: "2"
 ```
 
-Recognised `type` values are `file`, `environment`, `vault`, `consul`, and `configmap` (alias `k8s`). `springcloud` is accepted but only logs; Spring Cloud Config stays on its own path. An unknown type logs a warning and is skipped.
+| `type` | Source | `auth` keys |
+|---|---|---|
+| `file` | `FileConfigSource` (`classpath:` or file path) | — |
+| `vault` | `VaultConfigSource` | `token`, `namespace`, `kvVersion` (default `2`) |
+| `consul` | `ConsulConfigSource` | `token` |
+| `configmap`, `k8s` | `ConfigMapConfigSource` over a mounted directory | `watch` (default `false`) |
+| `environment` | Ignored; the environment source is always added | — |
+| `springcloud` | Logged only; Spring Cloud Config stays on its own path | — |
 
-Merging is **key-level, not deep**. Each source's `loadConfig()` map is applied with `putAll`, lowest priority first. So a higher source replaces individual keys, but never merges nested structures. If the high-priority source does not define a key, it falls through to the next source down.
+Any `ConfigSource` bean is added too. Read the merged view:
 
-## A realistic refreshable component
+```java
+import com.adhar.kit.config.manager.ConfigManager;
 
-`@RefreshConfig` exists to rebuild a derived object — a client, a pool, a rate limiter — when its inputs change. Note that it is a **method-level** annotation:
+String url  = configManager.getProperty("database.url", String.class);
+int pool    = configManager.getProperty("database.pool.size", Integer.class, 10);
+String key  = configManager.getRequiredProperty("api.key", String.class); // IllegalArgumentException if absent
+Map<String, Object> db = configManager.getPropertiesWithPrefix("database.");
+```
+
+`ConfigFacade` offers string-typed reads: `get`, `getOptional`, `getInt`, `getLong`, `getBoolean`, `getDouble`, `getPropertiesWithPrefix`, `containsKey`, `refresh`.
+
+React to changes with `@RefreshConfig` on a method of any bean:
 
 ```java
 import com.adhar.kit.config.annotation.RefreshConfig;
 import com.adhar.kit.config.manager.ConfigManager;
-import java.time.Duration;
+import org.springframework.stereotype.Service;
 
 @Service
 public class PricingClient {
 
     private final ConfigManager config;
-    private volatile RestClient client;   // volatile: rebuilt on the refresh thread
+    private volatile int timeoutMs;          // written on the refresh thread
 
     public PricingClient(ConfigManager config) {
         this.config = config;
     }
 
-    @RefreshConfig(keys = {"pricing.timeout-ms", "pricing.base-url"},
-                   refreshOnStartup = true)
-    public void rebuild() {
-        int timeout = config.getProperty("pricing.timeout-ms", Integer.class, 5000);
-        String base = config.getRequiredProperty("pricing.base-url", String.class);
-        this.client = RestClient.builder()
-                .baseUrl(base)
-                .requestFactory(factoryWithTimeout(Duration.ofMillis(timeout)))
-                .build();
-    }
-
-    public Price quote(String sku) {
-        return client.get().uri("/prices/{sku}", sku).retrieve().body(Price.class);
+    @RefreshConfig(keys = "pricing.timeout-ms", refreshOnStartup = true)
+    void reload() {
+        timeoutMs = config.getProperty("pricing.timeout-ms", Integer.class, 5000);
     }
 }
 ```
 
-`refreshOnStartup = true` makes the post-processor call `rebuild()` once at bean initialization. So the constructor can stay empty, and exactly one code path builds the client. Declare the field `volatile`, because the rebuild runs on the refresh thread while request threads read it.
+`RefreshConfigBeanPostProcessor` registers each annotated method as a `ConfigChangeListener` and calls it by reflection, so private methods and self-calls work. Rules:
 
-## How it behaves
+- The method takes no arguments or `(String key, Object oldValue, Object newValue)`; any other signature is skipped with a warning.
+- `keys` match exactly, `prefix` matches with `startsWith`; with neither, every change matches.
+- It runs **once per matching changed key**, so make it idempotent.
+- `refreshOnStartup = true` calls a zero-argument method once at bean initialisation.
 
-**Reads are map lookups, not source calls.** `ConfigManager` keeps a `ConcurrentHashMap` cache of the merged view. `getProperty` never contacts Vault or Consul. It reads the cache, then decrypts if an encryptor is attached. Sources are contacted only at `addSource`, `refreshAll` and `refreshSource`.
-
-**Decryption is per read.** `decryptIfNeeded` runs on every `getProperty` that returns a `String`. A value starting with `ENC(` is decrypted each time. Key derivation (PBKDF2) happens once, in the `PropertyEncryptor` constructor, but the AES/GCM operation does not. So read a secret once into a field. Never read it inside a loop or on a per-request path.
-
-**Refresh clears before it repopulates.** `refreshCache()` calls `cache.clear()`, then re-applies every source from lowest to highest priority. A read that lands inside that window can see a key as missing: `getProperty` returns `null`, and `getRequiredProperty` throws `IllegalArgumentException`. Resolve configuration into fields at startup or in a `@RefreshConfig` method. Do not read `ConfigManager` on a hot request path.
-
-**Who sees a new value after a refresh.**
-
-| Consumer | Sees the new value? |
-|---|---|
-| `configManager.getProperty(...)` / `ConfigFacade` called after the refresh | Yes |
-| `@RefreshConfig` methods whose `keys` / `prefix` match | Yes, invoked during the refresh |
-| Registered `ConfigManager.ConfigChangeListener`s | Yes, invoked during the refresh |
-| A field assigned in a constructor or `@PostConstruct` | No |
-| `@Value`-injected fields | No |
-| `@ConfigurationProperties` beans, Spring's `Environment` | No |
-
-**Failure behaviour is degrade-and-log, not fail.**
-
-- If a source cannot be constructed (bad Vault URL, missing token), `addConfigSource` catches the exception and logs an error. The application still starts, just without that source.
-- If a source throws during `loadConfig()`, `refreshCache()` logs it and carries on with the others.
-
-The symptom is a missing key much later, not a startup failure. To turn that into a loud failure, use `getRequiredProperty` or the startup validator. Check `getHealthStatus()` (and the `adharconfig` endpoint) for per-source health.
-
-**Scheduled refresh has two gates and is off by default.** `ConfigRefreshScheduler` is created only when `adhar.config.refresh.enabled=true` **and** `org.springframework.cloud.context.refresh.ContextRefresher` is on the classpath. It waits an initial delay of `adhar.config.refresh.initial-delay` (default `PT10S`). It then runs with a fixed delay of `adhar.config.refresh.interval` (default `PT30S`). A refresh that throws is logged. `max-retries` and `retry-delay` are bound and logged, but they do not drive a retry loop. The next scheduled tick is the retry.
-
-**Change notification is synchronous and serial.** `refreshAll()` diffs the old and new cache. It then calls every registered listener, in registration order, on the refreshing thread. A listener that blocks delays every later listener and the refresh itself. A listener that throws is caught and logged, and the remaining listeners still run.
-
-**Concurrency.** `ConfigManager` holds sources and listeners in `CopyOnWriteArrayList`s, and the merged view in a `ConcurrentHashMap`. So it is safe to share and to read from many threads. The encryptor field is `volatile`. `ConfigFacade` is a process-wide singleton. The auto-configuration swaps in its `ConfigManager`.
-
-## Encryption
-
-Encryption is **off by default** (`adhar.config.encryption.enabled=false`), and so is refresh. When you turn encryption on, a `PropertyEncryptor` is built and attached to the `ConfigManager`.
-
-The v2 format is `ENC(v2:<base64(iv + ciphertext + gcm-tag)>)`:
-
-| Parameter | Value |
-|---|---|
-| Cipher | `AES/GCM/NoPadding` (authenticated — tampering is detected) |
-| IV | random 12 bytes per encryption, prepended to the ciphertext |
-| Auth tag | 128 bits |
-| Key derivation | `PBKDF2WithHmacSHA256`, 256-bit key |
-| Iterations | `adhar.config.encryption.key-iterations`, default `210000` |
-| Salt | `adhar.config.encryption.salt`, default `adhar-kit-config-salt` |
-
-Values written as `ENC(<base64>)` without the `v2:` marker are legacy v1 (AES/ECB). They are still decrypted, for backward compatibility. `encrypt(...)` always emits v2 for AES. A non-AES `algorithm` falls back to the legacy cipher path entirely. A decryption failure — wrong key, changed salt, altered ciphertext — throws a `RuntimeException`. It does not return the raw value.
-
-The key is read from `adhar.config.encryption.key` first, then from the `ADHAR_CONFIG_ENCRYPTION_KEY` environment variable. **`key-location` is not implemented.** It is logged and ignored. If nothing else supplied a key, the bean throws `IllegalStateException` and the application fails to start. Supply the key through the property or the environment variable.
-
-```yaml
-adhar:
-  config:
-    encryption:
-      enabled: true
-      algorithm: AES
-      salt: orders-prod-salt
-      key-iterations: 210000
-    validation:
-      enabled: true
-      fail-on-error: true
-      required:
-        - database.url
-        - api.key
-      patterns:
-        "[database.url]": "^jdbc:.*"
-```
-
-Keep `salt` and `key-iterations` stable for the life of a ciphertext. Changing either one derives a different key, and every existing `ENC(v2:...)` value stops decrypting.
-
-## Startup validation
-
-`ConfigValidationRunner` implements `InitializingBean`. So validation runs during bean initialization, after the `ConfigManager` exists. It does three things:
-
-1. Merges the `required` keys and `patterns` declared in properties into the `ConfigValidator`.
-2. Validates the whole merged map.
-3. With `fail-on-error` true (the default), throws `IllegalStateException`, so the context fails to start.
-
-With `fail-on-error` false, violations are logged as warnings when `log-warnings` is on.
-
-The mutator methods return `void`, so configure the validator one statement at a time:
+Validate at startup, or in code:
 
 ```java
-ConfigValidator validator = new ConfigValidator();
+import com.adhar.kit.config.validator.ConfigValidator;
+
+ConfigValidator validator = new ConfigValidator();   // mutators return void
 validator.addRequiredProperty("api.key");
 validator.addPatternRule("database.url", "^jdbc:.*");
 validator.addRangeRule("server.port", 1, 65535);
-
-validator.validateOrThrow(configManager.getPropertiesWithPrefix(""));
+List<String> errors = validator.validate(configManager.getPropertiesWithPrefix(""));
 ```
 
-## `@RefreshConfig` mechanics
+`ConfigValidationRunner` applies `adhar.config.validation.required` and `patterns` to the merged map during bean initialisation and, with `fail-on-error`, throws `IllegalStateException`.
 
-`@RefreshConfig` is **not** an aspect. That makes it the one annotation in this group that is immune to the self-invocation trap.
+Feature flags (with `adhar.config.feature-flags.enabled=true`):
 
-`RefreshConfigBeanPostProcessor` scans every bean's user-declared methods. For each annotated method, it registers a `ConfigChangeListener` that invokes the method by reflection on the target object. `ReflectionUtils.makeAccessible` is applied, so a private method works. Calling the method from inside the same class does not matter, because the post-processor holds a direct reference.
+```java
+boolean on = featureFlagService.isEnabled("new-checkout", userId);
+```
 
-What does bite:
-
-- The annotation targets **methods only** (`@Target(ElementType.METHOD)`). Putting it on a class will not compile.
-- Only two signatures are supported: zero-argument, or `(String key, Object oldValue, Object newValue)`. Any other arity logs a warning at startup and is skipped entirely.
-- Matching is per changed key. `keys` matches an exact key, and `prefix` matches by `startsWith`. **If neither is set, every change matches.**
-- **The method is invoked once per matching changed key.** A method watching `{a, b}` runs twice when both change in the same refresh. Make it idempotent and cheap, or guard it.
-- `refreshOnStartup = true` works only on zero-argument methods. On a three-argument method, it logs a warning and skips the startup call.
-- An exception inside the method is caught and logged. It does not abort the refresh or reach the caller.
-- Refresh defaults to off. So none of this fires until `adhar.config.refresh.enabled=true` (or until you call `configManager.refreshAll()` yourself).
+The deny list wins, then the allow list, then `enabled`, then a stable hash bucket against `rollout-percentage`. A partial rollout with no key is off.
 
 ## Configuration
 
-| Property | Purpose | Default |
-|---|---|---|
-| `adhar.config.enabled` | Master switch | `true` |
-| `adhar.config.application-name` | Logical name used when namespacing remote keys | — |
-| `adhar.config.profiles` | Active profiles for source lookups | `[default]` |
-| `adhar.config.sources.<name>.{type,location,prefix,priority,enabled,auth}` | Declare a source | `priority: 100`, `enabled: true` |
-| `adhar.config.encryption.enabled` | Enable `PropertyEncryptor` | `false` |
-| `adhar.config.encryption.key` | Encryption key (or `ADHAR_CONFIG_ENCRYPTION_KEY`) | — |
-| `adhar.config.encryption.salt` | PBKDF2 salt | `adhar-kit-config-salt` |
-| `adhar.config.encryption.key-iterations` | PBKDF2 iterations | `210000` |
-| `adhar.config.validation.enabled` | Run startup validation | `true` |
-| `adhar.config.validation.fail-on-error` | Abort the boot on a violation | `true` |
-| `adhar.config.validation.log-warnings` | Log violations when not failing | `true` |
-| `adhar.config.refresh.enabled` | Enable scheduled refresh | `false` |
-| `adhar.config.refresh.interval` | Re-read interval | `PT30S` |
-| `adhar.config.refresh.initial-delay` | Delay before the first refresh | `PT10S` |
-| `adhar.config.feature-flags.enabled` | Register `FeatureFlagService` | `false` |
-| `adhar.config.audit.enabled` | Record `ConfigChangeEvent`s | `true` |
-| `adhar.config.audit.max-events` | Retained audit ring size | `100` |
-| `adhar.config.endpoint.enabled` | Expose the `adharconfig` actuator endpoint | `true` |
+`ConfigProperties` (`adhar.config.*`):
 
-## Testing
+| Property | Type | Default | Description |
+|---|---|---|---|
+| `adhar.config.enabled` | boolean | `true` | Master switch |
+| `adhar.config.application-name` | String | — | Logical application name |
+| `adhar.config.profiles` | String[] | `[default]` | Active profiles for source lookups |
+| `adhar.config.sources.<name>.*` | Map | — | Declared sources (see above); `priority` `100`, `enabled` `true` |
+| `adhar.config.encryption.enabled` | boolean | `false` | Build a `PropertyEncryptor` and attach it to `ConfigManager` |
+| `adhar.config.encryption.key` | String | — | Key; falls back to the `ADHAR_CONFIG_ENCRYPTION_KEY` environment variable |
+| `adhar.config.encryption.algorithm` | String | `AES` | `AES` writes the v2 GCM format; anything else uses the legacy cipher |
+| `adhar.config.encryption.salt` | String | `adhar-kit-config-salt` | PBKDF2 salt |
+| `adhar.config.encryption.key-iterations` | int | `210000` | PBKDF2 iterations |
+| `adhar.config.validation.enabled` | boolean | `true` | Register the validator and run it at startup |
+| `adhar.config.validation.fail-on-error` | boolean | `true` | Abort startup on a violation |
+| `adhar.config.validation.log-warnings` | boolean | `true` | Log violations when not failing |
+| `adhar.config.validation.required` | List | — | Keys that must be present |
+| `adhar.config.validation.patterns` | Map | — | Key to regex |
+| `adhar.config.refresh.enabled` | boolean | `false` | Scheduled `refreshAll()` (also needs Spring Cloud's `ContextRefresher` on the classpath) |
+| `adhar.config.refresh.interval` | Duration | `30s` | Fixed delay between refreshes |
+| `adhar.config.refresh.initial-delay` | Duration | `10s` | Delay before the first refresh (placeholder only, not a bound field) |
+| `adhar.config.feature-flags.enabled` | boolean | `false` | Register `FeatureFlagService` |
+| `adhar.config.feature-flags.flags.<name>.*` | Map | — | `enabled` (`true`), `rollout-percentage` (`100`), `allow-list`, `deny-list` |
+| `adhar.config.audit.enabled` | boolean | `true` | Publish a `ConfigChangeEvent` per changed key |
+| `adhar.config.audit.max-events` | int | `100` | Retained recent events |
+| `adhar.config.audit.secret-key-patterns` | List | `password`, `secret`, `token`, … | Substrings that mark a key as secret; its values are masked |
+| `adhar.config.endpoint.enabled` | boolean | `true` | Register the `adharconfig` actuator endpoint |
+| `adhar.config.dapr.config-enabled` / `secrets-enabled` | boolean | `true` / `true` | Add the Dapr configuration / secret sources |
+| `adhar.config.dapr.config-store` / `secret-store` | String | `configstore` / `secretstore` | Dapr component names |
+| `adhar.config.dapr.keys` | List | — | Configuration keys to load |
+| `adhar.config.dapr.subscribe` | boolean | `true` | Subscribe to configuration updates |
+| `adhar.config.dapr.config-priority` / `secret-priority` | int | `150` / `160` | Source priorities |
 
-- **Build the manager by hand.** `new ConfigManager()` needs no Spring. Add a tiny `ConfigSource` that returns a fixed `Map` from `loadConfig()` at a chosen priority. You can then assert override order, prefix lookups and `getRequiredProperty` failures in a plain unit test.
-- **Test refresh wiring without the scheduler.** Call `configManager.refreshAll()` directly. `@RefreshConfig` methods and listeners fire exactly as they would on a scheduled tick, with no clock involved. Keep `adhar.config.refresh.enabled=false` in tests, so nothing fires behind your back.
-- **Round-trip encryption.** You can construct `new PropertyEncryptor(key, "AES", salt, iterations)` directly. Lower `iterations` in tests: 210,000 PBKDF2 rounds per constructor call is deliberate and slow. Assert `isEncrypted`, `decrypt(encrypt(x)).equals(x)`, and that a mutated ciphertext throws.
-- **Validation.** `ConfigValidator.validate(map)` returns the error list, so you can assert messages without catching an exception. Use `validateOrThrow` only when the failure itself is what you are testing.
-- **Watch the facade singleton.** `ConfigFacade.getInstance()` is process-wide, and the auto-configuration changes it with `setConfigManager`. With several Spring test contexts in one JVM, the facade points at whichever context started last. In tests, inject `ConfigManager` instead of reaching for the facade.
-- **Disable the module.** `adhar.config.enabled=false` removes everything. `adhar.config.validation.enabled=false` lets a deliberately incomplete test fixture boot.
+The Dapr sources are added only when `adhar-kit-dapr` is on the classpath, a `DaprFacade` bean exists and `adhar.dapr.enabled=true` is set explicitly. `refresh.max-retries`, `refresh.retry-delay`, `encryption.key-location`, `key-alias`, `encrypted-prefix` and `encrypted-suffix` are bound but do not change behaviour.
 
-## Interaction with sibling modules
+### Encryption format
 
-[Security](/adhar-kit/modules/security) usually consumes the secrets decrypted here. The ConfigMap and Secret sources are the in-cluster half of [Kubernetes](/adhar-kit/modules/kubernetes).
+`encrypt(...)` emits `ENC(v2:<base64(iv + ciphertext + tag)>)`: AES/GCM/NoPadding with a random 12-byte IV and a 128-bit tag, under a 256-bit key derived with PBKDF2WithHmacSHA256 from the key, salt and iteration count. `ENC(<base64>)` without `v2:` is the legacy AES/ECB format and is still decrypted. A wrong key, changed salt or altered ciphertext throws `RuntimeException("Decryption failed")`. Keep the salt and iteration count fixed for the life of a ciphertext.
 
-When `adhar-kit-dapr` is on the classpath and `adhar.dapr.enabled=true`, `DaprConfigSource` (priority 150) and `DaprSecretConfigSource` (priority 160) are added as beans and merged automatically. Both sit above declared file sources and below environment variables.
+## Operations
 
-`ConfigChangeAuditPublisher` emits each change as a Spring `ConfigChangeEvent`, with secret values masked by `ConfigMasking`. Use this hook to forward configuration drift into [Logging](/adhar-kit/modules/logging)'s audit event stream. Errors raised here use the exception hierarchy from [Commons](/adhar-kit/modules/commons).
+- **Actuator.** `GET /actuator/adharconfig` returns `sources` (type and health), `properties` (merged, secret-looking values masked), `featureFlags` and `recentChanges`. `ConfigManager.getHealthStatus()` gives the per-source health map in code.
+- **Audit.** `ConfigChangeAuditPublisher` is a change listener that publishes Spring `ConfigChangeEvent`s (`key`, `oldValue`, `newValue`, `secret`, `sourceType`, `changedAt`) with secret values masked.
+- **Refresh.** `refreshAll()` refreshes sources that support it, rebuilds the merged map, diffs it, and calls every listener in registration order on the refreshing thread. A listener that throws is logged; the others still run.
+- **Failure behaviour.** A declared source that fails to construct (bad URL, missing token) is logged and skipped; startup continues. A source that throws in `loadConfig()` is logged and skipped. A failed scheduled refresh is logged and retried on the next tick. Encryption enabled with no key fails startup with `IllegalStateException`.
 
-## Common pitfalls
+## Limits
 
-| Symptom | Cause | Fix |
-|---|---|---|
-| A file value is ignored | `EnvironmentConfigSource` sits at 200 and an env var shadows it | Raise the file source's priority, or unset the variable |
-| `@Value` fields never change on refresh | `ConfigManager` is not a Spring `PropertySource` | Read through `ConfigManager`, or rebuild in a `@RefreshConfig` method |
-| `ENC(...)` appears verbatim in the app | `adhar.config.encryption.enabled` is `false` (the default) | Enable it and provide the key |
-| Boot fails with "Encryption is enabled but no key provided" | Only `key-location` was set, which is not implemented | Use `adhar.config.encryption.key` or `ADHAR_CONFIG_ENCRYPTION_KEY` |
-| Decryption fails after a redeploy | `salt` or `key-iterations` changed, so a different key is derived | Keep both stable for the life of the ciphertext |
-| A Vault key is missing but startup succeeded | Source construction failures are caught and logged | Check `getHealthStatus()` / `adharconfig`; add the key to `validation.required` |
-| `@RefreshConfig` never fires | It targets methods, not classes, and refresh defaults to off | Annotate a method and set `adhar.config.refresh.enabled=true` |
-| A `@RefreshConfig` method runs twice per refresh | It is invoked once per matching changed key | Make it idempotent, or watch a single key |
-| `validator.addRequiredProperty(...).addPatternRule(...)` does not compile | These methods return `void` | Call them as separate statements |
+- Only reads through `ConfigManager` or `ConfigFacade` see the merged view and decrypt `ENC(...)`. `@Value`, `@ConfigurationProperties` beans and fields set at construction do not change on refresh.
+- Startup validation checks the merged view, not `application.yml`. A `required` key that lives only in `application.yml` fails validation unless you declare that file as a `file` source.
+- The merged map is cleared and rebuilt on refresh. A read in that window can miss a key, so resolve values into fields at startup or in a `@RefreshConfig` method rather than on a request path.
+- `ENC(...)` values are decrypted on every read (AES/GCM per call). Read secrets once.
+- The environment source lowercases names and maps `_` to `.`: `DATABASE_URL` becomes `database.url`. At priority 200 it overrides every declared source by default.
+- `ConfigFacade.getInstance()` is process-wide; with several Spring contexts in one JVM it points at the last one started. Inject `ConfigManager` in tests.
+- `ConfigRefreshManager` (a `ContextRefresher` wrapper gated on `adhar.config.refresh.auto-refresh`) is not registered by the auto-configuration.
 
-## See also
+## Next steps
 
-- [Commons](/adhar-kit/modules/commons) — the exception and response types this module depends on
-- [Security](/adhar-kit/modules/security) — where the secrets decrypted here are usually consumed
-- [Kubernetes](/adhar-kit/modules/kubernetes) — the ConfigMap and Secret sources in a cluster
-- [Configuration](/docs/getting-started/configuration) — platform-level configuration on Adhar
+- [Security](/adhar-kit/modules/security) — where decrypted secrets are usually consumed
+- [Kubernetes](/adhar-kit/modules/kubernetes) — ConfigMaps and Secrets in a cluster
+- [Dapr](/adhar-kit/modules/dapr) — the configuration and secret stores behind the Dapr sources
+- [Concepts](/adhar-kit/concepts) — how `adhar.kit.modules.*` and module settings combine

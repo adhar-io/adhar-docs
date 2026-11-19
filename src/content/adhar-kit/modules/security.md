@@ -7,108 +7,150 @@ path: "/adhar-kit/modules/security"
 
 # Security
 
-To secure a Spring service correctly, you must assemble a `SecurityFilterChain`, a `JwtDecoder`, an authorities converter, a CORS source, a CSRF repository, headers, and a rate limiter. That is a dozen beans you get wrong once and then copy forever.
-
-`adhar-kit-security` **ships that assembly as a starter with secure defaults**. Point a service at its identity provider and it becomes a working OAuth2 resource server. Everything else is a toggle.
+`adhar-kit-security` turns a Spring Boot service into a stateless OAuth2 resource server: it builds the `SecurityFilterChain` and `JwtDecoder`, maps token claims to authorities, and adds method-level checks with `@RequiresRole` and `@RequiresPermission`. Opt-in extras cover rate limiting, API keys, a security audit log, self-issued tokens with refresh rotation, a JWKS endpoint and bearer-token relay. Use it when a service validates tokens from an identity provider such as Keycloak and enforces role- or permission-based access.
 
 ## At a glance
 
 | | |
 | --- | --- |
 | Artifact | `com.adhar.kit:adhar-kit-security` |
-| Built on | Spring Security, OAuth2 resource server and client, Nimbus JOSE+JWT, JJWT, Spring AOP; optional Redis, Dapr |
-| Entry points | `SecurityFacade` / `SecurityService`, `@RequiresRole`, `@RequiresPermission`, `JwtUtils` |
-| Config prefix | `adhar.security` |
-| Use it when | A service validates OIDC tokens and enforces role- or permission-based access |
+| Toggle | `adhar.security.enabled` (default `true`) switches the auto-configuration. Facade gate `adhar.kit.modules.security` (default `true`); when `false`, `adhar.getSecurity()` throws `IllegalStateException` |
+| Facade | `adhar.getSecurity()` → `SecurityFacade`, plus the shortcuts `adhar.hasRole(..)`, `adhar.hasPermission(..)`, `adhar.currentUserId()`, `adhar.isAuthenticated()`. Injectable beans: `SecurityService`, `JwtUtils`, and the opt-in `TokenRefreshService`, `ApiKeyService`, `SecurityAuditLogger`, `BearerTokenRelayInterceptor`, `JwksKeyManager` |
+| Dependencies | Required: Spring Security, OAuth2 resource server, Spring MVC, AspectJ, Jackson. Optional: `jjwt` (token refresh), `spring-data-redis` (shared stores), `adhar-kit-dapr` (signing key from a secret store), OAuth2 client |
+| Frameworks | Spring Boot (servlet stack) only. On other runtimes `SecurityFacade` has no delegate and fails closed |
 
 ## How it works
 
-There are two layers, and it helps to keep them apart. The **filter chain** decides whether a request may enter the application at all. The **aspect** decides whether an authenticated principal may call a particular method.
-
 ```diagram
-kit-security-layers
+nkc-security-layers
 ```
 
-### The default filter chain, as built
+- **Servlet filters** run first. `RateLimitingFilter` (order `HIGHEST_PRECEDENCE + 10`) and `ApiKeyAuthenticationFilter` (`+ 20`) are registered on `/*` only when enabled, ahead of Spring Security.
+- **The filter chain** decides whether a request may enter. It is `STATELESS` (no `HttpSession`). Its rules apply in order: health endpoints, `permit-all`, `authenticated`, `authorities`, then `anyRequest().authenticated()`. The first match wins. The JWT resource server is wired only when `issuer-uri` or `jwk-set-uri` is set.
+- **The aspect** decides whether the authenticated principal may call a method. `AccessControlAspect` reads `@RequiresRole` / `@RequiresPermission` on the method, falling back to the class, and throws `com.adhar.kit.security.exception.AccessDeniedException` on failure.
+- **The facade** answers the same questions from plain code. The `securityService` bean registers a `SpringSecurityAdapter` as the delegate of the `SecurityFacade` singleton, which reads `SecurityContextHolder` on every call.
 
-`securityFilterChain(HttpSecurity)` is `@ConditionalOnMissingBean`. So if you define any `SecurityFilterChain` of your own, it replaces the whole thing. Here is what it configures, in order:
+The module also enables `@EnableMethodSecurity`, so Spring's own `@PreAuthorize` works alongside the kit annotations.
 
-1. `sessionManagement` → `SessionCreationPolicy.STATELESS`. No `HttpSession` is created or consulted. Form login and session-based flows do not work. Every request carries its own credential.
-2. When `authorization.enabled` (default `true`), an `authorizeHttpRequests` block in exactly this order:
-   - `permit-all` patterns
-   - then `authenticated` patterns
-   - then the `authorities` map, applied with `hasAnyAuthority`
-   - and finally **`anyRequest().authenticated()`**
+## Add it
 
-   Spring Security matches top to bottom, and the first match wins. So anything not explicitly listed falls through to the last rule and requires a token. That final line is the most important default on this page. It is why actuator, Swagger and any unlisted path start returning 401 as soon as the module is on the classpath.
-3. CORS from `corsConfigurationSource()` when `cors.enabled`. With no `allowed-origins` configured, the source is built with `*`.
-4. CSRF when `csrf.enabled` (default `true`). It uses `CookieCsrfTokenRepository.withHttpOnlyFalse()` so a browser SPA can read and echo the token. Otherwise CSRF is explicitly disabled.
-5. `oauth2ResourceServer().jwt()`, **only when** `oauth2.enabled` and `jwt.enabled` are true *and* an `issuer-uri` or `jwk-set-uri` is actually set. Without a configured endpoint there is no `JwtDecoder` bean, and wiring the resource server would fail the chain build. So it is skipped rather than half-wired.
+```xml
+<dependency>
+    <groupId>com.adhar.kit</groupId>
+    <artifactId>adhar-kit-security</artifactId>
+    <version>0.1.0</version>
+</dependency>
+```
 
-`OnJwtConfiguredCondition` gates that step. It is an `AnyNestedCondition` that matches when either `adhar.security.jwt.issuer-uri` or `adhar.security.jwt.jwk-set-uri` is present. It guards the `JwtDecoder` bean and the whole `OAuth2ResourceServerConfig` import.
+Token refresh signs tokens with JJWT, which the module declares optional. Add it if you set `token-refresh.enabled: true`:
 
-### Filters that run before the chain
+```xml
+<dependency>
+    <groupId>io.jsonwebtoken</groupId>
+    <artifactId>jjwt-api</artifactId>
+    <version>0.12.6</version>
+</dependency>
+<dependency>
+    <groupId>io.jsonwebtoken</groupId>
+    <artifactId>jjwt-impl</artifactId>
+    <version>0.12.6</version>
+    <scope>runtime</scope>
+</dependency>
+<dependency>
+    <groupId>io.jsonwebtoken</groupId>
+    <artifactId>jjwt-jackson</artifactId>
+    <version>0.12.6</version>
+    <scope>runtime</scope>
+</dependency>
+```
 
-Two features are plain servlet filters, registered through `FilterRegistrationBean` on `/*`. Rate limiting runs at `Ordered.HIGHEST_PRECEDENCE + 10` and the API key filter at `+ 20`. Both orders are far below Spring Security's filter-chain registration order of `-100`. So **they run before any Spring Security filter**:
+For `store: redis` (rate limits or refresh tokens), add `spring-boot-starter-data-redis` so a `StringRedisTemplate` bean exists.
 
-- `RateLimitingFilter` sheds load before any authentication work happens. It identifies a client by `X-Forwarded-For` (first entry), then `X-Real-IP`, then `getRemoteAddr()`. It returns `429` with a `Retry-After` header and a JSON body. Behind a proxy that does not set those headers, every caller shares one bucket.
-- `ApiKeyAuthenticationFilter` reads the configured header and resolves it through `ApiKeyService`. On success it fills `SecurityContextHolder` with a `UsernamePasswordAuthenticationToken`. That token carries the key's configured roles **verbatim as authorities**, with no `ROLE_` prefix added. The filter clears the context in a `finally` block. An invalid key stops the request with `401` and a JSON body.
+## Use it
 
-### Where the authorities come from
+### Validate tokens from your identity provider
 
-`jwtAuthenticationConverter` wires a `JwtGrantedAuthoritiesConverter` with `authoritiesClaimName` from configuration and **an authority prefix of `ROLE_`**. So a claim value of `admin` becomes the granted authority `ROLE_admin`. Because of that prefix, the facade matches roles with or without it.
+```yaml
+adhar:
+  security:
+    jwt:
+      jwk-set-uri: https://keycloak.example.com/realms/adhar/protocol/openid-connect/certs
+      authorities-claim-name: groups
+    authorization:
+      permit-all:
+        - /v3/api-docs/**
+      authorities:
+        "/admin/**": [ROLE_admin]
+```
 
-## The facade and the delegate mechanism
+`/actuator/health`, `/actuator/health/**` and `/actuator/info` are open by default (`permit-health-endpoints`), so Kubernetes probes work. Every other unlisted path needs a valid token.
 
-`SecurityFacade` is a process-wide singleton (`getInstance()`) that holds a `volatile SecurityService delegate`. At context refresh, the `securityService` bean constructs a `SpringSecurityAdapter` and calls `SecurityFacade.getInstance().setDelegate(adapter)`. Every facade method forwards to the delegate when one is set.
+The registered `jwtAuthenticationConverter` reads `authorities-claim-name` and adds the prefix `ROLE_`, so a claim value `admin` becomes the authority `ROLE_admin`. URL `authorities` rules compare the full authority string; `hasRole` accepts either form.
 
-This indirection lets framework-neutral code ask authorization questions. That includes the `AccessControlAspect`, your own domain services, and modules with no Spring Security dependency. It also means you should know how the facade behaves before the delegate is registered. **With no delegate, the facade fails closed:**
+### Enforce access on methods
 
-| Method | No-delegate behaviour |
+```java
+package com.example.orders;
+
+import com.adhar.kit.security.SecurityFacade;
+import com.adhar.kit.security.annotation.CheckMode;
+import com.adhar.kit.security.annotation.RequiresPermission;
+import com.adhar.kit.security.annotation.RequiresRole;
+import com.adhar.kit.security.exception.AccessDeniedException;
+import org.springframework.stereotype.Service;
+
+@Service
+@RequiresRole("ORDERS_USER")                       // class-level baseline
+public class OrderAdminService {
+
+    private final OrderRepository orders;
+    private final SecurityFacade security = SecurityFacade.getInstance();
+
+    public OrderAdminService(OrderRepository orders) {
+        this.orders = orders;
+    }
+
+    @RequiresRole("ADMIN")                         // replaces the class-level @RequiresRole
+    public void deleteOrder(Long id) {
+        orders.deleteById(id);
+    }
+
+    @RequiresRole(value = {"AUDITOR", "COMPLIANCE"}, mode = CheckMode.ALL_OF)
+    public Report complianceReport() {
+        return orders.buildComplianceReport();
+    }
+
+    @RequiresPermission({"order:read", "order:export"})   // ANY_OF by default
+    public byte[] exportOrders() {
+        return orders.exportAll();
+    }
+
+    // Data-dependent rules: check inline with the facade.
+    public Order view(Long id) {
+        Order order = orders.findById(id).orElseThrow();
+        String caller = security.getCurrentUserId();
+        if (!order.getOwnerId().equals(caller) && !security.hasPermission("order:read:any")) {
+            throw new AccessDeniedException("order " + id + " is not owned by " + caller);
+        }
+        return order;
+    }
+}
+```
+
+How the checks resolve:
+
+| Rule | Behaviour |
 | --- | --- |
-| `hasRole`, `hasPermission`, `isAuthenticated`, `validateToken` | `false` |
-| `getCurrentUserId`, `getCurrentUsername`, `extractUserId` | `null` |
-| `getCurrentUserRoles` | empty set |
-| `generateToken`, `encodePassword` | throw `IllegalStateException` rather than fake a result |
+| Method vs class | Per annotation type, the method-level annotation wins; the class-level one applies only when the method has none |
+| Role and permission | Roles are checked first, then permissions; when both apply, both must pass |
+| `mode` | `CheckMode.ANY_OF` (default) or `CheckMode.ALL_OF` |
+| `hasRole("ADMIN")` | Matches authority `ADMIN` or `ROLE_ADMIN` |
+| `hasPermission("order:read")` | Matches authority `order:read` or `SCOPE_order:read` |
+| `getCurrentUserId()` | The JWT `sub` claim, otherwise `Authentication.getName()` |
+| `getCurrentUsername()` | The `jwt.username-claim-name` claim, falling back to `sub` |
+| `getCurrentUserRoles()` | Every authority with `ROLE_` stripped |
 
-Failing closed is right, but it is silent for the boolean checks. Suppose a bean calls `SecurityFacade.getInstance().hasRole(...)` from its own constructor, before the `securityService` bean exists. It gets `false` and no error. Call the facade from request-handling code, not during construction.
-
-### How the principal is resolved
-
-`SpringSecurityAdapter` reads `SecurityContextHolder` on every call. It treats a null, unauthenticated, or `AnonymousAuthenticationToken` authentication as "no user".
-
-- `getCurrentUserId()` returns the JWT `sub` claim for a `JwtAuthenticationToken` or `Jwt` principal. Otherwise it returns `authentication.getName()`.
-- `getCurrentUsername()` uses `JwtUtils.extractUsername`, driven by `jwt.username-claim-name` (default `sub`). It falls back to the subject.
-- `getCurrentUserRoles()` returns every authority, with any `ROLE_` prefix stripped.
-- `hasRole("ADMIN")` matches an authority of `ADMIN` **or** `ROLE_ADMIN`.
-- `hasPermission("order:read")` matches an authority of `order:read` **or** `SCOPE_order:read`. The second is the form the resource server produces from OAuth2 scopes.
-
-The context is a thread-local, so none of this works on a thread you started yourself. Resolve the principal on the request thread and pass the value along.
-
-## The aspect, and proxy mechanics
-
-`AccessControlAspect` is a `@ConditionalOnMissingBean` bean. It is registered whenever `adhar.security.rbac.enabled` is not `false`. `spring-boot-starter-aspectj` is a direct (non-optional) dependency of the module, so there is nothing to switch on. Its pointcut covers `@annotation` and `@within` for both `@RequiresRole` and `@RequiresPermission`.
-
-The advice resolves checks in this order:
-
-1. It finds the most specific method with `AopUtils.getMostSpecificMethod` against the target class. So annotations on an implementation are seen even when the call arrives through an interface.
-2. It handles each annotation type separately. The **method-level** annotation wins. The **class-level** one is used only if the method has none. A method-level `@RequiresRole` replaces the class-level `@RequiresRole`, but a class-level `@RequiresPermission` stays in force.
-3. Role check first, then permission check. When both apply, **both must pass**.
-4. `CheckMode.ANY_OF` (default) versus `CheckMode.ALL_OF` selects `hasAnyRole`/`hasAllRoles`, and `anyMatch`/`allMatch` over `hasPermission`.
-
-> **Self-invocation silently disables the annotation.** The aspect runs in a Spring AOP proxy, so it only sees calls that arrive *through* the proxy. A `this.deleteOrder(id)` call from another method in the same class bypasses the proxy entirely. The `@RequiresRole` on `deleteOrder` is never evaluated. There is no error, no log line and no check. The same applies to a private method, a `final` method under CGLIB proxying, and any call made before the bean is proxied. Call through an injected reference to the bean (or split the methods into two beans), or do the check inline with the facade.
-
-### What happens on a valid token that lacks the authority
-
-The answer depends on the layer:
-
-| Layer | Outcome |
-| --- | --- |
-| Filter chain, `anyRequest().authenticated()` | **Passes.** The token is valid and the principal is authenticated. Authorities are not checked |
-| Filter chain, an `authorization.authorities` entry matching the path | Spring Security's own `AccessDeniedException` → `403` |
-| Aspect, `@RequiresRole` / `@RequiresPermission` | Throws `com.adhar.kit.security.exception.AccessDeniedException`. This is a plain `RuntimeException`, deliberately *not* Spring Security's, so portable callers need no Spring Security dependency |
-
-The module does not handle the result of that last row for you. It ships **no `@ControllerAdvice` and no `@ResponseStatus`**. So an unhandled `AccessDeniedException` from the aspect surfaces as a `500`, not a `403`. Add a handler.
+The module ships no `@ControllerAdvice`, so an `AccessDeniedException` from the aspect surfaces as `500`. Map it to `403`:
 
 ```java
 package com.example.web;
@@ -124,181 +166,152 @@ public class AuthorizationExceptionHandler {
 
     @ExceptionHandler(AccessDeniedException.class)
     ProblemDetail onAccessDenied(AccessDeniedException ex) {
-        // The message names the roles/permissions required - do not echo it to the caller.
+        // The message names the required roles; do not echo it to the caller.
         return ProblemDetail.forStatusAndDetail(HttpStatus.FORBIDDEN, "Forbidden");
     }
 }
 ```
 
-## Worked example: layered authorization
+### Forward the caller's token downstream
+
+With `token-relay.enabled: true`, register the interceptor on a client. It copies the inbound `Bearer` header to the outbound request unless that request already sets `Authorization`.
 
 ```java
-package com.example.orders;
+import com.adhar.kit.security.relay.BearerTokenRelayInterceptor;
+import org.springframework.context.annotation.Bean;
+import org.springframework.web.client.RestClient;
 
-import com.adhar.kit.security.SecurityFacade;
-import com.adhar.kit.security.annotation.CheckMode;
-import com.adhar.kit.security.annotation.RequiresPermission;
-import com.adhar.kit.security.annotation.RequiresRole;
-import com.adhar.kit.security.exception.AccessDeniedException;
-import org.springframework.stereotype.Service;
-
-@Service
-@RequiresRole("ORDERS_USER")                 // class-level baseline
-public class OrderAdminService {
-
-    private final OrderRepository orders;
-    private final SecurityFacade security = SecurityFacade.getInstance();
-
-    public OrderAdminService(OrderRepository orders) {
-        this.orders = orders;
-    }
-
-    @RequiresRole("ADMIN")                   // replaces the class-level @RequiresRole
-    public void deleteOrder(Long id) {
-        orders.deleteById(id);
-    }
-
-    @RequiresRole(value = {"AUDITOR", "COMPLIANCE"}, mode = CheckMode.ALL_OF)
-    public Report complianceReport() {
-        return orders.buildComplianceReport();
-    }
-
-    @RequiresPermission({"order:read", "order:export"})   // ANY_OF by default
-    public byte[] exportOrders() {
-        return orders.exportAll();
-    }
-
-    /**
-     * Ownership is data-dependent, so the annotation model cannot express it.
-     * Check inline against the resolved principal instead.
-     */
-    public Order view(Long id) {
-        Order order = orders.findById(id).orElseThrow();
-        String caller = security.getCurrentUserId();
-        if (!order.getOwnerId().equals(caller) && !security.hasPermission("order:read:any")) {
-            throw new AccessDeniedException("order " + id + " is not owned by " + caller);
-        }
-        return order;
-    }
+@Bean
+RestClient inventoryClient(RestClient.Builder builder, BearerTokenRelayInterceptor relay) {
+    return builder.baseUrl("http://inventory").requestInterceptor(relay).build();
 }
 ```
 
-Use annotations for coarse, static rules and the facade for anything that depends on the data being accessed.
+### Authenticate machine clients with API keys
 
-## Minimal: validate tokens from your IdP
+Configure the SHA-256 hex hash of each key, never the key itself (`printf '%s' "$KEY" | sha256sum`). Roles become authorities verbatim, with no `ROLE_` prefix added.
 
 ```yaml
 adhar:
   security:
-    jwt:
-      issuer-uri: https://keycloak.example.com/realms/adhar
-      jwk-set-uri: https://keycloak.example.com/realms/adhar/protocol/openid-connect/certs
-      authorities-claim-name: groups
-    authorization:
-      permit-all:
-        - /actuator/health/**
-        - /actuator/info
+    api-key:
+      enabled: true
+      header-name: X-API-Key
+      keys:
+        - key-hash: <sha256-hex-of-key>
+          principal: billing-job
+          roles: [ROLE_BATCH]
 ```
 
-> **`issuer-uri` on its own makes startup depend on the IdP.** `NimbusJwtDecoder.withIssuerLocation(...)` resolves OIDC discovery metadata eagerly while the bean is created. So an unreachable Keycloak fails the context. `jwk-set-uri` builds the decoder lazily and fetches keys on first use. When both are set, `jwk-set-uri` wins. Prefer it for services that must start before the IdP is reachable. Keep `issuer-uri` for discovery convenience in environments where start-up order is guaranteed.
+A request without the header passes through to the other mechanisms; an unknown key gets `401` with a JSON body.
 
-There is a second trap in the same block of configuration.
+### Issue your own tokens
 
-> **`adhar.security.jwt.audience` is not enforced by the decoder.** The `JwtDecoder` is built with no additional `OAuth2TokenValidator`. So the configured audience list is never applied automatically. `JwtUtils.validateAudience(jwt)` exists and reads it, but nothing in the module calls it. If audience restriction matters, call it yourself, or supply your own `JwtDecoder` bean with the validator attached.
+With `token-refresh.enabled: true` and JJWT on the classpath, `TokenRefreshService` issues HMAC-signed access/refresh pairs with rotation and reuse detection.
 
-## How it behaves
+```java
+import com.adhar.kit.security.service.TokenRefreshService;
+import com.adhar.kit.security.service.TokenRefreshService.TokenResponse;
+import java.util.Map;
+import org.springframework.stereotype.Service;
 
-- **Thread-safety.** `SecurityFacade` and `SpringSecurityAdapter` are singletons and hold no per-request state. Everything comes from the thread-local `SecurityContextHolder`. The delegate reference is `volatile`, so a late `setDelegate` is visible to other threads.
-- **Lifecycle.** The delegate is registered when the `securityService` bean is created. Filters and the chain are built once at startup. Changing `adhar.security.*` at runtime has no effect until you restart.
-- **Failure behaviour.** The facade fails closed. The aspect fails closed. The filter chain fails closed on `anyRequest().authenticated()`. The one place the module fails *open* is conditional registration. `rate-limit`, `api-key`, `audit`, `token-refresh`, `jwks` and `token-relay` all default to disabled. With `audit.enabled: false`, there is no security audit trail at all until you turn it on.
-- **Overriding.** Every bean is `@ConditionalOnMissingBean`. For `SecurityFilterChain`, that is a sharp edge rather than a convenience. Your own chain replaces the default entirely, including `anyRequest().authenticated()`, the CORS source and the CSRF repository. Also, when a JWT endpoint is configured, the imported `OAuth2ResourceServerConfig` adds a second chain bean named `oauth2SecurityFilterChain`. If you need to be sure which rules are in force, declare your own `SecurityFilterChain` and own the whole thing.
-- **Resource bounds and distribution.** The default `RateLimiterStore` and `RefreshTokenStore` are in-process (`InMemoryRateLimiterStore`, `InMemoryRefreshTokenStore`). So limits are per pod and reset on restart, and refresh tokens do not survive a redeploy. Switching either `store` to `redis` needs `spring-data-redis` on the classpath. It uses the key prefixes `adhar:security:ratelimit:` and `adhar:security:refresh:`.
+@Service
+public class SessionTokens {
 
-## Key APIs
+    private final TokenRefreshService tokens;
 
-- **`SecurityFacade`** (`getInstance()`) and **`SecurityService`**: `getCurrentUserId`, `getCurrentUsername`, `getCurrentUserRoles`, `hasRole`, `hasAnyRole`, `hasAllRoles`, `hasPermission`, `isAuthenticated`, `generateToken(userId, roles[, claims])`, `validateToken`, `extractUserId`, `encodePassword`, `verifyPassword`, plus `setDelegate`, `clearDelegate`, `hasDelegate`. Also reachable as `adhar.hasRole(...)`, `adhar.hasPermission(...)`, `adhar.currentUserId()`, `adhar.isAuthenticated()`.
-- **`@RequiresRole(value, mode)`** and **`@RequiresPermission(value, mode)`**: on a method or a class. `mode` is `CheckMode.ANY_OF` (default) or `CheckMode.ALL_OF`.
-- **`JwtUtils`**: `extractJwt(authentication)`, `extractUsername`, `extractName`, `extractEmail`, `extractAuthorities`, `extractAdditionalClaims`, `validateAudience`. Which claims it reads is driven by `adhar.security.jwt.*-claim-name`.
-- **`TokenRefreshService`**: for services that issue their own tokens. Offers `createTokenPair(subject, claims)`, `refreshAccessToken(refreshToken)`, `generateAccessToken`, `revokeRefreshToken` and `revokeAllUserTokens(userId)`. It is also required by `SecurityFacade.generateToken`/`validateToken`/`extractUserId`, which throw or return falsy without it.
-- **`ApiKeyService`**: validates SHA-256 hashes of configured keys. Paired with `ApiKeyAuthenticationFilter`.
-- **`SecurityAuditLogger`** and the `AuditEventSink` SPI (`Slf4jAuditEventSink` by default). Swap the sink to send audit events somewhere durable.
-- **`BearerTokenRelayInterceptor`**: a `ClientHttpRequestInterceptor` you register on a `RestClient`/`RestTemplate` builder. It copies the inbound `Authorization` header to the outbound request, but only when the outbound request does not already set one.
-- **`JwksKeyManager` / `JwksController`**: publish your own JWKS at `/.well-known/jwks.json` when this service signs tokens.
-- **`DaprSecretKeyProvider`**: when `adhar-kit-dapr` is present, Dapr is enabled and `adhar.security.dapr.jwt-secret-name` is set, the signing key is fetched from the Dapr secret store. It **overrides** `token-refresh.secret`.
+    public SessionTokens(TokenRefreshService tokens) {
+        this.tokens = tokens;
+    }
+
+    public TokenResponse login(String userId) {
+        return tokens.createTokenPair(userId, Map.of("tenant", "acme"));
+    }
+
+    public TokenResponse refresh(String refreshToken) {
+        return tokens.refreshAccessToken(refreshToken);   // rotates the refresh token
+    }
+
+    public void logoutEverywhere(String userId) {
+        tokens.revokeAllUserTokens(userId);
+    }
+}
+```
+
+Presenting an already-rotated refresh token revokes its whole family and throws `TokenRefreshException`. `SecurityFacade.generateToken`, `validateToken` and `extractUserId` delegate to this service; without it they throw or return `false`/`null`.
 
 ## Configuration
 
-| Property | Purpose | Default |
-| --- | --- | --- |
-| `adhar.security.enabled` | Master switch | `true` |
-| `adhar.security.jwt.issuer-uri` | Expected token issuer; resolved eagerly at startup | — |
-| `adhar.security.jwt.jwk-set-uri` | Signing key endpoint; lazy, and wins over `issuer-uri` | — |
-| `adhar.security.jwt.audience` | Read only by `JwtUtils.validateAudience`, not enforced | empty |
-| `adhar.security.jwt.authorities-claim-name` | Claim holding roles; values get a `ROLE_` prefix | `authorities` |
-| `adhar.security.jwt.username-claim-name` | Claim holding the user name | `sub` |
-| `adhar.security.jwt.email-claim-name` | Claim holding the email | `email` |
-| `adhar.security.authorization.enabled` | Apply URL authorization rules | `true` |
-| `adhar.security.authorization.permit-all` | Paths open to anyone | empty |
-| `adhar.security.authorization.authenticated` | Paths needing any authenticated user | empty |
-| `adhar.security.authorization.authorities` | Map of path to required authorities | empty |
-| `adhar.security.cors.enabled` | CORS configuration source | `true` |
-| `adhar.security.cors.allowed-methods` | Permitted methods | `GET, POST, PUT, DELETE, OPTIONS` |
-| `adhar.security.cors.allow-credentials` | Send credentials cross-origin | `true` |
-| `adhar.security.headers.hsts-max-age-seconds` | HSTS lifetime | `31536000` |
-| `adhar.security.headers.frame-options-value` | X-Frame-Options | `DENY` |
-| `adhar.security.headers.referrer-policy-value` | Referrer-Policy | `strict-origin-when-cross-origin` |
-| `adhar.security.csp.enabled` | Content-Security-Policy | `true` |
-| `adhar.security.csrf.enabled` | CSRF protection | `true` |
-| `adhar.security.csrf.ignore-ant-matchers` | Paths exempt from CSRF | empty |
-| `adhar.security.rate-limit.enabled` | Request rate limiting | `false` |
-| `adhar.security.rate-limit.max-requests` | Requests per window | `100` |
-| `adhar.security.rate-limit.window-seconds` | Window length | `60` |
-| `adhar.security.rate-limit.store` | `memory` or `redis` | `memory` |
-| `adhar.security.audit.enabled` | Security audit logging | `false` |
-| `adhar.security.token-refresh.enabled` | Issue and rotate tokens here | `false` |
-| `adhar.security.token-refresh.access-token-validity-seconds` | Access token lifetime | `900` |
-| `adhar.security.token-refresh.refresh-token-validity-seconds` | Refresh token lifetime | `604800` |
-| `adhar.security.token-refresh.rotate-refresh-tokens` | New refresh token per use | `true` |
-| `adhar.security.token-refresh.store` | `memory` or `redis` | `memory` |
-| `adhar.security.api-key.enabled` | API-key authentication | `false` |
-| `adhar.security.api-key.header-name` | API-key header | `X-API-Key` |
-| `adhar.security.rbac.enabled` | Register `AccessControlAspect` | `true` |
-| `adhar.security.jwks.enabled` | Serve a JWKS document | `false` |
-| `adhar.security.token-relay.enabled` | Forward bearer tokens downstream | `false` |
+All keys sit under `adhar.security`.
 
-## Testing
+| Property | Type | Default | Description |
+| --- | --- | --- | --- |
+| `enabled` | boolean | `true` | Master switch for the auto-configuration |
+| `jwt.enabled` | boolean | `true` | Register the `JwtDecoder` |
+| `jwt.issuer-uri` | String | — | Issuer; the decoder fetches OIDC discovery metadata at startup |
+| `jwt.jwk-set-uri` | String | — | JWK set endpoint; keys are fetched on first use. Wins over `issuer-uri` |
+| `jwt.audience` | List | empty | Read only by `JwtUtils.validateAudience`; not enforced by the decoder |
+| `jwt.authorities-claim-name` | String | `authorities` | Claim mapped to authorities (with `ROLE_` prefix) |
+| `jwt.username-claim-name` / `name-claim-name` / `email-claim-name` | String | `sub` / `name` / `email` | Claims read by `getCurrentUsername()` and `JwtUtils.extract*` |
+| `jwt.additional-claims` | List | empty | Claims returned by `JwtUtils.extractAdditionalClaims` |
+| `oauth2.enabled` | boolean | `true` | Wire the resource server into the chain (needs a JWT endpoint) |
+| `authorization.enabled` | boolean | `true` | Apply URL rules; when `false`, the chain adds no `authorizeHttpRequests` block |
+| `authorization.permit-health-endpoints` | boolean | `true` | Open `/actuator/health`, `/actuator/health/**`, `/actuator/info` |
+| `authorization.permit-all` | List | empty | Paths open to anyone |
+| `authorization.authenticated` | List | empty | Paths needing any authenticated principal |
+| `authorization.authorities` | Map&lt;String, List&gt; | empty | Path → authorities, applied with `hasAnyAuthority` |
+| `cors.enabled` | boolean | `true` | Register `CorsConfigurationSource` and `CorsFilter` for `/**` |
+| `cors.allowed-origins` | List | empty (`*`) | Allowed origins; empty means `*` |
+| `cors.allowed-methods` / `allowed-headers` / `exposed-headers` | List | `GET, POST, PUT, DELETE, OPTIONS` / `*` / empty | Methods, request headers, exposed headers |
+| `cors.allow-credentials` | boolean | `true` | Applied only when `allowed-origins` is set |
+| `cors.max-age` | long | `3600` | Preflight cache, seconds |
+| `csrf.enabled` | boolean | `false` | CSRF with a JavaScript-readable cookie (`CookieCsrfTokenRepository.withHttpOnlyFalse()`); enable for cookie-authenticated browser apps |
+| `csrf.ignore-ant-matchers` | List | empty | Paths exempt from CSRF |
+| `rbac.enabled` | boolean | `true` | Register `AccessControlAspect` |
+| `rate-limit.enabled` | boolean | `false` | Register `RateLimitingFilter` |
+| `rate-limit.max-requests` | int | `100` | Requests per window per client |
+| `rate-limit.window-seconds` | int | `60` | Fixed window length |
+| `rate-limit.store` / `redis-key-prefix` | String | `memory` / `adhar:security:ratelimit:` | Counter store (`memory` or `redis`) and its key namespace |
+| `api-key.enabled` | boolean | `false` | Register `ApiKeyService` and its filter |
+| `api-key.header-name` | String | `X-API-Key` | Header carrying the key |
+| `api-key.keys[].key-hash` / `.principal` / `.roles` | String / String / List | — | One entry per accepted key |
+| `audit.enabled` | boolean | `false` | Register `SecurityAuditLogger` and `Slf4jAuditEventSink` |
+| `audit.log-successful-auth` / `log-failed-auth` / `log-logout` | boolean | `true` | Which events to record |
+| `token-refresh.enabled` | boolean | `false` | Register `TokenRefreshService` |
+| `token-refresh.secret` | String | — | HMAC key, at least 32 characters |
+| `token-refresh.access-token-validity-seconds` / `refresh-token-validity-seconds` | long | `900` / `604800` | Token lifetimes |
+| `token-refresh.rotate-refresh-tokens` | boolean | `true` | Issue a new refresh token on each use |
+| `token-refresh.store` / `redis-key-prefix` | String | `memory` / `adhar:security:refresh:` | Refresh-token store (`memory` or `redis`) and its key namespace |
+| `jwks.enabled` | boolean | `false` | Register `JwksKeyManager` and `JwksController` |
+| `jwks.path` | String | `/.well-known/jwks.json` | Where the public key set is served |
+| `jwks.key-size` / `retain-keys` | int | `2048` / `1` | RSA key size; previous keys kept after `rotate()` |
+| `token-relay.enabled` / `header-name` | boolean / String | `false` / `Authorization` | Register `BearerTokenRelayInterceptor`; inbound header to relay |
+| `dapr.secret-store` / `jwt-secret-name` | String | `secretstore` / — | When the name is set (with `adhar-kit-dapr` and `adhar.dapr.enabled=true`), the token-refresh secret is read from Dapr and overrides `token-refresh.secret` |
 
-`adhar-kit-test-commons` has nothing security-specific. Use `spring-security-test`, which this module itself depends on at test scope.
+## Operations
 
-1. **Annotation enforcement.** Use `@SpringBootTest` with `@WithMockUser(authorities = "ROLE_ADMIN")`. Then assert that `AccessDeniedException` is thrown for a user without it. Call the bean **through the injected proxy**, never a `new`-ed instance. Otherwise the aspect is not involved and the test passes without testing anything.
-2. **Facade-based checks.** Unit-test them without Spring by setting a stub: `SecurityFacade.getInstance().setDelegate(myFakeSecurityService)`. The facade is a process-wide singleton, so call `clearDelegate()` in an `@AfterEach`. Otherwise the stub leaks into every later test in the JVM.
-3. **URL rules.** Use `@WebMvcTest` with `MockMvc` and `.with(jwt().authorities(...))` from `spring-security-test`. This exercises the real chain, and it is the only way to catch a missing `permit-all` entry.
-4. **Turning the module off.** `adhar.security.enabled: false` backs off the whole auto-configuration. The service is then **completely unsecured**. Use it for slice tests of unrelated code, never as a production escape hatch.
-5. **Keeping the aspect but not the chain.** Set `adhar.security.rbac.enabled: false` to drop only the aspect. Or define your own `SecurityFilterChain` to replace only the chain.
+- **Rate limiting.** Each response carries `X-RateLimit-Limit`, `X-RateLimit-Remaining` and `X-RateLimit-Reset`. Over the limit the filter returns `429` with `Retry-After` and a JSON body. Clients are keyed by the first `X-Forwarded-For` entry, then `X-Real-IP`, then the remote address.
+- **Audit.** `SecurityAuditLogger` listens for Spring Security authentication-success, bad-credentials, locked and logout events and writes one JSON line per event to the `SECURITY_AUDIT` logger (`WARN` for failures, `INFO` otherwise). Call `logCustomEvent(..)` for your own events. Replace the `AuditEventSink` bean to send them somewhere durable.
+- **Startup.** With `issuer-uri` only, an unreachable identity provider fails the context; `jwk-set-uri` defers the fetch to the first request. With authorization on and no JWT endpoint, the module logs a warning, because no request can authenticate.
+- **Failure behaviour.** The facade, the aspect and the chain all fail closed. Without a delegate, `SecurityFacade` returns `false`/`null`/empty for checks and throws `IllegalStateException` from `generateToken` and `encodePassword`.
+- **Overriding.** Every bean is `@ConditionalOnMissingBean`. Your own `SecurityFilterChain` replaces the default entirely: URL rules, CORS, CSRF and the resource server.
 
-## Common pitfalls
+## Limits
 
-| Symptom | Cause | Fix |
-| --- | --- | --- |
-| Health and metrics endpoints start returning 401 | The default chain ends in `anyRequest().authenticated()` | Add those paths to `adhar.security.authorization.permit-all` |
-| Every request is 403 after wiring the IdP | `authorities-claim-name` does not match the claim your IdP emits | Decode a real token; Keycloak commonly uses `groups` or `realm_access.roles`, not `authorities` |
-| Authority names have an unexpected `ROLE_` prefix | The converter is configured with an authority prefix of `ROLE_` | Expected; `hasRole` matches with or without it, URL `authorities` rules do not |
-| An annotation denial returns 500 instead of 403 | The module ships no `@ControllerAdvice` for its `AccessDeniedException` | Add an `@ExceptionHandler`, as shown above |
-| `@RequiresRole` ignored | The call is a self-invocation inside the same bean, so no proxy is involved | Call through the injected bean, or check inline with the facade |
-| Tokens from the wrong client are accepted | `jwt.audience` is configured but never enforced | Call `JwtUtils.validateAudience`, or supply your own `JwtDecoder` with the validator |
-| The service will not start when the IdP is down | `issuer-uri` resolves OIDC metadata eagerly | Use `jwk-set-uri` |
-| Session-based login does not stick | The chain is `SessionCreationPolicy.STATELESS` by design | Authenticate per request with a bearer token or API key |
-| Rate limits reset on every deploy and differ per pod | The default store is in-process | Set `rate-limit.store: redis` with `spring-data-redis` on the classpath |
-| All callers share one rate-limit bucket | The proxy does not set `X-Forwarded-For` or `X-Real-IP` | Configure the proxy to forward the client address |
-| Refresh tokens stop working after a restart | `token-refresh.store` is `memory` | Use `redis`, or accept re-authentication |
-| Audit trail missing | `audit.enabled` defaults to `false` | Turn it on; replace `Slf4jAuditEventSink` for durable storage |
-| CSRF blocks a machine-to-machine API | CSRF is on by default and stateless clients cannot carry a token | Add those paths to `csrf.ignore-ant-matchers` |
-| Nothing is secured at all | `adhar.security.enabled: false`, or your own `SecurityFilterChain` bean took precedence | Every bean is `@ConditionalOnMissingBean`. A custom chain replaces the whole default |
-| API keys appear to be ignored | The configured key is the raw value, not its SHA-256 hash | `api-key.keys[].key-hash` expects a hash |
+- **Self-invocation skips the annotations.** The aspect runs in a Spring AOP proxy; `this.deleteOrder(id)`, private methods and `final` methods under CGLIB are never checked. Call through the injected bean, or check inline with the facade.
+- **Audience is not enforced.** The decoder has no extra `OAuth2TokenValidator`. Call `JwtUtils.validateAudience(jwt)` yourself, or supply a `JwtDecoder` with an audience validator.
+- **The default chain does not name the converter.** It calls `oauth2ResourceServer().jwt()` and relies on Spring Security finding the `jwtAuthenticationConverter` bean. Check the authorities on a real token (`getCurrentUserRoles()`); if they are not what `authorities-claim-name` implies, set the converter on your own chain.
+- **The API-key filter sits outside the chain.** It sets `SecurityContextHolder` before Spring Security runs. Cover API-key routes with an integration test; if the principal does not reach your endpoint, add `ApiKeyAuthenticationFilter` inside your own chain with `http.addFilterBefore(..)`.
+- **Self-issued tokens are HMAC, the chain expects your IdP.** Tokens from `TokenRefreshService` do not validate against `jwk-set-uri`. Without a 32-character secret it generates a random one per instance, so tokens break across pods and restarts.
+- **The JWKS endpoint needs a permit rule** (`permit-all: [/.well-known/jwks.json]`). Its RSA keys are generated in memory at startup, so they change on restart and differ per pod.
+- **In-memory stores are per pod.** Rate-limit windows and refresh-token families reset on restart; use `store: redis` for shared state. `X-Forwarded-For` is trusted as sent, so put the service behind a proxy that overwrites it.
+- **Session login does not work.** The chain is `STATELESS`; authenticate every request with a bearer token or API key.
+- **Some keys bind but do nothing.** `headers.*`, `csp.*`, `authentication.*`, the OAuth2 client fields (`oauth2.client-id`, `token-uri`, …), `authorization.decision-manager`, `authorization.access-denied-handler` and the `csrf` cookie/header fields are not read by any auto-configured bean. Response headers are Spring Security's defaults.
+- **`adhar.security.enabled: false` does not mean unsecured.** Spring Boot's own security auto-configuration takes over, with its generated default user.
 
-## See also
+## Next steps
 
-- [Platform Services](/docs/core-concepts/platform-services) — Keycloak as the platform's identity provider, and the realm URIs to point `issuer-uri` at.
-- [Accessing the Platform](/docs/operations/accessing-the-platform) — obtaining tokens and reaching protected services.
-- [Security Best Practices](/docs/security/security-best-practices) — the platform-level hardening guidance this module implements at the service level.
-- [GraphQL](/adhar-kit/modules/graphql) — reads the `Authentication` this module populates for `@auth` field authorization.
+- [GraphQL](/adhar-kit/modules/graphql) — reads the `Authentication` this module populates for field authorization.
+- [Dapr](/adhar-kit/modules/dapr) — the secret store behind `dapr.jwt-secret-name`.
+- [Platform services](/docs/core-concepts/platform-services) — Keycloak, the identity provider to point `jwk-set-uri` at.
+- [Concepts](/adhar-kit/concepts) — module toggles, auto-configuration and the facade model.

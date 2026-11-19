@@ -205,7 +205,7 @@ Nodes stay NotReady until the platform bootstrap installs Cilium.
 
 `NotReady` at that point is correct: no CNI is installed at `kubeadm init`. The bootstrap installs Cilium next, and the nodes turn Ready. The rest of the checklist is the same as on every cloud: Cilium & Gateway, ArgoCD, Gitea, GitOps repos, Crossplane, GitOps sync.
 
-The catalogue keeps converging after the CLI returns; that is expected. `--apps-timeout` (default 15m) limits only how long the CLI waits.
+The catalogue keeps converging after the CLI returns; that is expected. `--apps-timeout` (default 45m on a cloud) limits only how long the CLI waits.
 
 **Re-running is safe.** Node prep is guarded by a completion marker, `kubeadm init` is skipped on an initialised control plane, and a worker already in the node list is not re-joined. Adding hosts to `workerIPs` and re-running grows the cluster.
 

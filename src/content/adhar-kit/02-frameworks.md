@@ -7,88 +7,83 @@ path: "/adhar-kit/frameworks"
 
 # Framework Support
 
-Adhar Kit runs on Spring Boot, Quarkus, Micronaut, Helidon and Vert.x. **Your business logic, including every `adhar.*` call, is byte-for-byte identical on all five.** Only the four or five lines that get the `AdharFacade` differ. This page explains how that works, so you can judge the claim for yourself.
+`AdharFacade` is one plain class with no DI annotations, and `adhar-kit-starter` ships a thin adapter that hands it to Spring Boot, Quarkus, Micronaut, Helidon or Vert.x. Spring Boot gets the full kit. On the other runtimes you get the facade object and the framework-independent modules; several module facades do not work there yet. This page shows what each runtime gets today.
 
 ## At a glance
 
-| | |
-|---|---|
-| Supported runtimes | Spring Boot 4.0+, Quarkus 3.21+, Micronaut 4.8+, Helidon 4.2+, Vert.x 4.5+ |
-| Shared across all | `AdharFacade`, every `*Facade`, every shortcut, module gating |
-| Adapter-specific | How the facade becomes injectable; how config is read |
-| Selection | Classpath detection by `FrameworkDetector`, cached after first call |
-| Fallback | `AdharFacade.getInstance()` works with no container at all |
+| Runtime | Status | How you get `AdharFacade` |
+|---|---|---|
+| Spring Boot 4 | `status:complete` | Constructor injection; auto-configured |
+| Quarkus | `status:in-progress` | `@Inject`, from a CDI producer |
+| Micronaut | `status:in-progress` | `@Inject`, from a factory you declare |
+| Helidon MP / SE | `status:in-progress` | `@Inject` (MP) or `HelidonSeBootstrap.adhar()` (SE) |
+| Vert.x | `status:in-progress` | `VertxAdharFacadeBootstrap.adhar()` |
+| No container | `status:in-progress` | `AdharFacade.getInstance()` |
 
-## Why this is not the usual claim
+The kit's own tests cover the Spring Boot wiring. The other adapters have no tests in the kit repository.
 
-Most libraries that call themselves framework-agnostic still put framework types in your method signatures: a `@Component` here, a Spring `Environment` there. Moving frameworks then means touching every class. Adhar Kit puts the boundary one level lower.
-
-`AdharFacade` has **no DI annotations and no compile-time dependency on any framework**. It is a plain class.
-
-Each supported runtime ships a thin adapter in its own package: `starter.spring`, `starter.quarkus`, `starter.micronaut`, `starter.helidon`, `starter.vertx`. The adapter's only job is to hand that plain class to the container.
-
-The adapters live in `adhar-kit-starter`. Every framework dependency they need is declared `<optional>true</optional>`. So adding the starter to a Quarkus app does not drag Spring onto your classpath.
+## How the facade reaches your code
 
 ```diagram
-kit-framework-adapters
+nka-framework-adapters
 ```
 
-## Shared versus adapter-specific
+The adapters live in `adhar-kit-starter` under `starter.spring`, `starter.quarkus`, `starter.micronaut`, `starter.helidon` and `starter.vertx`, and the starter declares each framework `<optional>true</optional>`. Every adapter returns the same process-wide singleton, so a `static` helper or `main` method that calls `AdharFacade.getInstance()` gets the instance the container injected.
 
-| Concern | Shared | Adapter-specific |
-|---|---|---|
-| Facade API and shortcuts | Yes — one class, one implementation | — |
-| Module facades (`MetricsFacade`, `CacheFacade`, …) | Yes | — |
-| Module gating and `AdharModuleAccess` | Yes | How the toggles are read |
-| Event format (CloudEvents 1.0) | Yes | — |
-| Obtaining the facade | — | `@Bean`, `@Produces`, `@Factory`, or a static bootstrap |
-| Configuration source | — | Spring `Environment`, SmallRye Config, Micronaut Environment, MP Config, Vert.x `ConfigRetriever` |
-| Infrastructure adapters for tracing and resilience | — | Wired from container beans where the container has them |
+## What works outside Spring Boot
 
-People often trip over the last row. On Spring Boot, the tracing and resilience facades need injected infrastructure, so `SpringAdharFacadeConfiguration` cannot let them set themselves up. Instead it looks for a Micrometer `Tracer` bean and a Resilience4j `CircuitBreakerRegistry` bean. When they exist, it installs `SpringTracingAdapter` and `SpringCircuitBreakerAdapter` onto the facade.
+> **Warning:** The starter puts Spring Boot on every classpath. Modules it requires — `adhar-kit-core`, `adhar-kit-persistence`, `adhar-kit-security` and others — depend on Spring Boot starters. `FrameworkDetector` checks for Spring Boot first, so in a Quarkus, Micronaut, Helidon or Vert.x application that uses the starter, `adhar.currentFramework()` reports `SPRING_BOOT`, and module facades take their Spring code path without the Spring beans it expects.
 
-If neither bean exists, `getTracing()` and `getResilience()` have nothing to delegate to. Neither do `traced()`, `resilient()` and `safe()`, which depend on them.
+With the starter in a non-Spring application:
 
-## How the right adapter is selected
+| Capability | Behaviour |
+|---|---|
+| `adhar.kit.modules.*` gates | Not read. Every module is enabled unless you [create the singleton yourself](#gating-modules-outside-spring-boot). |
+| Module auto-configuration, banner, `/actuator/adhar` | None. They are Spring Boot auto-configurations. |
+| `getMetrics()`, `count(...)` | Records to Micrometer's global registry, `Metrics.globalRegistry`. |
+| `getTracing()`, `traced(...)` | Runs the operation without a span (no-op tracing); `traced` still records the timer. |
+| `getResilience()`, `resilient(...)`, `safe(...)` | Throws `UnsupportedOperationException`. |
+| Persistence, messaging and security shortcuts (`save`, `publish`, `hasPermission`, …) | Throw `No … configured` until you set a delegate, for example `PersistenceFacade.getInstance().setDelegate(...)`. On Spring Boot, each module's auto-configuration sets it. |
+| `getHealth()`, `isHealthy()` | Registry-backed default service. |
+| Logging, cache, config, `getUtils()` | Work as on Spring Boot. |
 
-Two separate mechanisms are at work. It helps to keep them apart.
+On Spring Boot, tracing and resilience work because `SpringAdharFacadeConfiguration` installs adapters built from the `Tracer` and `CircuitBreakerRegistry` beans that `adhar-kit-tracing` and `adhar-kit-resilience` register.
 
-**Bean production** is chosen by the container itself. Each adapter is only active when its framework is on the classpath. For example, `SpringAdharFacadeConfiguration` is annotated `@ConditionalOnClass(name = "org.springframework.boot.SpringApplication")`. The Quarkus and Helidon producers are CDI beans that only resolve inside a CDI container, and so on. Nothing chooses between them, because only one can be active.
+### Modules without the starter
 
-**Runtime identification** is done by `FrameworkDetector`. It checks for marker classes in a fixed order and caches the first match:
+If you depend on individual modules instead, Spring Boot stays off the classpath unless a module brings it, and `MetricsFacade`, `TracingFacade`, `CircuitBreakerFacade` and `HealthFacade` pick an adapter for the detected runtime. Several of those adapters exist in the source but are excluded from compilation in the 0.1.0 jars:
 
-| Order | Framework | Marker class |
+| Facade | Quarkus | Micronaut | Helidon | Vert.x |
+|---|---|---|---|---|
+| `MetricsFacade` | Adapter included | Adapter included | Not in jar: throws | Not in jar: throws |
+| `TracingFacade` | Throws `UnsupportedOperationException` | Throws `UnsupportedOperationException` | Not in jar: throws | Not in jar: throws |
+| `CircuitBreakerFacade` | Not in jar: throws | Not in jar: throws | Not in jar: throws | Not in jar: throws |
+| `HealthFacade` | Registry-backed default | Registry-backed default | Falls back to the default | Falls back to the default |
+
+"Not in jar" means the module's `pom.xml` excludes that adapter package from compilation, so the facade fails with `IllegalStateException` (`Failed to create adapter …` or `… adapter not available`).
+
+## How the runtime is detected
+
+`FrameworkDetector` checks for marker classes in a fixed order and caches the first match:
+
+| Order | `Framework` | Marker class |
 |---|---|---|
 | 1 | `SPRING_BOOT` | `org.springframework.boot.SpringApplication` |
 | 2 | `QUARKUS` | `io.quarkus.runtime.Quarkus` |
 | 3 | `MICRONAUT` | `io.micronaut.context.ApplicationContext` |
 | 4 | `HELIDON` | `io.helidon.webserver.WebServer` or `io.helidon.microprofile.cdi.Main` |
 | 5 | `VERTX` | `io.vertx.core.Vertx` |
-| — | `OTHER` | Nothing matched; standalone/fallback mode |
+| — | `OTHER` | none matched |
 
-Read the result with `adhar.currentFramework()`. The first match wins. This matters in the unusual case of a hybrid classpath: a Spring Boot app that also embeds Vert.x reports `SPRING_BOOT`.
+Read the result with `adhar.currentFramework()`. The first match wins, so a Spring Boot application that embeds Vert.x reports `SPRING_BOOT`. Module facades such as `MetricsFacade` use the same result to pick their implementation.
 
-However the facade was produced, it is the same process-wide singleton. `AdharFacade.getInstance()` returns that instance. So utility code outside the container, such as a `static` helper, a `ServiceLoader` provider or a JMH benchmark, can reach the facade without injection.
-
-## Capability comparison
-
-| Capability | Spring Boot | Quarkus | Micronaut | Helidon | Vert.x |
-|---|---|---|---|---|---|
-| Core APIs | Identical | Identical | Identical | Identical | Identical |
-| Configuration | Native YAML | Native props | Native YAML | MP Config | JSON/YAML |
-| DI integration | Spring DI | ArC CDI | Micronaut DI | MP CDI / SE | Standalone |
-| Native image | GraalVM | GraalVM | GraalVM | GraalVM | GraalVM |
-| Facade obtained by | Injection | Injection | Injection | Injection or bootstrap | Bootstrap |
-
-Configuration is the row with real consequences. On Spring Boot, the kit binds `adhar.kit.*` through `AdharKitProperties` and the standard relaxed binding rules. So `adhar.kit.modules.event-sourcing` and `ADHAR_KIT_MODULES_EVENTSOURCING` both work.
-
-On the other runtimes, the same logical keys are read through that framework's native mechanism: SmallRye Config on Quarkus, the Micronaut `Environment`, MicroProfile Config on Helidon, `ConfigRetriever` on Vert.x. The key names match, but the precedence rules are the host framework's, not the kit's.
+Detection is separate from bean production: each container only activates its own adapter. `SpringAdharFacadeConfiguration` is `@ConditionalOnClass(name = "org.springframework.boot.SpringApplication")`, and the CDI producers only resolve inside a CDI container.
 
 ## Per-framework setup
 
 ### Spring Boot
 
-Auto-configuration registers the bean. Take it as a constructor parameter.
+Auto-configuration registers the bean. See the [Quick Start](/adhar-kit/quickstart) for a complete service.
 
 ```java
 @Service
@@ -98,17 +93,9 @@ public class OrderService {
 }
 ```
 
-```yaml
-adhar:
-  kit:
-    enabled: true
-    modules:
-      cache: true
-```
-
 ### Quarkus
 
-`QuarkusAdharFacadeProducer` is a `@Singleton` bean with an `@ApplicationScoped` `@Produces` method.
+`QuarkusAdharFacadeProducer` is a `@Singleton` class with an `@ApplicationScoped` `@Produces` method; ArC finds it through the `META-INF/beans.xml` in the starter jar.
 
 ```java
 @ApplicationScoped
@@ -117,31 +104,31 @@ public class OrderService {
 }
 ```
 
-```properties
-adhar.kit.enabled=true
-adhar.kit.modules.cache=true
-```
+> **Note:** The same jar also carries `HelidonAdharFacadeProducer`, which produces the same unqualified type. If ArC reports an ambiguous `AdharFacade` dependency, exclude the Helidon one with `quarkus.arc.exclude-types=com.adhar.kit.starter.helidon.HelidonAdharFacadeProducer`.
 
 ### Micronaut
 
-`MicronautAdharFacadeFactory` is a `@Factory` exposing the facade as a `@Singleton`.
+The starter contains `MicronautAdharFacadeFactory`, but it is not compiled with Micronaut's annotation processor, so the jar has no bean definitions for Micronaut to find. Declare the factory in your own code, where your build runs the processor:
 
 ```java
-@Singleton
-public class OrderService {
-    @Inject AdharFacade adhar;
+import com.adhar.kit.starter.AdharFacade;
+import io.micronaut.context.annotation.Factory;
+import jakarta.inject.Singleton;
+
+@Factory
+public class AdharFacadeFactory {
+    @Singleton
+    AdharFacade adharFacade() {
+        return AdharFacade.getInstance();
+    }
 }
 ```
 
-```yaml
-adhar:
-  kit:
-    enabled: true
-```
+Then inject it as usual: `@Inject AdharFacade adhar;`.
 
 ### Helidon MP
 
-`HelidonAdharFacadeProducer` produces an `@ApplicationScoped` CDI bean, exactly as on Quarkus.
+`HelidonAdharFacadeProducer` is the same CDI producer pattern as on Quarkus:
 
 ```java
 @ApplicationScoped
@@ -150,9 +137,11 @@ public class OrderService {
 }
 ```
 
+If CDI reports an unsatisfied `AdharFacade`, add your own `@ApplicationScoped` class with a `@Produces` method that returns `AdharFacade.getInstance()`.
+
 ### Helidon SE
 
-There is no CDI container in SE mode, so use the static bootstrap.
+There is no container, so call the bootstrap once and pass the result around:
 
 ```java
 public static void main(String[] args) {
@@ -163,11 +152,11 @@ public static void main(String[] args) {
 
 ### Vert.x
 
-`VertxAdharFacadeBootstrap` gives you three entry points:
+`VertxAdharFacadeBootstrap` has three entry points:
 
-- `adhar()` returns the plain singleton.
-- `installInto(Vertx)` publishes it into the `Vertx` shared data map, under the key `com.adhar.kit.starter.AdharFacade`.
-- `from(Vertx)` reads it back inside a verticle.
+- `adhar()` returns the singleton.
+- `installInto(vertx)` stores it in `vertx.sharedData()`, in the local map `com.adhar.kit.starter.AdharFacade`.
+- `from(vertx)` reads it back, installing it first if needed.
 
 ```java
 public class OrderVerticle extends AbstractVerticle {
@@ -175,36 +164,35 @@ public class OrderVerticle extends AbstractVerticle {
 }
 ```
 
-### No container at all
+### No container
 
 ```java
 AdharFacade adhar = AdharFacade.getInstance();
 ```
 
-`getInstance()` creates the singleton with every module enabled and applies any `AdharFacadeCustomizer` registered through `META-INF/services`.
+`getInstance()` creates the singleton with every module enabled and applies each `AdharFacadeCustomizer` registered under `META-INF/services/com.adhar.kit.starter.AdharFacadeCustomizer`.
 
-## Adapter reference
+## Gating modules outside Spring Boot
 
-| Framework | Adapter class | Mechanism |
-|---|---|---|
-| Spring Boot | `SpringAdharFacadeConfiguration` | `@AutoConfiguration` + `@Bean` |
-| Quarkus | `QuarkusAdharFacadeProducer` | CDI `@Produces` |
-| Micronaut | `MicronautAdharFacadeFactory` | `@Factory` + `@Singleton` |
-| Helidon MP | `HelidonAdharFacadeProducer` | CDI `@Produces` |
-| Helidon SE | `HelidonSeBootstrap.adhar()` | Static bootstrap |
-| Vert.x | `VertxAdharFacadeBootstrap` | Static bootstrap + `Vertx` shared data |
+Only the Spring adapter reads `adhar.kit.*`. Everywhere else, the first call to `getInstance` decides the gates. Create the singleton yourself, before the container asks for it — for example at the top of `main`:
+
+```java
+AdharFacade.getInstance(AdharModuleAccess.of(Map.of(
+        "ai", false,
+        "dapr", false)));
+```
+
+Later `getInstance()` calls, including the adapters', return this instance.
 
 ## Migrating between frameworks
 
-Your code never names a framework type through the facade. So a migration touches the bootstrap, the build file and the framework's own annotations, but not the kit calls.
+Calls on `AdharFacade` do not name framework types, so a migration touches the bootstrap, the build and the framework's own annotations — and any kit module that is not yet supported on the target runtime (see the table above). Framework-native code such as Spring Data repositories or Panache entities still has to be ported.
 
-The `adhar-kit-rewrite` module ships OpenRewrite recipes, including cross-framework migrations, to automate most of the mechanical work. Reach them at runtime through `adhar.getRewrite()`. See the [Modules Overview](/adhar-kit/modules/overview).
-
-> Migration is not free. You still have to port framework-native code outside the kit, such as Spring Data repositories, Quarkus Panache entities and Micronaut HTTP clients. The kit removes the cross-cutting half of the work.
+`adhar-kit-rewrite` has OpenRewrite recipes for the mechanical annotation changes, such as `SpringToQuarkus` and `SpringToMicronaut`. See [Rewrite](/adhar-kit/modules/rewrite).
 
 ## Next steps
 
-- [Concepts](/adhar-kit/concepts) — module gating, lazy initialization and configuration precedence.
-- [Quick Start](/adhar-kit/quickstart) — a full first service on Spring Boot.
+- [Concepts](/adhar-kit/concepts) — gates, module switches and configuration precedence.
+- [Quick Start](/adhar-kit/quickstart) — a complete service on Spring Boot.
 - [Modules Overview](/adhar-kit/modules/overview) — what each module contributes.
-- [FAQ](/adhar-kit/faq) — native image, Gradle, and other cross-framework questions.
+- [FAQ](/adhar-kit/faq) — Gradle, native image and other questions.

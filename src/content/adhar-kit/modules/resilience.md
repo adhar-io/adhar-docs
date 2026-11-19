@@ -7,78 +7,30 @@ path: "/adhar-kit/modules/resilience"
 
 # Resilience
 
-`adhar-kit-resilience` brings enterprise fault-tolerance patterns to any framework via Resilience4j. It covers circuit breaker, retry, rate limiter, bulkhead, and time limiter. You use them as annotations you can combine, with metrics, event logging, a health indicator, and an actuator endpoint.
-
-The failure it prevents is the cascade: **one slow dependency fills your thread pool, and a problem in someone else's service becomes an outage in yours.**
+`adhar-kit-resilience` puts Resilience4j circuit breakers, retries, rate limiters, bulkheads and time limiters behind five annotations that you can stack on one method, and adds a fallback cache, fault injection, metrics, a health indicator and an actuator endpoint. Use it on any call to something you do not control (an HTTP API, a broker, a database), so that one slow dependency cannot fill your threads and turn its outage into yours.
 
 ## At a glance
 
 | | |
 |---|---|
 | Artifact | `com.adhar.kit:adhar-kit-resilience` |
-| Built on | Resilience4j (all modules + Micrometer binding), Spring Cloud Circuit Breaker, `adhar-kit-metrics`, `adhar-kit-commons` |
-| Entry points | `CircuitBreakerFacade`, the five annotations, `ResilienceEndpoint` |
-| Auto-configuration | `ResilienceAutoConfiguration` (gated on `adhar.resilience.enabled`) |
-| Actuator endpoint | `resilience` |
-| Use it when | You call anything you do not control: an HTTP API, a broker, a database |
-
-## The patterns
-
-| Annotation | Protects against |
-|---|---|
-| `@CircuitBreaker` | A failing dependency dragging you down. Trips open after a failure threshold |
-| `@Retry` | Transient failures. Retries with optional exponential backoff |
-| `@RateLimit` | Overload. Caps calls per refresh period |
-| `@Bulkhead` | Resource exhaustion. Limits concurrent calls |
-| `@TimeLimiter` | Hung calls. Bounds execution time |
-
-All five live in `com.adhar.kit.resilience.annotation` and target `METHOD` or `TYPE`. A class-level annotation applies to every method of that class. A method-level one on the same class wins, because annotation lookup checks the method first, then the declaring class, then the target class.
+| Toggle | `adhar.resilience.enabled` (default `true`). Facade gate `adhar.kit.modules.resilience` (default `true`); when it is `false`, `adhar.getResilience()` throws `IllegalStateException` |
+| Facade | `adhar.getResilience()` → `CircuitBreakerFacade` (circuit breaker only). Injectable beans: the five Resilience4j registries, `ResilienceAspect`, `FallbackCache`, `ResilienceEventRecorder`, `ResilienceMetricsService` |
+| Dependencies | Required: `resilience4j-all`, `resilience4j-micrometer`, `micrometer-core`, `adhar-kit-commons`. Optional: `spring-boot-starter-aspectj` (needed for the annotations), `spring-boot-starter-actuator` (endpoint, health), `adhar-kit-metrics` (platform metrics bridge), `resilience4j-spring-boot3` |
+| Frameworks | Spring Boot: `ResilienceAutoConfiguration` (annotations, registries, endpoint, health). Quarkus, Micronaut, Helidon, Vert.x: a `CircuitBreakerService` adapter only |
 
 ## How it works
 
-A single `ResilienceAspect` handles all five annotations. It inspects the method and its declaring class. It then combines the Resilience4j decorators in one fixed order. So the method body runs exactly once per attempt, no matter how many annotations you stack.
-
 ```diagram
-kit-resilience-order
+nkc-resilience-chain
 ```
 
-### Why the nesting order matters
+- One around-advice, `ResilienceAspect`, handles all five annotations. It builds the chain in the fixed order shown, so the method body runs once per attempt however many annotations you stack.
+- Retry sits outside the breaker, so every attempt is counted and a failing dependency trips the breaker quickly. The rate limiter sits inside the breaker, so an open breaker does not use up permits. The bulkhead holds its permit for one attempt, not the whole retry sequence.
+- Each annotation has a `name`. Instances are created per name (in the registry and in a per-name cache in the aspect), so every method that uses the same name shares one policy.
+- Methods that return a `CompletionStage` (including `CompletableFuture`) take the async path: non-blocking time limiter and scheduled retry backoff. Every other method takes the sync path.
 
-The aspect applies decorators from the inside out: bulkhead, then time limiter, then rate limiter, then circuit breaker, then retry. This makes **retry the outermost decorator and the bulkhead the innermost**. Read it from the outside in to see the effects:
-
-- **Retry outside the circuit breaker.** Every retry attempt passes through the breaker and is counted by it. So a dependency that keeps failing trips the breaker, and later attempts fail fast with `CallNotPermittedException`. If you invert this, with the breaker outside retry, the breaker sees one "call" per three attempts. It then needs three times the traffic to notice anything is wrong, and each retry still pays the full timeout.
-- **Rate limiter inside the breaker.** Only calls the breaker already allowed use up permits. So an open breaker does not burn your quota.
-- **Time limiter inside the rate limiter.** The clock starts after a permit is acquired. Time spent waiting for a permit does not count against the call's deadline.
-- **Bulkhead innermost.** A blocked call holds a permit for one attempt, not for the whole retry sequence. So concurrency is capped on real in-flight work.
-
-There is one fallback for the whole chain, not one per annotation. When several annotations each set `fallbackMethod`, the aspect takes the first non-empty one in this order: `@Retry`, `@CircuitBreaker`, `@RateLimit`, `@TimeLimiter`, `@Bulkhead`.
-
-### Configuration precedence runs the other way from what you might expect
-
-Every entry you write under `adhar.resilience.circuit-breaker.*` (and the other four maps) becomes a named registry instance **eagerly at startup**, inside the registry `@Bean` method. Later, the aspect meets `@CircuitBreaker(name = "payment")` and asks the registry for `payment`. Resilience4j returns the instance that already exists, and the config built from the annotation is discarded. **A name configured in properties wins over the annotation's attributes.**
-
-Annotation attributes use `-1` to mean "not set". If every numeric attribute is left at `-1`, the aspect uses the registry default as is. Otherwise it starts from the default config and overrides only what you set.
-
-### Instances are cached per name, not per method
-
-The aspect holds one `ConcurrentHashMap` per pattern, keyed by instance name and filled with `computeIfAbsent`. This has two effects:
-
-- The first call fixes the configuration for the life of the process. Changing an annotation attribute at runtime has no effect.
-- Two different methods annotated `@Retry(name = "inventory")` with *different* `maxAttempts` share one retry instance, from whichever was called first.
-
-Give each distinct policy its own name.
-
-### Sync and async take different paths
-
-A method whose return type is assignable to `CompletionStage` (so `CompletableFuture` too) takes the asynchronous path. That path is built from the `decorateCompletionStage` variants. Everything else takes the synchronous path.
-
-- **Async** uses a shared, static, daemon `ScheduledExecutorService` with **two threads** named `adhar-resilience-scheduler`. It serves both the non-blocking time limiter and retry backoff. It is created once per JVM and never shut down explicitly. Because these are daemon threads, they do not hold up exit.
-- **Sync with `@TimeLimiter`** cannot interrupt a blocking call in place. So the aspect wraps the decorated supplier in `CompletableFuture.supplyAsync(...)` and waits for it with the timeout. That means **your method body runs on the common ForkJoinPool, not the caller's thread**. Anything in a `ThreadLocal`, such as the MDC, the Spring `SecurityContext` or a tenant id, is invisible inside the method unless you propagate it. Prefer the async path when thread-bound context matters.
-- **Sync without `@TimeLimiter`** runs the body on the calling thread, so a `@Retry` backoff blocks that thread.
-
-Checked exceptions are carried through the supplier chain in a private wrapper. They are unwrapped before the fallback runs or the failure is rethrown. So your declared exception type surfaces, not a `CompletionException`.
-
-## Install
+## Add it
 
 ```xml
 <dependency>
@@ -86,44 +38,35 @@ Checked exceptions are carried through the supplier chain in a private wrapper. 
     <artifactId>adhar-kit-resilience</artifactId>
     <version>0.1.0</version>
 </dependency>
+<!-- The annotations are Spring AOP advice; AspectJ is an optional dependency of the module -->
+<dependency>
+    <groupId>org.springframework.boot</groupId>
+    <artifactId>spring-boot-starter-aspectj</artifactId>
+</dependency>
+<!-- Optional: /actuator/resilience and the circuit breaker health indicator -->
+<dependency>
+    <groupId>org.springframework.boot</groupId>
+    <artifactId>spring-boot-starter-actuator</artifactId>
+</dependency>
 ```
 
-`ResilienceAutoConfiguration` carries `@EnableAspectJAutoProxy` and registers every bean with `@ConditionalOnMissingBean`. So your own `CircuitBreakerRegistry`, `ResilienceAspect` or `FallbackCache` replaces the built-in one.
+Every bean is `@ConditionalOnMissingBean`, so your own `CircuitBreakerRegistry`, `ResilienceAspect` or `FallbackCache` replaces the built-in one.
 
-> **Self-invocation silently disables every annotation on this page.** The aspect is a Spring AOP around-advice, which only fires on calls that go through the proxy. `this.process(request)` from inside the same class calls the raw method. You get no breaker, no retry, no timeout, no fallback, and no warning. Inject the bean into a collaborator and call it from there, or move the protected call into its own bean.
+## Use it
 
-## A minimal circuit breaker, and the exact fallback signature
+### Annotations
 
-The fallback is found **by name, by reflection, on the target class and its superclasses**. The aspect scans `getDeclaredMethods()` on each class, up to but not including `Object`. The matching rule is:
+All five live in `com.adhar.kit.resilience.annotation` and target methods or types. The method-level annotation wins over the class-level one.
 
-1. Prefer a method with **exactly one parameter whose type is assignable from the thrown exception's class**. `Throwable` always matches. A narrower type such as `IOException` matches only when that is what was actually thrown.
-2. Otherwise use the first method found with **zero parameters**.
-3. If neither exists, the aspect raises `NoSuchMethodException`, which surfaces as `RuntimeException: Fallback method execution failed`.
+| Annotation | Protects against | Attributes (numbers are milliseconds; `-1` = use the registry config) |
+|---|---|---|
+| `@CircuitBreaker` | A failing dependency | `name`, `fallbackMethod`, `fallbackCache`, `failureRateThreshold`, `slowCallRateThreshold`, `slowCallDurationThreshold`, `slidingWindowSize`, `minimumNumberOfCalls`, `permittedNumberOfCallsInHalfOpenState`, `waitDurationInOpenState` |
+| `@Retry` | Transient failures | `name`, `fallbackMethod`, `fallbackCache`, `maxAttempts`, `waitDuration` |
+| `@RateLimit` | Overload | `name`, `fallbackMethod`, `limitForPeriod`, `limitRefreshPeriod`, `timeoutDuration` |
+| `@Bulkhead` | Too many concurrent calls | `name`, `fallbackMethod`, `maxConcurrentCalls`, `maxWaitDuration`, `type` |
+| `@TimeLimiter` | Hung calls | `name`, `fallbackMethod`, `timeoutDuration`, `cancelRunningFuture` (default `true`) |
 
-So a fallback that copies the original method's parameter list is **never matched**. This is the single most common mistake with this module.
-
-```java
-import com.adhar.kit.resilience.annotation.CircuitBreaker;
-
-@Service
-public class PaymentService {
-
-    @CircuitBreaker(name = "payment", fallbackMethod = "fallback")
-    public PaymentResponse process(PaymentRequest request) {
-        return externalGateway.process(request);
-    }
-
-    private PaymentResponse fallback(Throwable cause) {
-        return PaymentResponse.failed("Service unavailable");
-    }
-}
-```
-
-The method may be `private`, because the aspect calls `setAccessible(true)`. It is invoked on the **raw target object**, not the proxy, so annotations on the fallback itself do nothing. The return type is never checked during lookup. So an incompatible one fails late, as a `ClassCastException` at the call site, not at startup.
-
-## A complete example: a protected outbound client
-
-This client combines bounded concurrency, a hard timeout, a few retries, and a breaker over the whole thing.
+`name` defaults to `"default"` on every annotation, so always set it.
 
 ```java
 package com.example.inventory;
@@ -133,59 +76,85 @@ import com.adhar.kit.resilience.annotation.CircuitBreaker;
 import com.adhar.kit.resilience.annotation.Retry;
 import com.adhar.kit.resilience.annotation.TimeLimiter;
 import org.springframework.stereotype.Service;
+
 import java.util.concurrent.CompletableFuture;
 
 @Service
 public class InventoryClient {
 
-    private final InventoryHttpClient http;
+    private final InventoryHttpClient http;   // your non-blocking HTTP client
 
     public InventoryClient(InventoryHttpClient http) {
         this.http = http;
     }
 
     @Retry(name = "inventory", maxAttempts = 3, waitDuration = 200)
-    @CircuitBreaker(name = "inventory", fallbackMethod = "lastKnownGood",
-                    failureRateThreshold = 50, minimumNumberOfCalls = 20)
+    @CircuitBreaker(name = "inventory", fallbackMethod = "lastKnownGood", minimumNumberOfCalls = 20)
     @TimeLimiter(name = "inventory", timeoutDuration = 2000)
     @Bulkhead(name = "inventory", maxConcurrentCalls = 20)
     public CompletableFuture<StockLevel> check(String sku) {
-        return http.getStock(sku);   // must not block; the async path expects a future
+        return http.getStock(sku);
     }
 
-    // one Throwable parameter - NOT (String sku, Throwable cause)
+    // Exactly one Throwable-compatible parameter (or none) - not (String sku, Throwable cause)
     private CompletableFuture<StockLevel> lastKnownGood(Throwable cause) {
         return CompletableFuture.completedFuture(StockLevel.unknown());
     }
 }
 ```
 
-Numeric attributes here are milliseconds: `waitDuration = 200` is 200 ms, and `timeoutDuration = 2000` is two seconds. Durations in YAML are different. They are parsed as Spring `Duration` values, so `200ms` and `2s` are correct there. Because the method returns `CompletableFuture`, the time limiter does not block, and the retry backoff is scheduled rather than slept.
+There is one fallback for the whole chain. When several annotations set `fallbackMethod`, the first non-empty one wins, in this order: `@Retry`, `@CircuitBreaker`, `@RateLimit`, `@TimeLimiter`, `@Bulkhead`.
 
-> **`@Bulkhead(type = THREADPOOL)` is not implemented.** The attribute exists. But the aspect only logs, at debug level, that thread-pool isolation was requested, and builds a **semaphore** bulkhead anyway. `maxConcurrentCalls` and `maxWaitDuration` are the only bulkhead settings that take effect. The `core-thread-pool-size`, `max-thread-pool-size`, `queue-capacity` and `keep-alive-duration` properties are bound, but the aspect does not use them.
+### Fallback method rules
 
-### Serving a stale answer instead of none
+The aspect looks the fallback up by name, by reflection, on the target class and its superclasses:
 
-Set `fallbackCache = true` on `@CircuitBreaker` or `@Retry` to record each successful result. When the call later fails, the last good result is served.
+1. A method with exactly one parameter whose type is assignable from the thrown exception (`Throwable` always matches).
+2. Otherwise, the first method with zero parameters.
+3. Otherwise, `RuntimeException("Fallback method execution failed")` with a `NoSuchMethodException` cause.
 
-`FallbackCache` is an access-ordered `LinkedHashMap` behind a synchronized wrapper. It is bounded by `max-size` (default 1000), with a `ttl` (default 5 minutes). The key is the declaring class, the method name, and a deep hash of the arguments. A fallback *method* takes precedence over the cache, but successful results are still recorded in that case.
+The fallback may be `private`. It is called on the raw target, not the proxy, so annotations on it do nothing. Its return type is not checked: a wrong type fails as a `ClassCastException` at the call site. On the async path, a non-future return value is wrapped in a completed future.
 
-> `adhar.resilience.fallback-cache.enabled` does **not** gate the feature. The `FallbackCache` bean is always registered, so `fallbackCache = true` on an annotation works with the property left at its default. Setting the property to `true` applies the cache to **every** annotated method in the application, whether or not it asked for it.
+### Serve the last good result
 
-### The facade shortcut
+Set `fallbackCache = true` on `@CircuitBreaker` or `@Retry`. Each successful result is stored in `FallbackCache`, keyed by declaring class, method name and a deep hash of the arguments. When the chain fails and there is no `fallbackMethod`, the cached value is returned (with a WARN log). A `fallbackMethod` always takes precedence, but successful results are still cached.
+
+### Facade
 
 ```java
-return adhar.resilient("payment", () -> gateway.process(req), () -> queued(req));
-return adhar.safe("payment", () -> gateway.process(req), () -> queued(req)); // + tracing
+import com.adhar.kit.resilience.api.CircuitBreakerService;
+import com.adhar.kit.starter.AdharFacade;
+
+PaymentResult r = adhar.resilient("payment", () -> gateway.charge(req));           // breaker only
+PaymentResult s = adhar.safe("payment", () -> gateway.charge(req), () -> queued(req)); // + tracing span
+CircuitBreakerService.State state = adhar.getResilience().getState("payment");
+adhar.getResilience().reset("payment");
 ```
 
-Both delegate to `CircuitBreakerService.executeWithFallback` and give you the circuit breaker only. You get no retry, rate limiter, bulkhead or time limiter.
+`CircuitBreakerService` offers `execute`, `executeWithFallback`, `getState`, `getMetrics` and `reset`. It covers the circuit breaker only: no retry, rate limiter, bulkhead or time limiter. On Spring Boot the starter wires it from the `CircuitBreakerRegistry` bean, so it shares the breakers that the annotations and properties use. `CircuitBreakerFacade.getInstance()` on its own throws `UnsupportedOperationException` under Spring Boot; go through `AdharFacade`, or inject `CircuitBreakerRegistry`.
 
-`CircuitBreakerFacade.getInstance()` is deliberately unusable under Spring Boot. It throws `UnsupportedOperationException`, telling you to inject `SpringCircuitBreakerAdapter` instead. The static path cannot see the Spring-managed registry.
+### Inject faults
+
+With `adhar.resilience.chaos.enabled=true`, a `ChaosPolicy` bean adds latency and/or throws `ChaosPolicy.ChaosInjectedException` at the innermost point of the chain, so every decorator reacts as it would to a real fault.
+
+```yaml
+adhar:
+  resilience:
+    chaos:
+      enabled: true
+      latency-enabled: true
+      min-latency-ms: 200
+      max-latency-ms: 1500
+      error-enabled: true
+      error-probability: 0.2
+      included-methods: [check]   # matched against the method name (equals or contains); empty = every annotated method
+```
+
+For tests, configure a test-only instance name with small values (for example `minimum-number-of-calls: 2`, `wait-duration-in-open-state: 100ms`); properties override annotation attributes. For network-level faults, `adhar-kit-test-commons` provides `ToxiproxyIntegrationTest` and `NetworkToxics`.
 
 ## Configuration
 
-Configure each named instance separately. Every key below is a map entry under its pattern, keyed by instance name.
+Named instances are map entries under each pattern, keyed by instance name. Durations use Spring `Duration` syntax (`500ms`, `2s`, `1m`).
 
 ```yaml
 adhar:
@@ -193,113 +162,113 @@ adhar:
     circuit-breaker:
       payment:
         failure-rate-threshold: 50
-        slow-call-rate-threshold: 100
-        slow-call-duration-threshold: 60s
-        sliding-window-size: 100
-        minimum-number-of-calls: 10
-        permitted-number-of-calls-in-half-open-state: 10
-        wait-duration-in-open-state: 60s
-        automatic-transition-from-open-to-half-open-enabled: true
+        minimum-number-of-calls: 20
+        wait-duration-in-open-state: 30s
     retry:
-      order:
-        max-attempts: 5
-        wait-duration: 1s
+      payment:
+        max-attempts: 4
+        wait-duration: 200ms
         enable-exponential-backoff: true
-        exponential-backoff-multiplier: 1.5
-    rate-limiter:
-      search:
-        limit-for-period: 100
-        limit-refresh-period: 1m
-        timeout-duration: 5s
-    bulkhead:
-      report:
-        max-concurrent-calls: 10
-        max-wait-duration: 0ms
-    time-limiter:
-      data:
-        timeout-duration: 5s
-        cancel-running-future: true
+    health:
+      critical-circuit-breakers: [payment]
 ```
 
-Module-level switches:
+Per instance (`adhar.resilience.<pattern>.<name>.*`):
 
-| Property | Purpose | Default |
+| Property | Type | Default | Description |
+|---|---|---|---|
+| `circuit-breaker.<name>.failure-rate-threshold` | float | `50.0` | Failure percentage that opens the breaker |
+| `circuit-breaker.<name>.slow-call-rate-threshold` | float | `100.0` | Slow-call percentage that opens the breaker |
+| `circuit-breaker.<name>.slow-call-duration-threshold` | Duration | `60s` | Calls slower than this count as slow |
+| `circuit-breaker.<name>.sliding-window-size` | int | `100` | Calls in the sliding window |
+| `circuit-breaker.<name>.minimum-number-of-calls` | int | `10` | Calls before the failure rate is evaluated |
+| `circuit-breaker.<name>.permitted-number-of-calls-in-half-open-state` | int | `10` | Trial calls in HALF_OPEN |
+| `circuit-breaker.<name>.wait-duration-in-open-state` | Duration | `60s` | Time OPEN before HALF_OPEN |
+| `circuit-breaker.<name>.automatic-transition-from-open-to-half-open-enabled` | boolean | `false` | Move to HALF_OPEN without waiting for a call |
+| `retry.<name>.max-attempts` | int | `3` | Total attempts, including the first |
+| `retry.<name>.wait-duration` | Duration | `500ms` | Wait between attempts (initial interval with backoff) |
+| `retry.<name>.enable-exponential-backoff` | boolean | `false` | Multiply the wait after each attempt (no upper cap) |
+| `retry.<name>.exponential-backoff-multiplier` | double | `1.5` | Backoff multiplier |
+| `rate-limiter.<name>.limit-for-period` | int | `10` | Permits per refresh period |
+| `rate-limiter.<name>.limit-refresh-period` | Duration | `1s` | Refresh period |
+| `rate-limiter.<name>.timeout-duration` | Duration | `5s` | How long a caller waits for a permit |
+| `bulkhead.<name>.max-concurrent-calls` | int | `25` | Concurrent calls allowed |
+| `bulkhead.<name>.max-wait-duration` | Duration | `0ms` | How long a caller waits for a slot |
+| `time-limiter.<name>.timeout-duration` | Duration | `1s` | Deadline per attempt |
+| `time-limiter.<name>.cancel-running-future` | boolean | `true` | Cancel the future on timeout |
+
+Names that appear only in annotations, and the `"default"` name, use the registry defaults, which equal the defaults above.
+
+Module-wide (`adhar.resilience.*`):
+
+| Property | Type | Default | Description |
+|---|---|---|---|
+| `enabled` | boolean | `true` | Turn the whole auto-configuration on or off |
+| `metrics.enabled` | boolean | `true` | Register Resilience4j Micrometer binders and `ResilienceMetricsService` |
+| `metrics.export-circuit-breaker-metrics` / `export-retry-metrics` / `export-rate-limiter-metrics` / `export-bulkhead-metrics` | boolean | `true` | Register each tagged binder (needs a `MeterRegistry` bean) |
+| `metrics.bridge-to-platform-metrics` | boolean | `true` | Forward events to `adhar-kit-metrics` `PlatformMetrics` (when that module and bean are present) |
+| `events.enabled` | boolean | `true` | Register `ResilienceEventRecorder` and WARN-level event logging |
+| `endpoint.enabled` | boolean | `true` | Register the `resilience` actuator endpoint (Actuator on the classpath) |
+| `health.enabled` | boolean | `true` | Register `CircuitBreakerHealthIndicator` |
+| `health.critical-circuit-breakers` | list | empty | Breakers whose OPEN state reports DOWN. **Empty means every breaker is critical** |
+| `fallback-cache.enabled` | boolean | `false` | Apply the fallback cache to **every** annotated method. The cache bean exists either way, so per-method `fallbackCache = true` works without it |
+| `fallback-cache.max-size` | int | `1000` | Entries kept (least recently used evicted) |
+| `fallback-cache.ttl` | Duration | `5m` | How long a result stays servable; zero or negative = no expiry |
+| `chaos.enabled` | boolean | `false` | Register `ChaosPolicy` |
+| `chaos.latency-enabled` / `chaos.min-latency-ms` / `chaos.max-latency-ms` | boolean / long / long | `false` / `0` / `0` | Random delay in `[min, max]` ms |
+| `chaos.error-enabled` / `chaos.error-probability` | boolean / double | `false` / `0.0` | Throw on this fraction of calls |
+| `chaos.included-methods` | list | empty | Method names to affect; empty = all |
+
+## Operations
+
+**Metrics.** With a `MeterRegistry` bean, the Resilience4j tagged binders publish their standard `resilience4j.*` meters for circuit breakers, retries, rate limiters and bulkheads. With `adhar-kit-metrics`, the bridge also records:
+
+| Meter | Tags | Recorded on |
 |---|---|---|
-| `adhar.resilience.enabled` | Master switch | `true` |
-| `adhar.resilience.metrics.enabled` | Export pattern metrics to Micrometer | `true` |
-| `adhar.resilience.metrics.export-circuit-breaker-metrics` | Register `TaggedCircuitBreakerMetrics` (siblings exist for retry, rate limiter and bulkhead) | `true` |
-| `adhar.resilience.metrics.bridge-to-platform-metrics` | Also publish through `adhar-kit-metrics` | `true` |
-| `adhar.resilience.events.enabled` | Record state transitions via `ResilienceEventRecorder` | `true` |
-| `adhar.resilience.endpoint.enabled` | Expose the `resilience` actuator endpoint | `true` |
-| `adhar.resilience.health.enabled` | Register `CircuitBreakerHealthIndicator` | `true` |
-| `adhar.resilience.health.critical-circuit-breakers` | Breakers whose OPEN state makes the app unhealthy | empty |
-| `adhar.resilience.fallback-cache.enabled` | Apply the fallback cache to *every* annotated method | `false` |
-| `adhar.resilience.fallback-cache.max-size` | Entries retained | `1000` |
-| `adhar.resilience.fallback-cache.ttl` | How long a last-good result stays servable | `PT5M` |
-| `adhar.resilience.chaos.enabled` | Register `ChaosPolicy` and inject latency or errors | `false` |
+| `adhar.resilience.circuit_breaker.<name>` (gauge) | — | Breaker state as a number |
+| `adhar.resilience.circuit_breaker.transitions` | `name`, `state` | Every state transition |
+| `adhar.resilience.retry.attempts` | `name`, `attempt`, `success` | Each retry, and a success after retries |
+| `adhar.resilience.rate_limit.rejected` | `name` | Each rejected permit |
+| `adhar.operation.count` / `.errors` / `.duration` | `module=resilience`, `operation=bulkhead.<name>.rejected` or `timeLimiter.<name>.timeout` | Bulkhead rejections, time-limiter timeouts |
 
-Registry defaults when nothing is specified:
+Instances created later (from annotations) are covered too: the listeners subscribe to registry `onEntryAdded`.
 
-- **Circuit breaker:** 50% failure rate, 100% slow-call rate over a 60s slow-call threshold, 100-call sliding window, minimum 10 calls, 10 permitted half-open calls, 60s open.
-- **Retry:** 3 attempts at 500 ms.
-- **Rate limiter:** 10 per second with a 5s acquire timeout.
-- **Bulkhead:** 25 concurrent with a 0 ms wait.
-- **Time limiter:** 1s with `cancelRunningFuture` on.
+**Health.** `CircuitBreakerHealthIndicator` (bean `resilienceCircuitBreakers`) reports each breaker's `state`, `critical` and `failureRate`, plus `openCriticalBreakers`. It is DOWN when any critical breaker is OPEN or FORCED_OPEN. Because an empty `critical-circuit-breakers` list makes every breaker critical, one open breaker on a non-essential dependency turns the whole health check DOWN until you list the ones that matter.
 
-## How it behaves
-
-- **Thread safety.** `ResilienceAspect` is a stateless singleton, apart from its five `ConcurrentHashMap` instance caches. The Resilience4j registries and instances are themselves thread-safe and designed to be shared. `FallbackCache` serialises all access through a synchronized map. It is correct under concurrency, but it is a single lock, so do not use it for high-frequency methods.
-- **Lifecycle.** Named instances mentioned in properties exist from startup. Instances that exist only in annotations are created on their first intercepted call. So a breaker you have never exercised does not appear in `/actuator/resilience` yet. Nothing is drained at shutdown. The async scheduler threads are daemons, and in-flight `CompletableFuture`s are abandoned with the JVM.
-- **Failure behaviour.** With no fallback and no usable cached value, the original exception is rethrown unchanged after unwrapping. If a fallback itself throws, it is wrapped in `RuntimeException("Fallback method execution failed")` with the real failure as the cause. The failure is logged at error level.
-- **Resource bounds.** Sliding windows, the half-open permit count and the bulkhead semaphore are all fixed-size. `ResilienceEventRecorder` keeps `LongAdder` counters keyed by instance name. So its memory is bounded by the number of distinct instance names. That is why those names must come from a small, fixed set and never be built from request data.
-
-## Observability
-
-Resilience4j's own tagged Micrometer binders are registered when a `MeterRegistry` bean is present.
-
-Separately, `ResiliencePlatformMetricsBridge` subscribes to registry events and forwards them into `adhar-kit-metrics`. It subscribes to `onEntryAdded` too, so instances created later are also covered. It forwards:
-
-- breaker state transitions
-- retry attempts (flagged once a retried call eventually succeeds)
-- rate-limiter rejections
-- bulkhead rejections and time-limiter timeouts, as zero-duration failed operations under the module name `resilience`
-
-`CircuitBreakerHealthIndicator` reports each breaker's `state`, `critical` flag and `failureRate`. It reports DOWN, with an `openCriticalBreakers` detail, when any breaker named in `health.critical-circuit-breakers` is open.
+**Endpoint.** Expose it with `management.endpoints.web.exposure.include=resilience`.
 
 ```text
-GET  /actuator/resilience
-       -> circuitBreakers, retries, rateLimiters, bulkheads, events
-
-POST /actuator/resilience/{name}
-       -> {"name":"payment","result":"reset","state":"CLOSED"}
-       -> {"name":"typo","result":"not-found"}   when the name is unknown
+GET  /actuator/resilience          -> circuitBreakers, retries, rateLimiters, bulkheads, events
+POST /actuator/resilience/{name}   -> {"name":"payment","result":"reset","state":"CLOSED"}
+                                      {"name":"typo","result":"not-found"}
 ```
 
-## Testing
+**Failure behaviour.**
 
-- **Unit-test the policy, not the proxy.** Annotations do nothing on a plain `new PaymentService()`, so an aspect-level test needs a real context. Instantiate `ResilienceAspect` directly with purpose-built registries, or use a slice context that imports `ResilienceAutoConfiguration`.
-- **Keep tests fast by shrinking the instance, not by sleeping.** Configure a test-only name under `adhar.resilience.*` with `minimum-number-of-calls: 2` and `wait-duration-in-open-state: 100ms`. Because properties beat annotations, this works without touching the production code.
-- **Reset between tests.** Shared registries leak state across test methods. Call `reset()` on the breaker, or `POST /actuator/resilience/{name}`, in an `@AfterEach`.
-- **Inject real faults.** Set `adhar.resilience.chaos.enabled: true` with `latency-enabled` or `error-enabled` and an `included-methods` list. This makes a named method slow or failing from configuration alone. The chaos policy is applied at the innermost point of the chain, so the decorators see it exactly as they would a real failure. For real network faults, `adhar-kit-test-commons` provides `ToxiproxyIntegrationTest` and `NetworkToxics` (`addLatency`, `addBandwidth`, `takeDown`, `bringUp`). They degrade a container's traffic while the test runs.
-- **Assert on effects, not timings.** Count calls on a stubbed dependency to prove a retry happened, and assert `getState(name)` rather than measuring elapsed time.
+- With no fallback and no cached value, the original exception is rethrown, unwrapped from `CompletionException`/`ExecutionException`. An open breaker throws `CallNotPermittedException`; a timeout throws `TimeoutException`.
+- A fallback that throws surfaces as `RuntimeException("Fallback method execution failed")` with the real failure as the cause, logged at ERROR.
+- Breaker transitions, retries and rejections are logged at WARN as `resilience.event type=...` while `events.enabled` is on.
+- Instances defined in properties exist from startup. Instances defined only by annotations appear (in the endpoint, health and metrics) after their first call.
 
-## Common pitfalls
+## Limits
 
-| Symptom | Cause | Fix |
-|---|---|---|
-| `NoSuchMethodException` / `Fallback method execution failed` | The fallback mirrors the original parameter list | Give it exactly one `Throwable`-assignable parameter, or none |
-| Annotation attributes are ignored | A property block already created that instance name at startup | Remove the YAML entry, or configure it there instead |
-| Changing an attribute has no effect after startup | Instances are cached per name on first use | Use a distinct name, or configure via properties |
-| Two methods share one policy unexpectedly | They use the same `name`, and the cache is keyed by name only | Give each distinct policy its own name |
-| The breaker never opens | `minimum-number-of-calls` (default 10) has not been reached | Lower it, or send more traffic before judging |
-| The annotation does nothing | Self-invocation bypasses the proxy | Call through an injected bean reference |
-| MDC or security context is empty inside the method | Sync `@TimeLimiter` runs the body on the common ForkJoinPool | Return a `CompletableFuture` to take the async path, or propagate context explicitly |
-| A timeout fires but the work keeps running | `cancel-running-future` was disabled, or the call ignores interrupts | Leave it at `true`, and set a transport-level timeout too |
-| Thread-pool isolation seems to have no effect | `@Bulkhead(type = THREADPOOL)` falls back to semaphore isolation | Bound concurrency with `maxConcurrentCalls`, or manage your own pool |
+- **Self-invocation bypasses everything.** The annotations are Spring AOP advice, so `this.process(...)` inside the same class gets no breaker, retry, timeout or fallback, and no warning. Call through another bean.
+- **Properties beat annotation attributes.** A name configured under `adhar.resilience.*` is created at startup; the annotation's attributes for that name are ignored.
+- **One policy per name.** The first call fixes the configuration for that name. Two methods with `@Retry(name = "inventory")` and different `maxAttempts` share whichever was created first.
+- **Sync `@TimeLimiter` changes threads.** On the sync path the body runs via `CompletableFuture.supplyAsync` on the common ForkJoinPool, so `ThreadLocal` state (MDC, `SecurityContext`, tenant id) is not visible inside it. Return a `CompletableFuture` when that matters.
+- **A timeout does not stop the work.** Cancelling a `CompletableFuture` does not interrupt the thread running it, so timed-out work keeps running. Set a timeout on the client or transport as well.
+- **`@Bulkhead(type = THREADPOOL)` is not implemented.** The aspect always builds a semaphore bulkhead.
+- **Bound but unused properties:** `bulkhead.<name>.core-thread-pool-size`, `max-thread-pool-size`, `queue-capacity`, `keep-alive-duration`; `retry.<name>.max-wait-duration`, `enable-randomized-wait`; `circuit-breaker.<name>.record-exceptions`; `metrics.export-time-limiter-metrics`.
+- **Exponential backoff has no annotation attribute.** Enable it per name in properties.
+- **The facade fallback hides failures from the breaker.** `executeWithFallback` (behind `adhar.resilient(name, op, fallback)` and `adhar.safe`) catches the exception inside the breaker, so the breaker records a success and does not open from those failures. If the breaker is already open, the call throws `CallNotPermittedException` instead of running the fallback. Use `@CircuitBreaker(fallbackMethod = ...)` when you need the breaker to trip.
+- **`FallbackCache` is one synchronized map**, in memory, per instance. Avoid it on very high-frequency methods.
+- **Use fixed instance names.** Event counters and meters are kept per name; never build names from request data.
+- **Other runtimes get the circuit breaker only.** The Quarkus, Micronaut, Helidon and Vert.x adapters each build their own registry (largely Resilience4j defaults); annotations, `adhar.resilience.*` instances, the endpoint and health are Spring Boot only.
+- If `resilience4j-spring-boot3` is on the classpath, the module also activates Resilience4j's own annotation aspects (`io.github.resilience4j.*.annotation.*`). Use one annotation family per method.
 
-## See also
+## Next steps
 
-- [Core](/adhar-kit/modules/core) — the lightweight `@Retry` when you need nothing more than backoff
-- [Metrics](/adhar-kit/modules/metrics) — the registry these patterns report into
-- [Health](/adhar-kit/modules/health) — where `CircuitBreakerHealthIndicator` surfaces
-- [Messaging](/adhar-kit/modules/messaging) — consumers that need bulkheads and retry the most
+- [Core](/adhar-kit/modules/core) — the lightweight `@Retry` and `RetryUtil` when backoff is all you need
+- [Metrics](/adhar-kit/modules/metrics) — where `PlatformMetrics` and the `adhar.resilience.*` meters come from
+- [Health](/adhar-kit/modules/health) — the kit's health checks, alongside `CircuitBreakerHealthIndicator`
+- [Concepts](/adhar-kit/concepts) — module toggles, auto-configuration and the facade

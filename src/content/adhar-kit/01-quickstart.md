@@ -7,54 +7,83 @@ path: "/adhar-kit/quickstart"
 
 # Quick Start
 
-This page takes you from an empty `pom.xml` to a running service. The service logs, counts, traces and caches through one injected object. **The whole integration is one dependency and one constructor parameter.** The rest of this page explains what happens as a result.
+This page takes you from an empty directory to a Spring Boot service that logs, counts, traces and caches through one injected `AdharFacade`. You add one dependency, set a few `adhar.*` properties, and check the result in the startup banner and at `/actuator/adhar`.
 
-## At a glance
-
-| | |
-|---|---|
-| Time | About ten minutes |
-| You end up with | A Spring Boot service using `AdharFacade` |
-| Dependency | `com.adhar.kit:adhar-kit-starter:0.1.0` |
-| Config prefix | `adhar.kit.*` |
-| Verification | The Adhar Kit startup banner plus `GET /actuator/adhar` |
+```diagram
+nka-quickstart-flow
+```
 
 ## Prerequisites
 
-| Tool | Version | Why |
-|---|---|---|
-| JDK | 25 or later | The kit compiles to Java 25 bytecode and the Maven Enforcer rejects anything older |
-| Maven | 3.9+ | 3.8 is the enforced floor when building the kit itself; use 3.9+ to consume it |
-| A framework | Spring Boot 4.0+, Quarkus 3.21+, Micronaut 4.8+, Helidon 4.2+ or Vert.x 4.5+ | Optional — the kit also runs standalone |
+- **JDK 25 or later.** Every kit artifact is Java 25 bytecode, so an older compiler fails with `class file has wrong version 69.0`.
+- **Maven 3.8 or later.** `adhar-kit-parent` enforces it.
+- **A repository that serves `com.adhar.kit` 0.1.0**: Maven Central for released versions, the platform's Nexus on an Adhar cluster, or your local `~/.m2` after you [build the kit from source](/adhar-kit/build).
+- **Access to `https://projectlombok.org/edge-releases`** if you inherit `adhar-kit-parent`. The parent compiles with Lombok `edge-SNAPSHOT` and declares that repository.
 
-Check the JDK first. A Java 24 toolchain fails during dependency resolution, not at compile time, and the error is confusing:
+## Choose how to depend on the kit
 
-```bash
-java -version    # openjdk version "25" …
-mvn -version     # Apache Maven 3.9.x …
-```
+| Approach | Declare | What you get | Use it when |
+|---|---|---|---|
+| Parent + starter | `adhar-kit-parent` as `<parent>`, `adhar-kit-starter` as a dependency | Everything below, plus `AdharFacade` and Spring Boot auto-configuration | A new Spring Boot service. The platform templates do this. |
+| BOM + modules | `adhar-kit-bom` imported in `<dependencyManagement>`, then each module without a version | Only the modules you list, each used through its own `*Facade` | A small dependency graph, or a service with its own parent |
+| Starter, own parent | `adhar-kit-bom` import + `adhar-kit-starter`, and `<java.version>25</java.version>` | `AdharFacade` without the kit's build rules | Your organization already has a parent POM |
 
-## Step 1 — choose how you depend on it
+What each build artifact carries:
 
-There are three ways to depend on the kit. You can combine them, but pick one as your main approach.
+- **`adhar-kit-starter`** requires 23 kit modules and holds `AdharFacade` and the framework adapters. `adhar-kit-batch` is optional: declare it yourself to use `getBatch()`. Through those modules you also get Spring MVC, Spring Security, Spring Data JPA, Flyway and springdoc.
+- **`adhar-kit-bom`** manages every kit module and the maven plugin, and imports the Spring Boot (`spring-boot-dependencies` 4.1.0) and Spring Cloud (2025.1.2) BOMs. It also pins the third-party versions the kit is built with: Resilience4j, OpenTelemetry, gRPC, CloudEvents, the Dapr SDK, the Fabric8 Kubernetes client, Spring AI, MapStruct, QueryDSL, springdoc, PostHog and WireMock.
+- **`adhar-kit-parent`** inherits `spring-boot-starter-parent` 4.1.0, imports the BOM, sets Java 25 and UTF-8, and applies the Maven Enforcer and the JaCoCo gate. **The gate applies to your service too:** `mvn verify` fails below 80% instruction coverage. It also manages `adhar-kit-maven-plugin`: declare the plugin with only its `groupId` and `artifactId` to run spec-first OpenAPI generation.
 
-### Option A — the starter
-
-The starter pulls in every module as a transitive dependency. It also registers the framework adapters and auto-configuration. Choose it when you want the full facade and are not worried about size.
-
-```xml
-<dependency>
-    <groupId>com.adhar.kit</groupId>
-    <artifactId>adhar-kit-starter</artifactId>
-    <version>0.1.0</version>
-</dependency>
-```
-
-### Option B — the BOM, then individual modules
-
-Import `adhar-kit-bom` once into `dependencyManagement`. Then declare modules without versions. Choose this when you want a slim dependency graph, such as a metrics-only sidecar.
+## Step 1 — Create the pom
 
 ```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>com.adhar.kit</groupId>
+        <artifactId>adhar-kit-parent</artifactId>
+        <version>0.1.0</version>
+        <relativePath/>
+    </parent>
+
+    <groupId>com.example</groupId>
+    <artifactId>greeting-service</artifactId>
+    <version>0.0.1-SNAPSHOT</version>
+
+    <dependencies>
+        <dependency>
+            <groupId>com.adhar.kit</groupId>
+            <artifactId>adhar-kit-starter</artifactId>
+        </dependency>
+        <!-- /actuator/adhar; the starter declares Actuator optional -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-actuator</artifactId>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.springframework.boot</groupId>
+                <artifactId>spring-boot-maven-plugin</artifactId>
+            </plugin>
+        </plugins>
+    </build>
+</project>
+```
+
+The parent's BOM supplies every version. If you keep your own parent instead, import the BOM and set the Java version:
+
+```xml
+<properties>
+    <java.version>25</java.version>
+</properties>
+
 <dependencyManagement>
     <dependencies>
         <dependency>
@@ -66,66 +95,54 @@ Import `adhar-kit-bom` once into `dependencyManagement`. Then declare modules wi
         </dependency>
     </dependencies>
 </dependencyManagement>
-
-<dependencies>
-    <dependency>
-        <groupId>com.adhar.kit</groupId>
-        <artifactId>adhar-kit-commons</artifactId>
-    </dependency>
-    <dependency>
-        <groupId>com.adhar.kit</groupId>
-        <artifactId>adhar-kit-logging</artifactId>
-    </dependency>
-    <dependency>
-        <groupId>com.adhar.kit</groupId>
-        <artifactId>adhar-kit-metrics</artifactId>
-    </dependency>
-</dependencies>
 ```
 
-The BOM also manages the third-party versions the kit is tested against: Resilience4j, OpenTelemetry, gRPC, CloudEvents, the Kubernetes client and Spring AI. Importing it keeps your own direct dependencies in line with the kit's.
+## Step 2 — Configure
 
-### Option C — inherit the parent POM
-
-For a new service, inherit `adhar-kit-parent`. It sets Java 25, UTF-8, Surefire/Failsafe wiring, the Enforcer rules and the JaCoCo coverage gate. It already imports the BOM.
-
-```xml
-<parent>
-    <groupId>com.adhar.kit</groupId>
-    <artifactId>adhar-kit-parent</artifactId>
-    <version>0.1.0</version>
-</parent>
-```
-
-> The parent inherits from `spring-boot-starter-parent`. That is handy on Spring Boot and harmless elsewhere. But on Quarkus or Micronaut you probably want their platform BOM as your parent, and Option A or B for the kit.
-
-## Step 2 — configure
-
-Everything the starter reads lives under `adhar.kit`. You always set two keys: the master switch and the application name.
+Create `src/main/resources/application.yml`:
 
 ```yaml
+spring:
+  application:
+    name: greeting-service       # the banner and docs title use it
+
 adhar:
   kit:
-    enabled: true
-    application-name: greeting-service
-    profile: default
-    modules:
+    modules:                     # facade gates; these restate the defaults
       cache: true
       metrics: true
       tracing: true
       ai: false
+  security:
+    authorization:
+      permit-all: "/**"          # demo only: every path is public
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,adhar
 ```
 
-The defaults matter here, and they are not the same for every module.
+- `adhar.kit.modules.<id>` gates the `AdharFacade` accessors. Eleven are on by default (`logging`, `metrics`, `tracing`, `resilience`, `security`, `persistence`, `cache`, `messaging`, `config`, `health`, `docs`) and eleven are off (`ai`, `analytics`, `kubernetes`, `dapr`, `grpc`, `graphql`, `batch`, `notification`, `event-sourcing`, `perf-profiler`, `rewrite`).
+- `adhar.security.authorization.permit-all` is needed because `adhar-kit-security` is active as soon as it is on the classpath, and it requires authentication on every path except `/actuator/health` and `/actuator/info`. With no JWT issuer configured, every other request gets `403`. Replace `"/**"` with real rules and `adhar.security.jwt.issuer-uri` or `adhar.security.jwt.jwk-set-uri` before you deploy.
+- You do not need a database. With no `spring.datasource.url`, `adhar-kit-persistence` switches the JDBC, JPA and Flyway auto-configuration off and logs that it did.
 
-- Eleven modules are **on** out of the box: logging, metrics, tracing, resilience, security, persistence, cache, messaging, config, health and docs.
-- Eleven are **off**: ai, analytics, kubernetes, dapr, grpc, graphql, batch, notification, event-sourcing, perf-profiler and rewrite.
+## Step 3 — Write the service
 
-Every entry in the block above restates a default. It is spelled out so you can see the shape of the `modules` map before you change anything in it.
+```java
+package com.example.greeting;
 
-## Step 3 — write the service
+import org.springframework.boot.SpringApplication;
+import org.springframework.boot.autoconfigure.SpringBootApplication;
 
-On Spring Boot, the facade is auto-configured as a bean. Take it as a constructor parameter.
+@SpringBootApplication
+public class GreetingApplication {
+    public static void main(String[] args) {
+        SpringApplication.run(GreetingApplication.class, args);
+    }
+}
+```
 
 ```java
 package com.example.greeting;
@@ -146,20 +163,11 @@ public class GreetingService {
         return adhar.traced("greet", () -> {
             adhar.count("greetings", "name", name);
             adhar.logInfo("Greeting {}", name);
-            return adhar.cached("greetings", name, String.class,
-                    () -> "Hello, " + name);
+            return adhar.cached("greetings", name, String.class, () -> "Hello, " + name);
         });
     }
 }
 ```
-
-That method uses three modules, and none of them appear in the imports:
-
-- `traced` opens a span through `TracingFacade` and records the duration through `MetricsFacade`.
-- `count` increments a Micrometer counter.
-- `cached` runs the cache-aside pattern against a cache named `greetings`, and creates the cache on first use.
-
-Expose the service over HTTP so you have something to call:
 
 ```java
 package com.example.greeting;
@@ -184,14 +192,19 @@ public class GreetingController {
 }
 ```
 
-## Step 4 — run it
+`greet` uses three modules without importing any of them:
+
+- `traced` records a Micrometer timer around an OpenTelemetry span.
+- `count` increments a Micrometer counter tagged `name=<name>`.
+- `cached` runs cache-aside against the cache `greetings`, and creates it on first use.
+
+## Step 4 — Run it
 
 ```bash
-mvn clean install
 mvn spring-boot:run
 ```
 
-During startup, Adhar Kit prints a banner. It lists the runtime it detected and which modules are live. If you see it, auto-configuration worked:
+**Check:** the startup log contains the Adhar Kit banner. `adhar-kit-logging` writes JSON log lines, so the banner is in the `message` field of consecutive lines from `AdharKitAutoConfiguration`:
 
 ```text
 ===============================================================================
@@ -202,7 +215,7 @@ During startup, Adhar Kit prints a banner. It lists the runtime it detected and 
   Runtime       : SPRING_BOOT
   Profile       : default
   Spring Profile: default
-  Started at    : 2026-01-14 09:41:07
+  Started at    : <timestamp>
 -------------------------------------------------------------------------------
   Active Modules:
     [+] Logging
@@ -216,31 +229,27 @@ During startup, Adhar Kit prints a banner. It lists the runtime it detected and 
     [+] Configuration
     [+] Health
     [+] API Docs
-  Disabled: AI/ML, Analytics, Kubernetes, Dapr, gRPC, GraphQL, Batch,
-            Notification, Event Sourcing, Perf Profiler, Rewrite
+  Disabled: AI/ML, Analytics, Kubernetes, Dapr, gRPC, GraphQL, Batch, Notification, Event Sourcing, Perf Profiler, Rewrite
 -------------------------------------------------------------------------------
   11 modules enabled, 11 disabled
 ===============================================================================
 ```
 
-Then call it:
+Call the endpoint:
 
 ```bash
 curl http://localhost:8080/greet/ada
-# Hello, ada
 ```
 
-## Step 5 — verify the module registry
+**Check:** the response is `Hello, ada`.
 
-Add Spring Boot Actuator and expose the `adhar` endpoint. It reports the same registry the banner printed, but at runtime and as JSON.
-
-```properties
-management.endpoints.web.exposure.include=health,adhar
-```
+## Step 5 — Inspect the module registry
 
 ```bash
 curl -s http://localhost:8080/actuator/adhar
 ```
+
+**Check:** the report shows 22 modules, 11 enabled and 11 disabled. Module order varies between runs.
 
 ```json
 {
@@ -249,8 +258,8 @@ curl -s http://localhost:8080/actuator/adhar
   "enabledModules": 11,
   "disabledModules": 11,
   "modules": [
-    { "id": "metrics", "name": "Metrics",
-      "description": "Micrometer metrics collection and export",
+    { "id": "cache", "name": "Cache",
+      "description": "Distributed caching with Kafka synchronization",
       "enabled": true, "status": "UP" },
     { "id": "ai", "name": "AI/ML",
       "description": "Multi-provider AI integration",
@@ -259,21 +268,24 @@ curl -s http://localhost:8080/actuator/adhar
 }
 ```
 
-`GET /actuator/adhar/{id}` returns a single module, for example `/actuator/adhar/cache`.
+`GET /actuator/adhar/{id}` returns one module, for example `/actuator/adhar/cache`. `status` reflects the gate only: `UP` means enabled, not health-checked.
 
-## Common pitfalls
+## Troubleshooting
 
 | Symptom | Cause | Fix |
 |---|---|---|
-| `IllegalStateException: Adhar Kit module 'ai' is disabled` | You called `adhar.getAi()` while `adhar.kit.modules.ai` is `false` — and it is false by default | Set `adhar.kit.modules.ai=true` |
-| No startup banner | `adhar.kit.enabled` is `false`, or the starter is not on the runtime classpath | Check the dependency scope and the property |
-| `/actuator/adhar` returns 404 | Actuator is absent, or the endpoint is not in the exposure list | Add `spring-boot-starter-actuator` and include `adhar` |
-| Dependency resolution fails on Java 24 or lower | The Enforcer requires Java 25+ | Switch the toolchain, do not lower the rule |
-| `adhar.traced(...)` fails on Spring Boot | The Spring adapter wires tracing only when a Micrometer `Tracer` bean exists | Add Micrometer Tracing, or use `adhar.count(...)` alone |
+| Every request returns `403`; the log warns `adhar.security requires authentication but no JWT issuer-uri or jwk-set-uri is configured` | `adhar-kit-security` protects all paths by default | Configure `adhar.security.jwt.*`, or list public paths in `adhar.security.authorization.permit-all` |
+| `IllegalStateException: Adhar Kit module 'ai' is disabled (adhar.kit.modules.ai=false)` | The accessor's gate is off; `ai` is off by default | Set `adhar.kit.modules.ai=true` |
+| `IllegalStateException: adhar-kit-batch is not on the classpath` from `getBatch()` | The starter does not bring `adhar-kit-batch` | Add `com.adhar.kit:adhar-kit-batch` |
+| No banner, and `/actuator/adhar` is missing | `adhar.kit.enabled=false`, or the starter is not on the runtime classpath | Remove the property or fix the dependency scope. With the switch off, the `AdharFacade` bean still exists, with every module enabled. |
+| `/actuator/adhar` returns `404` | Actuator is absent, or `adhar` is not in the exposure list | Add `spring-boot-starter-actuator` and include `adhar` |
+| `UnsupportedOperationException` from `getResilience()`, `resilient(...)` or `safe(...)` | No `CircuitBreakerRegistry` bean, usually because `adhar.resilience.enabled=false` | Re-enable the module, or define a `CircuitBreakerRegistry` bean |
+| `class file has wrong version 69.0` or `UnsupportedClassVersionError` | JDK older than 25 | Build and run on JDK 25 or later |
+| Log warns `No Dapr sidecar configured … run in memory` | `adhar-kit-dapr` auto-configures whenever it is on the classpath; the facade gate does not stop it | Expected without a sidecar. Set `adhar.dapr.enabled=false` to switch it off. |
 
 ## Next steps
 
-- [Framework Support](/adhar-kit/frameworks) — the same service on Quarkus, Micronaut, Helidon or Vert.x. The business code stays the same; only the injection differs.
-- [Concepts](/adhar-kit/concepts) — why the facade is gated and lazy, and how configuration precedence resolves.
+- [Concepts](/adhar-kit/concepts) — the two kinds of switch, lazy facades and configuration precedence.
+- [Framework Support](/adhar-kit/frameworks) — the same facade on Quarkus, Micronaut, Helidon and Vert.x, and what works there today.
 - [Modules Overview](/adhar-kit/modules/overview) — what else you can turn on.
-- [Building & Contributing](/adhar-kit/build) — build the kit from source if you need an unreleased fix.
+- [Building & Contributing](/adhar-kit/build) — build the kit from source.

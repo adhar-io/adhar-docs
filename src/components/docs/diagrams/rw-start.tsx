@@ -83,6 +83,23 @@ const ChangeLoop = () => (
   />
 );
 
+/* ---------------- quick start: how a local URL reaches a console ---------------- */
+const LocalAccess = () => (
+  <Flow
+    label="How a local console URL is served. The browser asks public DNS for a name under adhar.localtest.me and gets 127.0.0.1. It connects to host port 8443, which Kind maps to the Gateway's node port 30443. The Cilium Gateway adhar-gateway terminates TLS with the platform's self-signed certificate and matches the host name against the HTTPRoutes that enabled packages ship. The matching route sends the request to the service, and every UI signs you in through the Keycloak realm adhar."
+    caption="A URL works only when its package is enabled, Healthy and ships an HTTPRoute."
+    gap={40}
+    nodes={[
+      { title: "Browser", lines: ["<svc>.adhar.", "localtest.me:8443"], tone: "primary" },
+      { title: "Public DNS", lines: ["*.localtest.me", "→ 127.0.0.1"] },
+      { title: "Kind node", lines: ["host 8443 →", "node port 30443"] },
+      { title: "Gateway", lines: ["adhar-gateway", "TLS · HTTPRoutes"] },
+      { title: "Console UI", lines: ["Keycloak sign-in", "realm adhar"], tone: "accent" },
+    ]}
+    edges={[{ label: "resolves" }, { label: "connects" }, { label: "forwards" }, { label: "routes", tone: "primary" }]}
+  />
+);
+
 /* ---------------- installation: two kinds of host ---------------- */
 const InstallPaths = () => (
   <Split
@@ -96,7 +113,7 @@ const InstallPaths = () => (
         "8 GB+ given to the engine, 20 GB+ free disk",
         "The adhar CLI — nothing else",
         "adhar up — no config file",
-        "The first run pulls about 10 GB of images",
+        "The first run fills a local image cache",
       ],
       note: "URLs: https://<service>.adhar.localtest.me:8443",
     }}
@@ -134,8 +151,8 @@ const CloudPrep = () => (
 /* ---------------- configuration: one merged list, two readers ---------------- */
 const ClusterConfigReaders = () => (
   <Split
-    label="When a template and an environment both set the same clusterConfig key, the merged list holds both entries, template first. The provisioner walks the whole list and the last match wins, so the cluster is built with the environment's value. The adhar-cluster-spec ConfigMap, which the in-cluster autoscaler reads, takes the first match, so it records the template's value."
-    caption="Merged list: [nodeSize=s-2vcpu-4gb (template), nodeSize=s-8vcpu-16gb (environment)]"
+    label="When a template and an environment both set kubeVersion, the merged clusterConfig list holds both entries, template first. The provisioner walks the whole list and the last match wins, so the cluster runs the environment's version. The kubernetesVersion recorded in the adhar-cluster-spec ConfigMap, which the in-cluster autoscaler reads, takes the first exact-spelling match, so it records the template's version."
+    caption="Merged list: [kubeVersion=v1.36.0 (template), kubeVersion=v1.37.0 (environment)]"
     left={{
       heading: "Provisioner — last match wins",
       tone: "primary",
@@ -143,17 +160,17 @@ const ClusterConfigReaders = () => (
         "Builds the cluster spec",
         "Walks the whole list in order",
         "Ignores case and separators in key names",
-        "Result: s-8vcpu-16gb (the environment)",
+        "Result: v1.37.0 (the environment)",
       ],
     }}
     right={{
       heading: "adhar-cluster-spec — first match wins",
       tone: "accent",
       items: [
-        "ConfigMap the in-cluster autoscaler reads",
+        "Records kubernetesVersion for the autoscaler",
         "Takes the first entry for the key",
         "Matches the exact spelling only",
-        "Result: s-2vcpu-4gb (the template)",
+        "Result: v1.36.0 (the template)",
       ],
     }}
   />
@@ -195,21 +212,21 @@ const FirstService = () => (
 /* ---------------- first service: what one Application composes ---------------- */
 const AppEnvironments = () => (
   <Ladder
-    label="What one Application composes. The Application hello lives in adhar-system and belongs to the project adhar. The application-multienv composition creates a Kargo Warehouse named hello that watches the image repository, and one ArgoCD Application per project environment: adhar-hello-dev, adhar-hello-test and adhar-hello-prod, each syncing deploy/envs/<environment> into that environment's namespace. Dev and test are promoted automatically; prod is promoted only by a Release."
+    label="What one Application composes. The Application hello lives in adhar-system and belongs to the project adhar. The application-multienv composition creates a Kargo Warehouse named hello in the Kargo namespace adhar, which watches the image repository, and one ArgoCD Application per project environment: adhar-hello-dev, adhar-hello-test and adhar-hello-prod. Each syncs its environment's rendered branch stage/<environment> into that environment's namespace. The project's Kargo Stages promote dev and test automatically; prod only through a Release."
     heading={["object", "what it does"]}
-    caption="Environments belong to the project, so every application in it shares the same dev → test → prod chain."
+    caption="Kargo renders deploy/envs/<env> from main into stage/<env>; ArgoCD syncs that branch. Environments and Stages belong to the project."
     width={760}
     boxW={236}
     rungs={[
       { name: "Application hello", detail: "adhar-system · project adhar", tone: "primary",
         adds: ["The one object you declare.", "The application-multienv composition creates the rest"] },
-      { name: "Warehouse hello", detail: "Kargo",
-        adds: ["Watches the image repository for new builds"] },
-      { name: "adhar-hello-dev", detail: "deploy/envs/dev → ns dev",
+      { name: "Warehouse hello", detail: "Kargo · namespace adhar",
+        adds: ["Watches the image repository; each new build becomes Freight"] },
+      { name: "adhar-hello-dev", detail: "stage/dev → ns dev",
         adds: ["ArgoCD Application. Every new build is promoted here automatically"] },
-      { name: "adhar-hello-test", detail: "deploy/envs/test → ns test",
-        adds: ["ArgoCD Application. Promoted automatically after dev"] },
-      { name: "adhar-hello-prod", detail: "deploy/envs/prod → ns prod", tone: "accent",
+      { name: "adhar-hello-test", detail: "stage/test → ns test",
+        adds: ["ArgoCD Application. Promoted automatically once dev verifies.", "Empty until its first promotion"] },
+      { name: "adhar-hello-prod", detail: "stage/prod → ns prod", tone: "accent",
         adds: ["ArgoCD Application. Never promoted automatically:", "production changes arrive through a Release"] },
     ]}
   />
@@ -220,6 +237,7 @@ export const rw_start: Record<string, ComponentType> = {
   "nst-self-service": SelfService,
   "nst-up-stages": UpStages,
   "nst-change-loop": ChangeLoop,
+  "nst-local-access": LocalAccess,
   "nst-install-paths": InstallPaths,
   "nst-cloud-prep": CloudPrep,
   "nst-clusterconfig-readers": ClusterConfigReaders,

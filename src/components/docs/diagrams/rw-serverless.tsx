@@ -140,7 +140,62 @@ const BatchRunLifecycle = () => (
   />
 );
 
+/* What adhar-kit-batch's runner does in one run pod, in order. */
+const KitBatchRunner = () => (
+  <Ladder
+    label="The adhar-kit-batch runner in a Kubernetes run pod. It first checks that the JobRepository is JDBC, else exits 2. It resolves the run context from the environment and the downward API, and the job named by ADHAR_BATCH_JOB, else exits 2. It resolves parameters from ADHAR_BATCH_PARAMS, then the schedule, then declared defaults, and validates them against @AdharBatchJob, else exits 2. It then looks at the last execution of that identity: none, FAILED or STOPPED starts or restarts the job; COMPLETED exits 0 as skipped; ABANDONED exits 6; an execution still STARTED is recovered when its owner is dead, waited for while its owner terminates, or skipped as a duplicate. While the job runs, its lease is renewed and SIGTERM stops it at a chunk boundary. Afterwards it maps the outcome to an exit code and writes the termination summary."
+    heading={["stage", "what the runner does"]}
+    width={820}
+    boxW={170}
+    caption="Kubernetes replaces the pod; the runner decides whether this pod starts, resumes, skips or refuses the work."
+    rungs={[
+      { name: "Guard", detail: "JobRepository", adds: ["a JDBC JobRepository, never resourceless → else exit 2"], tone: "primary" },
+      { name: "Resolve", detail: "job + parameters", adds: ["ADHAR_BATCH_JOB; ADHAR_BATCH_PARAMS > schedule > defaults,", "validated against @AdharBatchJob → else exit 2"] },
+      { name: "Decide", detail: "last execution", adds: ["none / FAILED / STOPPED → start or restart · COMPLETED → exit 0 skipped", "ABANDONED → exit 6 · STARTED → recover, wait, or skip duplicate"] },
+      { name: "Run", detail: "chunks", adds: ["lease renewed while it runs; SIGTERM stops at the next chunk boundary"] },
+      { name: "Report", detail: "exit code", adds: ["exit code from the outcome; one-line JSON termination summary"], tone: "accent" },
+    ]}
+  />
+);
+
+/* How the kit wraps a Spring Batch job. */
+const KitBatchLayers = () => (
+  <Ladder
+    label="The parts of adhar-kit-batch around a Spring Batch job. You write the job, its steps and its readers, processors and writers. The kit adds: @AdharBatchJob and @JobParam to declare parameters; AdharSteps and FaultTolerance to build chunk steps with retry, skip and dead letters; restart-safe readers and writers for JDBC, PostgreSQL upserts, files and S3; remote partitioning over a JDBC channel; a JobRepository in your own PostgreSQL schema with Flyway migrations; the Kubernetes runner and exit codes; and an embedded scheduler with simple and Quartz engines for jobs that run inside a service."
+    heading={["layer", "what the kit gives you"]}
+    width={820}
+    boxW={170}
+    caption="Plain Spring Batch underneath: the kit adds the contract with the platform and the parts every job rewrites."
+    rungs={[
+      { name: "Declare", detail: "annotations", adds: ["@AdharBatchJob, @JobParam: the parameters a run accepts and its identity"], tone: "primary" },
+      { name: "Build", detail: "steps", adds: ["AdharSteps, FaultTolerance: chunk steps with retry, skip and dead letters"] },
+      { name: "Read / write", detail: "builders", adds: ["keyset paging, PostgreSQL upsert, CSV, JSON Lines, S3 objects"] },
+      { name: "Scale", detail: "partitioning", adds: ["RemotePartitioning, SqlKeyRangePartitioner: a manager and workers"] },
+      { name: "Persist", detail: "JobRepository", adds: ["your PostgreSQL, schema batch, Flyway-migrated; dead-letter table"] },
+      { name: "Run", detail: "runtime", adds: ["Kubernetes runner and exit codes, or the embedded simple / Quartz scheduler"], tone: "accent" },
+    ]}
+  />
+);
+
+/* The path the Deploy a Batch Job guide follows. */
+const BatchGuide = () => (
+  <Pipeline
+    label="What the Deploy a Batch Job guide builds. You create the importer job from the Spring Batch Job template; it gets a repository, a PostgreSQL database and a BatchJob per environment. Every push runs app-ci, which builds, tests (including the contract test between the code and the BatchJob), scans and signs the image. Kargo promotes the digest into dev, where the schedule is suspended and you start runs by hand. The same digest moves to test automatically, where the real schedule runs and the smoke run must pass. Prod takes it only through a Release, with priority critical."
+    caption="One signed image digest in every environment. You edit the job's code and deploy/; the platform does the rest."
+    stages={[
+      { name: "Create", detail: "Spring Batch Job", guarantee: "repository, database,\nBatchJob per env", tone: "primary" },
+      { name: "Build", detail: "app-ci on push", guarantee: "contract test,\nsigned image" },
+      { name: "dev", detail: "on demand", guarantee: "run, inspect,\nrestart by hand" },
+      { name: "test", detail: "automatic", guarantee: "real schedule\n+ smoke run" },
+      { name: "prod", detail: "Release", guarantee: "approved Freight,\npriority critical", tone: "accent" },
+    ]}
+  />
+);
+
 export const rw_serverless: Record<string, ComponentType> = {
+  "nsv-batch-guide": BatchGuide,
+  "nsv-kit-batch-runner": KitBatchRunner,
+  "nsv-kit-batch-layers": KitBatchLayers,
   "nsv-function-scaling": FunctionScaling,
   "nsv-function-guide": FunctionGuide,
   "nsv-batch-model": BatchModel,

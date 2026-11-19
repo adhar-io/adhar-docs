@@ -133,6 +133,7 @@ Each guide walks through one task end to end, with a check after every stage.
 7. [Upgrade the Platform](/docs/guides/upgrade-the-platform) — diff, converge, roll back
 8. [Preview Environments per Pull Request](/docs/guides/preview-environments) — one namespace per PR
 9. [Deploy a Function](/docs/guides/deploy-a-function) — a scale-to-zero function on the same delivery chain
+10. [Deploy a Batch Job](/docs/guides/deploy-a-batch-job) — a scheduled Spring Batch job with a deadline and a smoke run
 
 ### Background and reference
 

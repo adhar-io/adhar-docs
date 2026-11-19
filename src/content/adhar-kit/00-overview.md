@@ -7,90 +7,39 @@ path: "/adhar-kit"
 
 # Overview
 
-**Adhar Kit** is a **framework-agnostic enterprise microservices toolkit** for Java. It is a Maven multi-module library that puts 22 cross-cutting infrastructure concerns behind one consistent API, called `AdharFacade`. You write `adhar.safe(...)` once, and it means the same thing on Spring Boot, Quarkus, Micronaut, Helidon, and Vert.x.
-
-> *A comprehensive, framework-agnostic enterprise microservices toolkit for Spring Boot, Quarkus, Micronaut, Helidon, and Vert.x.*
+**Adhar Kit** is a set of Java libraries for the cross-cutting parts of a service: logging, metrics, tracing, resilience, caching, security, persistence, messaging and more. Each concern is a separate Maven module with one `*Facade` class, and one object, `AdharFacade`, gives you all of them. This page explains what the kit is and where to start.
 
 ## At a glance
 
 | | |
 |---|---|
-| What it is | A Maven library (29 modules) you add to a Java service |
-| groupId | `com.adhar.kit` |
-| Entry point | `com.adhar.kit.starter.AdharFacade` |
-| Java | 25 or later (enforced by the build) |
-| Maven | 3.9+ to consume, 3.8+ enforced when building the kit |
-| Frameworks | Spring Boot 4.0+ · Quarkus 3.21+ · Micronaut 4.8+ · Helidon 4.2+ · Vert.x 4.5+ |
+| What it is | A Maven reactor of 29 artifacts: 27 library modules, `adhar-kit-bom` and `adhar-kit-parent` |
+| Coordinates | `com.adhar.kit:<artifactId>:0.1.0` |
+| Entry point | `com.adhar.kit.starter.AdharFacade`, from `adhar-kit-starter` |
+| Java | 25 or later — the artifacts are Java 25 bytecode |
+| Spring Boot | 4.x, `status:complete` — the starter auto-configures everything |
+| Quarkus, Micronaut, Helidon, Vert.x | `status:in-progress` — adapters hand out the facade; see [Framework Support](/adhar-kit/frameworks) |
 | License | Apache 2.0 |
 | Source | [github.com/adhar-io/adhar-kit](https://github.com/adhar-io/adhar-kit) |
 
-## The problem it solves
-
-Look at a typical microservice constructor. It takes a `MeterRegistry`, a `Tracer`, a `CircuitBreakerRegistry`, a cache template, a Kafka template, a JPA repository and a security context accessor. That is six or seven infrastructure collaborators before you write a single line of domain logic.
-
-Then the next service does the same thing again, slightly differently. Then someone moves a service to Quarkus, and all of it is rewritten against different types.
-
-Adhar Kit targets that cost: **the same cross-cutting concerns, re-implemented for every service and again for every framework.** This causes three problems.
-
-- **Inconsistency.** Retry policy, metric naming, log structure and audit coverage drift between teams, because each service wires them by hand.
-- **Framework lock-in.** "Framework-agnostic" libraries usually still leak framework types into your business code. A migration becomes a rewrite.
-- **Boilerplate density.** The interesting logic in `createOrder` is four lines. The plumbing around it is forty.
-
-## The AdharFacade idea
-
-Adhar Kit solves all three with one object. `AdharFacade` is a framework-neutral class, with no DI annotations and no compile-time coupling to any framework. It gives you every module through a sub-facade accessor. It also offers one-call shortcuts for the combinations you use all the time.
-
-There are 23 accessors: 22 for gated modules (`getMetrics()`, `getSecurity()`, `getAi()`, …) and `getUtils()`, which is never gated. A gated module is one you can switch on or off. Each sub-facade is built lazily the first time you access it, and only if its module is enabled. So a service that never touches AI never pays for the AI module.
-
-The shortcuts sit above those accessors:
-
-- `adhar.safe(name, work, fallback)` gives you tracing, a circuit breaker and a fallback in one call.
-- `adhar.cached(cache, key, type, loader)` is the whole cache-aside pattern.
-- `adhar.transactional(...)`, `adhar.publish(...)`, `adhar.hasPermission(...)` and `adhar.chat(...)` each turn a collaborator and its setup code into one method call.
+## How it works
 
 ```diagram
 kit-facade-layers
 ```
 
-The key line in that diagram is the adapter layer. Your code sits above it and never names a framework type. Only the adapter below it does. That is what makes the code truly portable.
+- **One facade per module.** `MetricsFacade`, `CacheFacade`, `SecurityFacade`, `CircuitBreakerFacade` and the rest are each a module's public API. You can use a module on its own, without the starter.
+- **One facade over all of them.** `AdharFacade` has an accessor per module (`getMetrics()`, `getCache()`, `getAi()`, …) and shortcuts that combine several, such as `safe(...)` (traced, timed, circuit breaker and fallback) and `cached(...)` (cache-aside).
+- **Gated and lazy.** On Spring Boot, `adhar.kit.modules.<id>` decides which accessors work. A sub-facade is built on first use, and a disabled one throws instead of starting.
+- **Framework-neutral.** `AdharFacade` is a plain class with no DI annotations. A thin adapter per framework hands it to the container.
 
-## What is in the box
-
-Twenty-nine Maven modules ship from the root `pom.xml`. There are 27 production modules, plus `adhar-kit-bom` for version management and `adhar-kit-parent` for build configuration.
-
-| Group | Modules |
-|---|---|
-| Foundation | commons, core, config, logging, metrics, tracing, cache, resilience, health, persistence |
-| Integration | messaging, grpc, graphql, notification, docs |
-| Enterprise | security, event-sourcing, analytics, batch, ai, dapr, kubernetes, perf-profiler |
-| Tooling | starter, maven-plugin, test-commons, rewrite, bom, parent |
-
-In practice, that gives you:
-
-- Resilience4j circuit breakers, retries, rate limiters and bulkheads
-- OAuth2/OIDC, JWT, RBAC and audit logging
-- OpenTelemetry tracing, and Micrometer metrics with Prometheus export
-- JPA with multi-tenancy, auditing, soft delete and a transactional outbox
-- Kafka and RabbitMQ messaging, where every event is a CloudEvents 1.0 envelope
-- an event store with CQRS and projections
-- multi-provider LLM access
-
-The [Modules overview](/adhar-kit/modules/overview) is the full catalogue.
-
-## Relationship to the Adhar Platform
-
-Adhar Kit is the **application-side library**. The [Adhar Platform](/docs) is the **infrastructure it can run on**: Kubernetes, Dapr, Prometheus and Grafana, Vault, Kafka, ArgoCD, Crossplane.
-
-They are designed together, but they are not coupled. The kit runs fine on a laptop, on plain Docker, or on somebody else's Kubernetes cluster. The platform runs fine under services that have never heard of the kit.
-
-When you pair them, the kit already knows the platform's conventions. So `adhar.secret(...)`, `adhar.isInKubernetes()` and the Dapr building blocks connect to real platform services, with no custom wiring.
-
-Framework detection is automatic. `FrameworkDetector` checks the classpath on first use and caches the result. You can read it back with `adhar.currentFramework()`.
+[Concepts](/adhar-kit/concepts) explains each idea in detail.
 
 ## A taste
 
 ```java
 import com.adhar.kit.starter.AdharFacade;
+import org.springframework.stereotype.Service;
 
 @Service
 public class OrderService {
@@ -99,11 +48,11 @@ public class OrderService {
     public OrderService(AdharFacade adhar) { this.adhar = adhar; }
 
     public Order createOrder(OrderRequest request) {
-        if (!adhar.hasPermission("order:create")) throw new ForbiddenException();
+        if (!adhar.hasPermission("order:create")) throw new SecurityException("order:create");
         adhar.logInfo("Creating order for user {}", adhar.currentUserId());
         adhar.count("orders.created");
 
-        // safe() = traced + resilient + fallback in one call
+        // traced + timed + circuit breaker + fallback in one call
         return adhar.safe("create-order",
             () -> adhar.transactional(() -> {
                 Order order = adhar.save(new Order(adhar.currentUserId()));
@@ -115,17 +64,39 @@ public class OrderService {
 }
 ```
 
-That is nine lines of behaviour that would otherwise need six injected collaborators. The same nine lines compile and run on all five frameworks.
+`Order`, `OrderRequest` and `queueForLater` are your own code. One constructor parameter replaces a metrics registry, a tracer, a circuit-breaker registry, a repository, a message template and a security accessor. `save` and `transactional` need a configured database.
+
+## What is in the box
+
+| Group | Modules |
+|---|---|
+| Foundation | commons, core, config, logging, metrics, tracing, cache, resilience, health, persistence |
+| Integration | messaging, grpc, graphql, notification, docs |
+| Platform and advanced | security, event-sourcing, analytics, batch, ai, dapr, kubernetes, perf-profiler |
+| Tooling | starter, maven-plugin, test-commons, rewrite |
+| Build | bom, parent |
+
+The [Modules Overview](/adhar-kit/modules/overview) describes each module, its toggle and its dependencies.
+
+## Three ways to add it
+
+| You want | Add | Read |
+|---|---|---|
+| Everything behind `AdharFacade` | `adhar-kit-starter` | [Quick Start](/adhar-kit/quickstart) |
+| Only some modules | `adhar-kit-bom` import, then each module | [Modules Overview](/adhar-kit/modules/overview#picking-only-what-you-need) |
+| The kit's build defaults for a new service | `adhar-kit-parent` as your parent | [Quick Start](/adhar-kit/quickstart#choose-how-to-depend-on-the-kit) |
+
+## Relationship to the Adhar Platform
+
+Adhar Kit is the application-side library; the [Adhar Platform](/docs) is the infrastructure it can run on. Neither requires the other: the kit runs on a laptop or any Kubernetes cluster, and the platform runs services that never use the kit. The platform's Spring Boot templates inherit `adhar-kit-parent` and depend on `adhar-kit-starter`, so a scaffolded service starts with the kit wired in.
 
 ## Where to go next
 
-| You want to… | Read |
-|---|---|
-| Get a service running with the kit | [Quick Start](/adhar-kit/quickstart) |
-| See how the same code runs on your framework | [Framework Support](/adhar-kit/frameworks) |
-| Understand the facade, gating and config precedence | [Concepts](/adhar-kit/concepts) |
-| Browse the module catalogue and pick dependencies | [Modules Overview](/adhar-kit/modules/overview) |
-| Build from source or contribute a change | [Building & Contributing](/adhar-kit/build) |
-| Check a specific question | [FAQ](/adhar-kit/faq) |
+Read the Get Started pages in order:
 
-If you are new, read [Concepts](/adhar-kit/concepts) after [Quick Start](/adhar-kit/quickstart). The module pages assume you know the facade model it describes.
+1. [Quick Start](/adhar-kit/quickstart) — a running Spring Boot service that uses `AdharFacade`.
+2. [Concepts](/adhar-kit/concepts) — facades, gates, auto-configuration and configuration precedence.
+3. [Framework Support](/adhar-kit/frameworks) — what each non-Spring runtime gets today.
+4. [Building & Contributing](/adhar-kit/build) — build the kit from source and add a module.
+
+Then use the [Modules Overview](/adhar-kit/modules/overview) and the [FAQ](/adhar-kit/faq) as reference.

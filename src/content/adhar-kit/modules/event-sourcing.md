@@ -7,127 +7,42 @@ path: "/adhar-kit/modules/event-sourcing"
 
 # Event Sourcing
 
-A row in a table tells you what something *is*. It has already thrown away how it got there. Sometimes the history is the point: the audit trail, the temporal query, or the need to "replay this differently". For those cases, `adhar-kit-event-sourcing` **makes the append-only event stream the source of truth and derives everything else from it**. Current state comes from replay, read models from projection, and cross-service workflows from sagas.
+`adhar-kit-event-sourcing` makes an append-only event stream the source of truth for an aggregate. You get an event store (in-memory, JPA or Dapr) with optimistic version checks, an `AggregateRoot` base class, a repository that replays and snapshots, projections, catch-up subscriptions, upcasters and a step-based saga manager. Use it when the history is the record you must keep, or when reads and writes need different models.
 
 ## At a glance
 
 | | |
 | --- | --- |
 | Artifact | `com.adhar.kit:adhar-kit-event-sourcing` |
-| Built on | Spring Data JPA (default store), Jackson; optional Kafka, Dapr |
-| Entry points | `EventStore` (or `adhar.getEventStore()`), `AggregateRoot`, `AggregateRepository`, `Projection` |
-| Config prefix | `adhar.event-sourcing` |
-| Use it when | History is the record you must keep, or reads and writes want genuinely different models |
+| Module toggle | `adhar.kit.modules.event-sourcing` (default `false`) gates `adhar.getEventStore()` |
+| Module switch | `adhar.event-sourcing.enabled` (default `true`) gates `EventSourcingAutoConfiguration` |
+| Entry points | `AggregateRepository`, `RetryingAggregateRepository`, `EventStore`, `ProjectionManager`, `SagaManager` (Spring beans); `EventSourcingFacade` |
+| Dependencies | Required: `adhar-kit-commons`, `jackson-databind`. Optional: `spring-boot-starter-data-jpa` (JPA store), `spring-kafka` (Kafka bus), `adhar-kit-dapr` (Dapr store and bus) |
+| Frameworks | Spring Boot auto-configures every bean. Elsewhere, construct the classes yourself; they are plain Java |
 
 ## How it works
 
-A command loads an aggregate by replaying its events. It then decides what to do and appends new events. The append is the only write. Everything downstream reacts to what was appended: the read model, the saga, the other service.
+A command loads an aggregate by replaying its events, decides, and emits new events. `AggregateRepository.save` appends them under an expected version, then publishes each one to the `EventBus`, which feeds projections, sagas and catch-up subscriptions.
 
 ```diagram
 kit-event-sourcing-flow
 ```
 
-Three invariants hold the model together:
+Three rules hold the model together:
 
-1. **Events are immutable and append-only.** You never update an event. Instead, you append a compensating one.
-2. **Version is the concurrency token.** `saveEvents(id, events, expectedVersion)` compares `expectedVersion` against the aggregate's current version. If another writer got there first, it throws `ConcurrencyException(aggregateId, expected, actual)`.
-3. **Snapshots and projections are derived, never authoritative.** Both can be deleted and rebuilt from the stream.
+1. **Events are immutable and append-only.** To undo, append a compensating event.
+2. **The version is the concurrency token.** `saveEvents(id, events, expectedVersion)` throws `ConcurrencyException(aggregateId, expected, actual)` when another writer got there first.
+3. **Snapshots and projections are derived.** You can delete and rebuild both from the stream.
 
-You choose the store in configuration:
+`event-store-type` picks the store. The default is `in-memory`. `jpa` falls back to in-memory when the application has no `EntityManagerFactory`, and an unrecognised value creates no `EventStore`, so the context fails to start.
 
-- `jpa` — the default. It is the only store where snapshots, projection checkpoints and saga state are also durable.
-- `in-memory` — for tests.
-- `dapr`.
-
-## The append path: how concurrency control actually works
-
-This is optimistic, version-checked concurrency. But **the strength of the check differs sharply by store**, and that difference decides what you can safely run.
-
-| Store | Mechanism | Safe against |
+| Store | Durable parts | Concurrency check |
 | --- | --- | --- |
-| `jpa` | Reads the whole stream, takes the last row's `version`, compares, then `saveAll` | A single-threaded writer. **Nothing else** |
-| `in-memory` | Check-and-append inside a `synchronized` block on the per-aggregate list | Concurrent threads in one JVM |
-| `dapr` | In-process version compare **plus** an ETag conditional write (`Concurrency.FIRST_WRITE`) over the whole stream document | Concurrent writers across replicas, to the extent the state component supports ETags |
+| `in-memory` (default) | Nothing; lost on restart | `synchronized` per-aggregate check-and-append. Correct within one JVM |
+| `jpa` | Events, snapshots, projection checkpoints, saga state | Read the stream, compare the last `version`, `saveAll`. **A race:** no lock, no transaction, no unique constraint on `(aggregate_id, version)` |
+| `dapr` | Events only (one document per aggregate, key `es:<aggregateId>`) | Version compare plus an ETag conditional write. Safe across replicas when the state component supports ETags |
 
-> **The JPA store's check is a read-then-write race.** The SELECT and the INSERT are in separate transactions. The class is not `@Transactional`, there is no pessimistic lock, and the `domain_events` table declares **no unique constraint on `(aggregate_id, version)`**. Two writers can both read version 4, both pass the check, and both insert version 5. Neither raises `ConcurrencyException`, so the retry wrapper never sees it. Until that constraint exists, serialise writes per aggregate yourself. Wrap the command in your own `@Transactional` with `SERIALIZABLE` isolation, or add the unique index by hand:
->
-> ```sql
-> CREATE UNIQUE INDEX uq_domain_events_aggregate_version
->     ON domain_events (aggregate_id, version);
-> ```
->
-> No DDL, Flyway or Liquibase script ships with the module. The tables come from Hibernate's `ddl-auto` in your application.
-
-The JPA store also reads the **entire** aggregate stream on every append, only to learn the last version. So append cost grows linearly with stream length, regardless of snapshots. Keep streams short.
-
-### What `executeWithRetry` retries, and what it does not
-
-```java
-public <T extends AggregateRoot> T executeWithRetry(
-        String aggregateId, Class<T> type, Consumer<T> command)
-```
-
-It loops up to `retry-max-attempts` times. Each attempt **reloads the aggregate from the store**, applies your `Consumer`, and saves.
-
-- **Retries exactly one thing: `ConcurrencyException`.** Nothing else. These all propagate on the first attempt: a JPA `DataAccessException`, a business exception from your command, or the `IllegalStateException` thrown when the aggregate has no events.
-- **There is no backoff.** Attempts run in a tight loop with no sleep and no jitter. So a hot aggregate produces a thundering retry rather than a staggered one.
-- **On exhaustion it rethrows the last `ConcurrencyException` as-is**, with the store's original stack trace and no "retries exhausted" wrapper.
-- **Your command runs again on every attempt.** Anything it does beyond mutating the aggregate happens up to `retry-max-attempts` times. That includes sending mail, calling an API, or generating a random id. Keep the `Consumer` free of effects on the outside world.
-
-## Events, publication and ordering
-
-`AggregateRepository.save` writes to the store **and then** publishes each event to the `EventBus` in a loop. There is no transaction and no outbox. A failure between the two loses the notification, while the events stay stored. If subscribers must not miss anything, drive them from the stream (a `CatchUpSubscription` or a rebuild), not only from live bus traffic.
-
-`expectedVersion` is computed as `aggregate.getVersion() − uncommittedEvents.size()`. `AggregateRoot.applyEvent` sets `version = event.version()`. It does **not** increment. The framework never assigns version numbers and never checks for gaps. The code that constructs each `DomainEvent` owns that.
-
-The `EventBus` implementations behave differently, and the differences matter:
-
-- **`SimpleEventBus`** dispatches synchronously on the publishing thread. So a projection runs inside your command, before `save` returns. Each subscriber call is wrapped in its own `try/catch (Exception)`, so one throwing subscriber does not stop the others. But an `Error` aborts the loop.
-- **`KafkaEventBus`** publishes keyed by `aggregateId`, which gives per-aggregate ordering. It consumes through a `@KafkaListener`. The send future is not awaited, so publish failures go unnoticed. `subscribe` is local-only and does not create a consumer.
-- **`DaprEventBus`** publishes with a `partitionKey` header but has **no inbound listener**. Wire a Dapr subscription and call `dispatch(message)` yourself. Unlike the other two, its dispatch has **no per-handler try/catch**. One throwing subscriber aborts the rest for that event.
-
-`EventBus` has no `unsubscribe` anywhere. If you register a projection twice, the first subscription stays live forever.
-
-## Snapshots
-
-Only `AggregateRepository.save` writes a snapshot, and only when the version crosses a multiple of `snapshot-interval`. This is a boundary test, not `version % interval == 0`. So a batch that jumps from 98 to 103 with an interval of 100 still snapshots.
-
-Both hooks throw by default. To opt in, override `createSnapshotState()` and `restoreFromSnapshot(state, version)`. The payload is an opaque `String` that you serialise yourself. The module provides no snapshot serializer.
-
-`InMemorySnapshotStore` keeps only the latest snapshot per aggregate. `JpaSnapshotStore` appends a new row every time and **never prunes**, so the `aggregate_snapshots` table grows without limit. `findLatest` orders by `version` descending.
-
-## Projections and rebuild
-
-`ProjectionManager.register` subscribes the projection to the bus for each of its `interestedEventTypes()`. So dispatch works however the bus works. With `SimpleEventBus`, that means synchronous on the publishing thread. There is no executor and no async anywhere in `ProjectionManager`.
-
-The checkpoint advances only when `handle` returns normally. **A failing event is logged at error and silently dropped**, with no retry and no dead-letter. The position stays behind. Fix the handler, then rebuild.
-
-`rebuild(name, eventStore)` resets the checkpoint to zero and replays `getAllEvents()` from the beginning. Know three things before you call it:
-
-- **It does not clear the read model.** `Projection` has no reset hook at all. Every event is re-applied on top of whatever is already there. That is fine for idempotent upserts, but wrong for counters and append-style projections. **Truncate the read model yourself first.**
-- **It is synchronous and loads the whole global stream into a `List`.** There is no paging and no streaming.
-- **The projection stays subscribed to the live bus throughout.** Live events interleave with replayed ones and can be applied twice. There is no pause.
-
-The two counters also count different things. Live dispatch advances only for *interested* events, and rebuild advances for *every* event. So the numbers are not comparable.
-
-`InMemoryProjectionCheckpointStore` is per-JVM and lost on restart. `JpaProjectionCheckpointStore` is durable and shared. But its read-modify-write has no version column and no transaction, so two replicas can overwrite each other's position.
-
-## The `dapr` store type persists only the stream
-
-With `event-store-type: dapr`, exactly one thing is durable: the event stream. It is held as one whole-stream document per aggregate, under the key `es:<aggregateId>`. The three supporting stores fall back to in-memory variants. Each is `@ConditionalOnMissingBean`, so your own bean wins:
-
-| Component | Under `dapr` |
-| --- | --- |
-| `EventStore` | `DaprEventStore` — durable, ETag-guarded |
-| `SnapshotStore` | `InMemorySnapshotStore` — **lost on restart** |
-| `ProjectionCheckpointStore` | `InMemoryProjectionCheckpointStore` — **lost on restart, per-replica** |
-| `SagaStateStore` | `InMemorySagaStateStore` — **lost on restart, so in-flight sagas are orphaned** |
-
-A second limitation follows from storing the whole stream under one key. `DaprEventStore` does not implement `getAllEvents()`, so the interface default throws `UnsupportedOperationException`. **`ProjectionManager.rebuild` and `CatchUpSubscription.start` cannot be used with this store type.**
-
-The `EventStore` bean also requires a `DaprFacade` bean. Without one, no `EventStore` is created at all, but the three in-memory fallbacks still are. The context then fails on a missing dependency rather than with a clear message.
-
-## Install
+## Add it
 
 ```xml
 <dependency>
@@ -137,139 +52,163 @@ The `EventStore` bean also requires a `DaprFacade` bean. Without one, no `EventS
 </dependency>
 ```
 
-## Key APIs
+For durable storage, also add `spring-boot-starter-data-jpa` and a datasource, and set `adhar.event-sourcing.event-store-type=jpa`.
 
-- **`DomainEvent`** — a record with `eventId`, `aggregateId`, `aggregateType`, `version` (int), `eventType`, `payload` (serialized, typically JSON), `occurredAt`. No validation; nulls are accepted.
-- **`EventStore`** — `saveEvents(aggregateId, events, expectedVersion)`, `getEvents(aggregateId)`, `getEventsAfterVersion(aggregateId, version)`, and `getAllEvents()` where supported.
-- **`AggregateRoot`** — extend it and implement `protected abstract void apply(DomainEvent event)`. You get `getAggregateId()`, `getVersion()`, `applyEvent(event)`, `getUncommittedEvents()`, `markEventsAsCommitted()`, and the snapshot hooks. **Not thread-safe.** The uncommitted list is a plain `ArrayList`, and the fields are non-volatile. One aggregate instance belongs to one command on one thread.
-- **`AggregateRepository`** — `load(aggregateId, Class<T>)` (needs a no-arg constructor; throws `IllegalStateException` when the stream is empty and no snapshot restored) and `save(aggregate)`. **`RetryingAggregateRepository.executeWithRetry`** wraps the pair.
-- **`Projection`** — `getName()`, `interestedEventTypes()`, `handle(event)`. `ProjectionManager` does `register(projection)` and `rebuild(name, eventStore)`.
-- **`EventUpcaster`** / **`UpcasterChain`** — `supports(eventType, version)` and `upcast(event)`. The chain re-runs passes until nothing changes, up to `upcasters.size() + 1` passes. An upcaster that always reports `supports` uses up all passes and stops silently.
-- **`CatchUpSubscription`** — `start()` / `start(fromPosition)`, `stop()`, `getPosition()`, `getState()` (`NEW`, `CATCHING_UP`, `LIVE`, `STOPPED`). `start()` replays **synchronously on the calling thread**. Live events that arrive during replay are buffered, then drained on the switch to `LIVE`. `stop()` never removes the bus subscription.
+## Use it
 
-> **Upcasters run on read only.** The event stores invoke `UpcasterChain.apply`. The buses and `ProjectionManager` never do. So a projection fed **live** from the bus sees raw events, while the *same* projection rebuilt from the store sees upcast ones. Keep `handle` tolerant of both shapes. Or, after a schema change, rebuild rather than relying on live dispatch.
+### An aggregate
 
-## A complete write side
+Extend `AggregateRoot`, give it a no-arg constructor, and change state only in `apply`. **`applyEvent` does not set the aggregate id**, so set it in `apply`; otherwise a loaded aggregate saves under a `null` id. `applyEvent` sets `version = event.version()` and never increments it, so each event you create carries `getVersion() + 1`.
 
 ```java
-package com.example.orders;
-
 import com.adhar.kit.eventsourcing.core.AggregateRoot;
 import com.adhar.kit.eventsourcing.core.DomainEvent;
-import com.adhar.kit.eventsourcing.repository.RetryingAggregateRepository;
-import org.springframework.stereotype.Service;
 import java.time.Instant;
 import java.util.UUID;
 
 public class Order extends AggregateRoot {
-    private OrderStatus status;
+    private String status;
 
     public void cancel(String reason) {
-        if (status == OrderStatus.SHIPPED) throw new IllegalStateException("already shipped");
-        applyEvent(new DomainEvent(UUID.randomUUID().toString(), getAggregateId(),
-            "Order", getVersion() + 1, "OrderCancelled",
-            "{\"reason\":\"" + reason + "\"}", Instant.now()));
+        if ("SHIPPED".equals(status)) throw new IllegalStateException("already shipped");
+        applyEvent(new DomainEvent(UUID.randomUUID().toString(), getAggregateId(), "Order",
+                getVersion() + 1, "OrderCancelled", "{\"reason\":\"" + reason + "\"}", Instant.now()));
     }
 
     @Override
     protected void apply(DomainEvent event) {
+        setAggregateId(event.aggregateId());
         switch (event.eventType()) {
-            case "OrderCreated"   -> this.status = OrderStatus.NEW;
-            case "OrderCancelled" -> this.status = OrderStatus.CANCELLED;
+            case "OrderCreated" -> status = "NEW";
+            case "OrderCancelled" -> status = "CANCELLED";
             default -> { }
         }
     }
 }
+```
+
+`AggregateRoot` is not thread-safe. One instance belongs to one command on one thread.
+
+### A command with retry
+
+```java
+import com.adhar.kit.eventsourcing.repository.RetryingAggregateRepository;
+import org.springframework.stereotype.Service;
 
 @Service
 public class OrderService {
+    private final RetryingAggregateRepository orders;
 
-    private final RetryingAggregateRepository repository;
-
-    public OrderService(RetryingAggregateRepository repository) {
-        this.repository = repository;
-    }
+    public OrderService(RetryingAggregateRepository orders) { this.orders = orders; }
 
     public void cancel(String orderId, String reason) {
-        // the command runs again on every attempt - keep it free of external side effects
-        repository.executeWithRetry(orderId, Order.class, order -> order.cancel(reason));
+        orders.executeWithRetry(orderId, Order.class, order -> order.cancel(reason));
     }
 }
 ```
 
-The projection side is an ordinary bean implementing `Projection`, registered with `ProjectionManager.register(...)`:
+`executeWithRetry` reloads the aggregate, runs your command and saves, up to `retry-max-attempts` times:
+
+- It retries **only** `ConcurrencyException`. Anything else propagates on the first attempt.
+- There is no backoff between attempts.
+- On exhaustion it rethrows the last `ConcurrencyException`.
+- **Your command runs again on every attempt.** Keep it free of external side effects (mail, API calls).
+
+`AggregateRepository.load(id, type)` throws `IllegalStateException` when the stream is empty and no snapshot was restored.
+
+### A projection
 
 ```java
-@Component
+import com.adhar.kit.eventsourcing.core.DomainEvent;
+import com.adhar.kit.eventsourcing.projection.Projection;
+import java.util.Set;
+
 public class OrderSummaryProjection implements Projection {
-    private final OrderSummaryRepository summaries;
-
-    public OrderSummaryProjection(OrderSummaryRepository summaries) { this.summaries = summaries; }
-
     @Override public String getName() { return "order-summary"; }
-
-    @Override public Set<String> interestedEventTypes() {
-        return Set.of("OrderCreated", "OrderCancelled");
-    }
-
+    @Override public Set<String> interestedEventTypes() { return Set.of("OrderCreated", "OrderCancelled"); }
     @Override public void handle(DomainEvent event) {
-        // must be idempotent: a rebuild re-applies every event over existing state
-        summaries.upsert(event.aggregateId(), event.eventType());
+        // idempotent upsert: a rebuild re-applies every event over existing state
     }
+}
+```
+
+Projection beans are not discovered. Register each one: `projectionManager.register(new OrderSummaryProjection())`. Rebuild with `projectionManager.rebuild("order-summary", eventStore)`.
+
+### A saga
+
+```java
+import com.adhar.kit.eventsourcing.saga.SagaDefinition;
+import com.adhar.kit.eventsourcing.saga.SagaStep;
+
+sagaManager.register(SagaDefinition.builder("checkout")
+        .startEventType("OrderPlaced")
+        .step(SagaStep.of("reserve-stock", ctx -> stock.reserve(ctx.correlationId()),
+                                           ctx -> stock.release(ctx.correlationId())))
+        .step(SagaStep.builder("charge")
+                .action(ctx -> payments.request(ctx.correlationId()))
+                .awaitEventType("PaymentCaptured")
+                .failureEventType("PaymentFailed")
+                .build())
+        .build());
+```
+
+A step with `awaitEventType` pauses until that event arrives; otherwise the next step runs at once. Events correlate on their `aggregateId`; an instance with a `null` correlation id matches every event. On failure (the action throws, or `failureEventType` arrives) the manager compensates earlier steps in reverse. The failing step itself is not compensated. A compensation that throws does not stop the rest, and the final status is `FAILED` instead of `COMPENSATED`.
+
+### Snapshots and upcasters
+
+- **Snapshots:** override `createSnapshotState()` and `restoreFromSnapshot(state, version)`; both throw by default, which disables snapshotting for that type. The state is a `String` you serialise yourself. `AggregateRepository.save` writes one when the version crosses a multiple of `snapshot-interval`.
+- **Upcasters:** publish `EventUpcaster` beans (`supports(eventType, version)`, `upcast(event)`). The stores apply the `UpcasterChain` on read. The bus never does, so a projection fed live sees raw events while the same projection rebuilt from the store sees upcast ones.
+
+### The facade
+
+`EventSourcingFacade` offers `saveEvents`, `getEvents`, `getEventsAfterVersion`, `publish`, `subscribe`, `publishCloudEvent`, `loadAggregate(id, Supplier)`, `saveAggregate` and `health()`. **`adhar.getEventStore()` returns `EventSourcingFacade.getInstance()`, which has no store:** `saveEvents` and `publish` throw `IllegalStateException`, and reads return empty lists. On Spring Boot, inject the beans above, or build a working facade and install it:
+
+```java
+@Bean
+AdharFacadeCustomizer eventStoreFacade(EventStore store, EventBus bus, AggregateRepository repo) {
+    return facade -> facade.setEventStore(new EventSourcingFacade(store, bus, repo));
 }
 ```
 
 ## Configuration
 
-| Property | Purpose | Default |
-| --- | --- | --- |
-| `adhar.event-sourcing.enabled` | Master switch | `true` |
-| `adhar.event-sourcing.event-store-type` | `jpa`, `in-memory`, or `dapr` | `jpa` |
-| `adhar.event-sourcing.snapshot-interval` | Version boundary that triggers a snapshot | `100` |
-| `adhar.event-sourcing.retry-max-attempts` | `ConcurrencyException` retries, no backoff | `3` |
-| `adhar.event-sourcing.kafka.enabled` | Use `KafkaEventBus` instead of in-process | `false` |
-| `adhar.event-sourcing.kafka.topic` | Topic events are published to | `adhar.event-sourcing.events` |
-| `adhar.event-sourcing.kafka.group-id` | Consumer group | `adhar-event-sourcing` |
-| `adhar.event-sourcing.dapr.enabled` | Dapr event bus (set `false` to fall back to `SimpleEventBus`) | `true` |
-| `adhar.event-sourcing.dapr.pubsub-name` | Dapr pub/sub component | `pubsub` |
-| `adhar.event-sourcing.dapr.topic` | Dapr topic | `adhar.event-sourcing.events` |
-| `adhar.event-sourcing.dapr.state-store` | Dapr state store for the stream | `statestore` |
+| Property | Type | Default | Description |
+| --- | --- | --- | --- |
+| `adhar.event-sourcing.enabled` | boolean | `true` | Registers the module's beans |
+| `adhar.event-sourcing.event-store-type` | string | `in-memory` | `in-memory`, `jpa` or `dapr` |
+| `adhar.event-sourcing.snapshot-interval` | int | `100` | Version boundary that triggers a snapshot; `0` disables |
+| `adhar.event-sourcing.retry-max-attempts` | int | `3` | Attempts in `executeWithRetry`; must be at least 1 |
+| `adhar.event-sourcing.kafka.enabled` | boolean | `false` | Use `KafkaEventBus`; needs `spring-kafka` and a `KafkaTemplate` bean |
+| `adhar.event-sourcing.kafka.topic` | string | `adhar.event-sourcing.events` | Topic events are published to and consumed from |
+| `adhar.event-sourcing.kafka.group-id` | string | `adhar-event-sourcing` | Consumer group of the bus listener |
+| `adhar.event-sourcing.dapr.enabled` | boolean | `true` | Use `DaprEventBus` when `adhar.dapr.enabled=true` and a `DaprFacade` bean exists; `false` falls back to `SimpleEventBus` |
+| `adhar.event-sourcing.dapr.pubsub-name` | string | `pubsub` | Dapr pub/sub component |
+| `adhar.event-sourcing.dapr.topic` | string | `adhar.event-sourcing.events` | Dapr topic |
+| `adhar.event-sourcing.dapr.state-store` | string | `statestore` | Dapr state store for the `dapr` event store |
 
-An unrecognised `event-store-type` matches no configuration. The context then fails on a missing `EventStore` bean rather than with a clear message. The JPA configuration also carries `@EnableJpaRepositories(basePackages = "com.adhar.kit.eventsourcing")`, which can interfere with your own repository scanning.
+Bus selection: an enabled Kafka bus wins, then Dapr, then the in-process `SimpleEventBus`. Every bean is `@ConditionalOnMissingBean`, so your own `EventStore`, `EventBus`, `SnapshotStore`, `ProjectionCheckpointStore` or `SagaStateStore` replaces the default.
 
-> **There are no Micrometer metrics and no health indicator in this module.** The only ways to observe it are SLF4J logging and `EventSourcingFacade.health()`. That method returns `enabled`, `eventStoreType` and `eventBusType`. To see append rates or conflict counts, instrument the write path yourself with [metrics](/adhar-kit/modules/metrics).
+With `jpa`, the module enables `@EnableJpaRepositories(basePackages = "com.adhar.kit.eventsourcing")` and adds its entities to the scanned packages. The tables (`domain_events`, `aggregate_snapshots`, `projection_checkpoints`, `saga_instances`) come from your Hibernate DDL setting; no migration script ships.
 
-## Sagas
+## Operations
 
-`SagaManager` (`register`, `start`, `onEvent`) drives a `SagaDefinition` of ordered `SagaStep`s. A step with an `awaitEventType` pauses until that event arrives. A step without one advances immediately by recursion, so a long synchronous saga nests one stack frame per step. Correlation is matched against the **event's `aggregateId`**. An instance with a null `correlationId` matches every event.
+- **No metrics and no health indicator.** Observe through logs, or `EventSourcingFacade.health()` (`enabled`, `eventStoreType`, `eventBusType`). Instrument the write path with [Metrics](/adhar-kit/modules/metrics) if you need conflict counts.
+- **Publish is not transactional.** `save` stores the events, then publishes them in a loop. A failure between the two loses the notification, not the events. Drive critical subscribers from the stream (`CatchUpSubscription`, `rebuild`).
+- **Bus failure handling differs.** `SimpleEventBus` dispatches synchronously on the caller's thread and catches each handler's exception. `KafkaEventBus` keys by `aggregateId` (per-aggregate order) and does not await the send. `DaprEventBus` has no inbound listener: wire a Dapr subscription and call `dispatch(message)`; a throwing handler stops the rest for that event.
+- **Projection failures are dropped.** A `handle` that throws is logged and skipped, with no retry. Fix the handler, then rebuild.
+- **Rebuild does not clear the read model**, loads the whole stream into memory, and runs while the projection stays subscribed live. Truncate the read model first and make `handle` idempotent.
 
-A failure happens when the step action throws, or the step's `failureEventType` arrives. The manager then sets `COMPENSATING` and runs compensations **in reverse from `currentStepIndex − 1` down to 0**. The currently failing step is **not** compensated. A compensation that throws does not abort the loop. The rest still run, and the terminal status becomes `FAILED` instead of `COMPENSATED`. Compensations are never retried.
+## Limits
 
-## Testing
+- The JPA append check races under concurrent writers. Serialise writes per aggregate, or add `CREATE UNIQUE INDEX ... ON domain_events (aggregate_id, version)` yourself. It also reads the whole stream on every append.
+- The `dapr` store keeps only events durable; snapshots, checkpoints and saga state are in-memory. It does not implement `getAllEvents()`, so `rebuild` and `CatchUpSubscription` throw `UnsupportedOperationException`.
+- `JpaSnapshotStore` never prunes old snapshots. `JpaProjectionCheckpointStore` has no locking, so two replicas can overwrite each other's position.
+- `EventBus` has no `unsubscribe`; `CatchUpSubscription.stop()` does not remove its bus subscription.
+- Events read back from the JPA store carry the row UUID as `eventId`, not the id you created.
 
-- **Test aggregates without any infrastructure.** `AggregateRoot` has no dependencies. Construct one, call `applyEvent`, and assert on the state your `apply` produced plus `getUncommittedEvents()`.
-- **Use `event-store-type: in-memory` for everything else.** It is the only store with a genuinely correct concurrency check. That makes it the right place to assert that `ConcurrencyException` is raised and that `executeWithRetry` reloads. Fire two threads at one aggregate through a latch.
-- **Assert that a retried command re-ran** by incrementing a counter inside the `Consumer`. That is the behaviour most likely to bite in production. Also make rebuild tests truncate first, so the double-count caveat is documented in code.
-- There is **no event-sourcing test support in `adhar-kit-test-commons`**. If you need the JPA store against a real database, use `PostgresTestContainer` via `BaseIntegrationTest`. The module's own tests mock every repository and never touch a database.
+## Next steps
 
-## Common pitfalls
-
-| Symptom | Cause | Fix |
-| --- | --- | --- |
-| Two events share a version and no exception was raised | The JPA store's check is a read-then-write race with no unique constraint | Add the unique index on `(aggregate_id, version)`, or serialise writes per aggregate |
-| `ConcurrencyException` under load | Two writers held the same `expectedVersion` | Use `RetryingAggregateRepository`, and keep aggregates small enough that contention is rare |
-| Retries hammer the database | `executeWithRetry` has no backoff | Lower `retry-max-attempts`; add your own backoff around the call |
-| A command's side effect happened three times | The `Consumer` re-runs on every retry attempt | Move side effects outside the command, or emit them from a projection |
-| Old events break after a schema change | `apply` expects the new payload shape | Add an `EventUpcaster` rather than editing stored events |
-| A projection sees upcast events on rebuild but raw ones live | Upcasters are applied on read only, never on the bus | Make `handle` tolerant of both, or rebuild after a schema change |
-| A rebuild doubles every count | `rebuild` does not clear the read model | Truncate the read model before calling it |
-| `getAllEvents()` throws | `DaprEventStore` does not implement it | Use `jpa` or `in-memory` for rebuilds and catch-up subscriptions |
-| Snapshots and saga state lost on restart | `event-store-type` is `in-memory`, or `dapr` | Use `jpa`, or supply your own `SnapshotStore` / `SagaStateStore` beans |
-| Aggregate fails to load | `load` needs a no-arg constructor, and throws on an empty stream | Give the aggregate one; build state only through `apply` |
-
-## See also
-
-- [Messaging](/adhar-kit/modules/messaging) — carries these events beyond the process when Kafka is enabled.
-- [Persistence](/adhar-kit/modules/persistence) — backs the JPA event, snapshot, checkpoint and saga tables, and offers the outbox when state, not the stream, is your source of truth.
-- [Dapr](/adhar-kit/modules/dapr) — the state-store and pub/sub backend for the `dapr` store type.
-- [Concepts](/adhar-kit/concepts) — how the facade and module layering fit together.
+- [Persistence](/adhar-kit/modules/persistence) — the JPA setup behind the `jpa` store
+- [Messaging](/adhar-kit/modules/messaging) — carrying events between services
+- [Dapr](/adhar-kit/modules/dapr) — the state store and pub/sub behind the `dapr` store type
+- [Concepts](/adhar-kit/concepts) — module toggles and the facade

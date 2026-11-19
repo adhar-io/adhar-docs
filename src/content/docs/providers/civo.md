@@ -250,7 +250,7 @@ The `Preflight` stage confirms the token works. The quota check runs next, befor
 
 In **compute mode**, the create instead builds a network, firewall, SSH key and instances, then runs `kubeadm init` and `join`. The cloud-integration step installs no Civo CCM or CSI. It writes `kube-system/civo-api-access` and makes `adhar-local` the only, default StorageClass.
 
-The catalogue keeps converging after the CLI returns; that is expected. `--apps-timeout` (default 15m) limits only how long the CLI waits.
+The catalogue keeps converging after the CLI returns; that is expected. `--apps-timeout` (default 45m on a cloud) limits only how long the CLI waits.
 
 ## Verify
 

@@ -260,7 +260,7 @@ During bootstrap the CLI also:
 
 The closing panel lists the Console, ArgoCD, Gitea, Keycloak, Grafana, Headlamp and Hubble URLs, the `adhar get secrets` and `adhar get status` commands, and the kube-context. If the zone was not delegated, the panel ends with a `▲ Platform URLs will not resolve, and TLS is SELF-SIGNED` block naming the fix.
 
-**The catalogue keeps converging after the CLI returns**, and the autoscaler adds workers while it does. `--apps-timeout` (default 15m) limits only how long the CLI waits; ArgoCD keeps going either way.
+**The catalogue keeps converging after the CLI returns**, and the autoscaler adds workers while it does. `--apps-timeout` (default 45m on a cloud) limits only how long the CLI waits; ArgoCD keeps going either way.
 
 > **Note:** Without `--env`, `adhar up -f config.yaml` builds **one** cluster for every `isolation: namespace` environment. It sizes that cluster from the production-type environment (`prod` here) and creates the `dev`, `test` and `prod` namespaces on it. Each `isolation: cluster` environment gets a cluster of its own.
 

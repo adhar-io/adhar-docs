@@ -1,0 +1,16 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(grep -n \"withDatabase\\\\|properties:\\\\|^\\\\s\\\\{8,10\\\\}[a-zA-Z]*:$\\\\|manifest\\\\|adhar.io/\" template.yaml)",
+      "Bash(unzip -l adhar-kit-starter/0.1.0/adhar-kit-starter-0.1.0.jar)",
+      "Bash(awk '{print $4}')",
+      "Bash(grep -v \"/$\")",
+      "Bash(awk '/^\\\\/\\\\*\\\\*/,/^ \\\\*\\\\//' integration/QuarkusHealthIntegration.java)",
+      "Bash(grep -v \"^$\")",
+      "Bash(grep -rln \"name: app-ci$\" .)",
+      "Bash(awk '/^\\\\/\\\\*\\\\*/,/^ \\\\*\\\\//' aspect/DaprKeyResolver.java)",
+      "Bash(cd /Users/tapas-pc/Documents/Work/Adhar/AdharWS/adhar-kit; grep -rn \"spring-boot.version\\\\|<spring-boot\" adhar-kit-bom/pom.xml adhar-kit-parent/pom.xml pom.xml | head -5; grep -rln \"spring-boot-starter-kafka\\\\|spring-boot-kafka\\\\|spring-boot-starter-amqp\\\\|spring-boot-amqp\" --include=pom.xml . ; grep -rn \"spring-boot-starter-kafka\\\\|spring-boot-kafka\\\\|spring-boot-starter-amqp\\\\|spring-boot-amqp\" --include=pom.xml . | head; ls ~/.m2/repository/org/springframework/boot/ 2>/dev/null | grep -E \"kafka|amqp\")",
+      "Read(//Users/tapas-pc/.m2/repository/org/springframework/boot/**)"
+    ]
+  }
+}

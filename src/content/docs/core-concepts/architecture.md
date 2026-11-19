@@ -139,7 +139,7 @@ The same reconciler serves both phases, from two places:
 
 | When | Where it runs | What it does |
 |---|---|---|
-| During `adhar up` | Inside the `adhar` CLI process | Reads the platform stack from the working tree and runs the full loop. Exits when the platform has converged or `--apps-timeout` (default `15m`) runs out. ArgoCD keeps reconciling packages after it exits |
+| During `adhar up` | Inside the `adhar` CLI process | Uses the platform stack built into the binary and runs the full loop. Exits when the platform has converged or `--apps-timeout` (default `15m` locally, `45m` on a cloud) runs out. ArgoCD keeps reconciling packages after it exits |
 | After `adhar up` | An in-cluster controller manager (a Deployment that runs `adhar controller`, with leader election) | Maintains the foundation of an already-seeded platform. It has no stack directory, so it skips step 5 |
 
 The CLI always installs the in-cluster manager on a cloud or on-prem provider. On Kind, it is installed only with `adhar up --in-cluster`; otherwise, re-run `adhar up` to reconcile the foundation again.

@@ -7,46 +7,41 @@ path: "/adhar-kit/modules/core"
 
 # Core
 
-`adhar-kit-core` is a small set of basic patterns and utilities with few dependencies. It covers functional types, retry/backoff, async execution with context propagation, memoization, lazy initialization, type conversion, and distributed ID generation.
-
-It exists because **these primitives are too small to justify a library each, and too important to hand-roll per service**. Hand-rolled copies drift apart, and the hand-rolled retry loop is the one that takes production down.
+`adhar-kit-core` is the kit's small-utility layer: error-as-value types (`Result`, `Either`, `Try`), composable `Specification`s, retry with backoff, async execution that carries the MDC across threads, memoization, lazy initialization, type conversion and Snowflake ID generation. Use it when you need these primitives in one consistent form instead of hand-rolling them per service. On Spring Boot it also publishes a bounded async executor, a `CoreFacade` bean and the `@Retry`, `@Memoize` and `@Async` aspects.
 
 ## At a glance
 
 | | |
 |---|---|
-| Artifact | `com.adhar.kit:adhar-kit-core` |
-| Built on | Plain Java plus Guava, Apache Commons Lang3/Collections4/Codec, Jackson; Spring AOP and autoconfigure are optional |
-| Entry points | `CoreFacade`, `Result<T, E>`, `Specification<T>`, `RetryUtil`, `SnowflakeIdGenerator`, `ContextPropagatingExecutor` |
-| Auto-configuration | `CoreAutoConfiguration` (gated on `adhar.core.enabled`) |
-| Use it when | You need retry, async, IDs, or error-as-value types without pulling in a framework |
+| Artifact | `com.adhar.kit:adhar-kit-core` (package `com.adhar.kit.core`) |
+| Module toggle | None. `adhar.getUtils()` is not gated by `adhar.kit.modules.*`. The Spring auto-configuration has its own switch, `adhar.core.enabled` (default `true`) |
+| Facade | `CoreFacade` — `adhar.getUtils()`, `CoreFacade.getInstance()`, or the Spring bean |
+| Dependencies | Required: `spring-boot-starter-webmvc`, `spring-boot-starter-validation`, Jackson (`jackson-databind`, `jackson-datatype-jsr310`), `commons-lang3`, `commons-collections4`, `commons-codec`, Guava. Optional: `spring-boot-autoconfigure`, `spring-context`, `spring-aop`, `aspectjweaver` |
+| Frameworks | `CoreAutoConfiguration` and the aspects are Spring Boot only. `CoreFacade.getInstance()` and every utility and value type work in any JVM |
 
 ## How it works
 
-Core has two layers. The lower layer is a set of static utilities and value types with no Spring dependency at all. You can use it from a plain `main()`. The upper layer is an auto-configuration. When Spring is present, it publishes a shared executor, an `ObjectMapper`, a `CoreFacade`, and three aspects.
+Core has two layers. The lower one is plain static utilities and immutable value types; you can call them from a `main()`. The upper one is `CoreAutoConfiguration`, which adds managed beans when Spring Boot is present.
 
-```text
-  CoreAutoConfiguration        (adhar.core.enabled, default true)
-    |
-    +-- adharCoreAsyncExecutor : ExecutorService   <- adhar.core.async.*
-    +-- objectMapper           : ObjectMapper
-    +-- CoreFacade             : ids, json, retry, async, hashing
-    |
-    +-- AspectsConfiguration   (needs ProceedingJoinPoint on the classpath,
-        |                       adhar.core.aspects.enabled, default true)
-        +-- RetryAspect    @Retry
-        +-- MemoizeAspect  @Memoize
-        +-- AsyncAspect    @Async   (runs on adharCoreAsyncExecutor)
-
-  No-Spring layer (always available):
-    Result / Either / Try / Specification / Observable
-    Lazy / Memoizer / RetryUtil / AsyncUtil / TypeConverter
-    SnowflakeIdGenerator / ContextPropagatingExecutor
+```diagram
+nkb-core-layers
 ```
 
-The aspects are proxy-based, so the usual Spring AOP rule applies. An annotated method only gets the behaviour when you call it through the bean's proxy, never on self-invocation.
+The Spring `CoreFacade` bean and `CoreFacade.getInstance()` are **different objects**, each with its own executor and its own `SnowflakeIdGenerator`. `adhar.getUtils()` returns the static instance, not the bean, unless you install the bean with an `AdharFacadeCustomizer` (`facade -> facade.setUtils(coreFacade)`).
 
-## Install
+| | Spring bean | `CoreFacade.getInstance()` |
+|---|---|---|
+| Executor | `adharCoreAsyncExecutor` (bounded, context-propagating) | Fixed pool of `availableProcessors() * 2` daemon threads, no context propagation |
+| Snowflake node id | `adhar.core.snowflake.node-id`, else auto-resolved | Auto-resolved |
+| `ObjectMapper` | The `objectMapper` bean | Its own, with `JavaTimeModule` |
+
+The async executor wraps a `ThreadPoolExecutor` in a `ContextPropagatingExecutor`, so the SLF4J MDC follows each task:
+
+```diagram
+nkb-core-context-executor
+```
+
+## Add it
 
 ```xml
 <dependency>
@@ -56,23 +51,13 @@ The aspects are proxy-based, so the usual Spring AOP rule applies. An annotated 
 </dependency>
 ```
 
-## Key APIs
+For the aspects, add `org.aspectj:aspectjweaver`; without it the aspect configuration is skipped and the annotations do nothing.
 
-- **`Result<T, E>`** — error-as-value. Two subclasses, `Success` and `Failure`, with `map`, `flatMap`, `mapError`, `ifSuccess`, `ifFailure`, `recover`, `fold`, `match`, `getOrDefault`, `orElseGet`, `getOrThrow`, `toOptional`, and the static `success`, `failure`, `of(Callable)`, `fromOptional`, `combine`. Use it when a failure is an expected outcome rather than an exceptional one. Use `Either` for an untyped left/right, and `Try` to capture an exception.
-- **`Specification<T>`** — a `Predicate<T>` you can name, compose (`and`, `or`, `negate`, `where`, `alwaysTrue`, `alwaysFalse`) and apply to collections (`filter`, `findFirst`, `anyMatch`, `allMatch`). Business rules become reusable objects instead of inline lambdas.
-- **`Lazy<T>` / `Memoizer<K, V>`** — deferred and cached computation. `Lazy.of(supplier)` initializes once behind a `volatile` field and a `ReentrantLock`. `Memoizer` caches per key, optionally with a TTL in milliseconds.
-- **`RetryUtil`** — `execute` and `executeWithBackoff`, plus a nested `RetryPolicy` builder (`maxRetries`, `initialDelay`, `maxDelay`, `backoffMultiplier`) when you want the policy as a value.
-- **`AsyncUtil`** — `runAsync`, `supplyAsync`, `executeInParallel`, `waitAll`, `executeWithTimeout` over a settable executor.
-- **`ContextPropagatingExecutor`** — an `ExecutorService` decorator that captures registered `ContextSnapshot`s on submit and restores them on the worker thread.
-- **`ContextSnapshot` / `ContextSnapshotRegistry`** — the SPI that decides *what* gets propagated. The default registry holds `MdcContextSnapshot` plus anything added via `register(...)` or discovered through `META-INF/services`.
-- **`TypeConverter`** — `convert`, `objectToMap`, `mapToObject`, `parseDate`, `parseDateTime`, `canConvert`, extensible through `TypeConverterSpi` and `ConverterRegistry`.
-- **`Observable<T>`** — in-process pub/sub with `subscribe`, `notifyObservers`, and a `Subscription` handle.
-- **`CoreFacade`** — the one-stop bean: `generateId`, `generateUUID`, `generateShortId`, `generateSnowflakeId`, `toJson`, `toPrettyJson`, `fromJson`, `retryWithBackoff`, `executeAsync`, `generateSHA256`. Reachable as `AdharFacade.getUtils()`.
-- **Annotations** — `@Retry`, its nested `@Retry.Backoff`, `@Async`, `@Memoize`.
+## Use it
 
-## A realistic service
+### Retry, `Result` and `Specification`
 
-This example uses declarative retry on the I/O boundary, `Result` for the expected-failure path, and a `Specification` for the business rule:
+Put `@Retry` on the I/O boundary bean, and call it from another bean so the call goes through the proxy:
 
 ```java
 import com.adhar.kit.core.annotation.Retry;
@@ -80,29 +65,16 @@ import com.adhar.kit.core.pattern.Result;
 import com.adhar.kit.core.pattern.Specification;
 import java.io.IOException;
 import java.util.concurrent.TimeoutException;
+import org.springframework.stereotype.Component;
+import org.springframework.stereotype.Service;
 
-@Service
-public class PaymentService {
-
-    private static final Specification<Account> FUNDED =
-            a -> a.balance().signum() > 0;
-    private static final Specification<Account> UNBLOCKED =
-            a -> !a.blocked();
-    private static final Specification<Account> ELIGIBLE = FUNDED.and(UNBLOCKED);
+@Component
+public class GatewayClient {
 
     private final PaymentGateway gateway;
 
-    public PaymentService(PaymentGateway gateway) {
+    public GatewayClient(PaymentGateway gateway) {
         this.gateway = gateway;
-    }
-
-    public Result<PaymentResult, String> pay(Account account, PaymentRequest request) {
-        if (!ELIGIBLE.test(account)) {
-            return Result.failure("account not eligible");
-        }
-        // charge() is proxied, so the retry actually happens
-        return Result.<PaymentResult>of(() -> charge(request))
-                     .mapError(Throwable::getMessage);
     }
 
     @Retry(maxAttempts = 3,
@@ -112,147 +84,153 @@ public class PaymentService {
         return gateway.charge(request);
     }
 }
+
+@Service
+public class PaymentService {
+
+    private static final Specification<Account> ELIGIBLE =
+            Specification.<Account>where(a -> a.balance().signum() > 0)
+                         .and(a -> !a.blocked());
+
+    private final GatewayClient client;
+
+    public PaymentService(GatewayClient client) {
+        this.client = client;
+    }
+
+    public Result<PaymentResult, String> pay(Account account, PaymentRequest request) {
+        if (!ELIGIBLE.test(account)) {
+            return Result.failure("account not eligible");
+        }
+        return Result.of(() -> client.charge(request))   // Result<PaymentResult, Exception>
+                     .mapError(Exception::getMessage);
+    }
+}
 ```
 
-Note two things. First, `retryOn` defaults to `Exception.class`. Narrow it: retrying a validation failure only gives you three times the latency for the same 400. Second, the result-handling methods are `ifSuccess` / `ifFailure`, not `onSuccess` / `onFailure`:
+`retryOn` defaults to `Exception.class`; narrow it so a validation failure is not retried. A non-matching exception is rethrown at once; after the last attempt the original exception is rethrown. Handle the outcome with `ifSuccess` / `ifFailure` (there is no `onSuccess`):
 
 ```java
-Result<PaymentResult, String> result = payments.pay(account, request);
-result.ifSuccess(r -> log.info("charged {}", r.reference()))
-      .ifFailure(err -> log.warn("declined: {}", err));
-PaymentResult value = result.getOrThrow(IllegalStateException::new);
+payments.pay(account, request)
+        .ifSuccess(r -> log.info("charged {}", r.reference()))
+        .ifFailure(err -> log.warn("declined: {}", err));
 ```
 
-## How it behaves
-
-**What is a singleton.** With Spring, `CoreFacade`, the `ObjectMapper`, `adharCoreAsyncExecutor` and the three aspects are singletons. Without Spring, `CoreFacade.getInstance()` builds a *different* singleton. It has its own fixed pool (`availableProcessors() * 2` daemon threads) and its own `SnowflakeIdGenerator`.
-
-- Value types (`Result`, `Either`, `Try`, `Specification`) are immutable and free to share.
-- `Lazy`, `Memoizer`, `Observable`, `ContextSnapshotRegistry`, and `SnowflakeIdGenerator` are internally synchronised and safe to share.
-- `TypeConverter` registrations are process-wide.
-
-**The async executor.** `adharCoreAsyncExecutor` is a `ThreadPoolExecutor` with:
-
-- `pool-size` core threads
-- a `LinkedBlockingQueue` of `queue-capacity`
-- a `max-pool-size` ceiling
-- `CallerRunsPolicy`
-- daemon threads named `adhar-async-<n>`
-
-The standard `ThreadPoolExecutor` growth rule applies. Threads grow to the core size, then work queues. Only when the queue is full do threads grow towards the maximum. These are platform threads, not virtual threads.
-
-When both the queue and the pool are saturated, `CallerRunsPolicy` runs the task on the *submitting* thread. You get backpressure instead of a rejection exception. But it also means a saturated pool slows down your request threads. The whole executor is wrapped in a `ContextPropagatingExecutor`, so the MDC follows the task.
-
-**Shutdown.** The executor bean declares `destroyMethod = "shutdown"`. On context close, it stops accepting work and drains what is already queued. In-flight tasks are not interrupted, and `shutdownNow` is never called. The threads are daemons, so a JVM exit will not wait for them.
-
-**Ordering.** Nothing in core guarantees ordering. Tasks submitted to the shared pool interleave freely, and `CallerRunsPolicy` can even complete a later task before an earlier queued one.
-
-**`ContextPropagatingExecutor` carries exactly one thing by default.** It calls three methods:
-
-- `captureAll()` at submit time, on the caller thread
-- `restoreAll()` on the worker, before the task
-- `resetAll()` in a `finally`, after the task
-
-The only provider in the default registry is `MdcContextSnapshot`. It captures `MDC.getCopyOfContextMap()` and resets with `MDC.clear()`. So the SLF4J MDC survives the hop, including the `correlationId`, `requestId` and `tenantId` written by [Commons](/adhar-kit/modules/commons). Plain thread-locals such as `TenantContext` and `CorrelationContext` **do not**. If you need those values themselves, and not just the log fields, register a `ContextSnapshot` for them:
+### `@Async` and `@Memoize`
 
 ```java
-ContextSnapshotRegistry.getDefault().register(new ContextSnapshot() {
+import com.adhar.kit.core.annotation.Async;     // not Spring's @Async
+import com.adhar.kit.core.annotation.Memoize;
+import java.math.BigDecimal;
+import java.util.concurrent.CompletableFuture;
+
+@Service
+public class ReportService {
+
+    @Async(timeout = 5000)                       // ms; 0 = no timeout
+    public CompletableFuture<Report> build(String id) {
+        return CompletableFuture.completedFuture(render(id));
+    }
+
+    @Memoize(value = "fx", ttl = 60_000)         // ttl in ms; -1 (default) = never expires
+    public BigDecimal rate(String currency) {
+        return fxClient.fetch(currency);
+    }
+}
+```
+
+`@Async` dispatches only `void` and `CompletableFuture` methods to `adharCoreAsyncExecutor`. Any other return type logs a warning and runs synchronously. A failing `void` method is logged at ERROR and otherwise lost.
+
+### Without Spring
+
+```java
+CoreFacade core = CoreFacade.getInstance();
+long id = core.generateSnowflakeId();
+String json = core.toJson(order);
+String hash = core.generateSHA256(payload);
+Order loaded = core.retryWithBackoff(() -> repo.load(key), 3, Duration.ofMillis(200), Duration.ofSeconds(5));
+```
+
+### API summary
+
+| Type | What you use |
+|---|---|
+| `CoreFacade` | `generateId` (32-char UUID without hyphens), `generateUUID`, `generateShortId` (8 chars), `generateSnowflakeId`, `toJson`, `toPrettyJson`, `fromJson`, `retryWithBackoff`, `executeAsync`, `generateHash`, `generateMD5`, `generateSHA256`, `isBlank`, `nullSafe`, `truncate` |
+| `Result<T, E>` | `success`, `failure`, `of(Callable)`, `fromOptional`, `combine`; `map`, `flatMap`, `mapError`, `recover`, `fold`, `match`, `ifSuccess`, `ifFailure`, `getOrDefault`, `orElseGet`, `getOrThrow`, `toOptional` |
+| `Either<L, R>`, `Try<T>` | Left/right values (`left`, `right`, `fromResult`); captured exceptions (`Try.of(Callable)`) |
+| `Specification<T>` | A `Predicate<T>` with `and`, `or`, `negate`, `where`, `alwaysTrue`, `alwaysFalse`, `filter`, `findFirst`, `anyMatch`, `allMatch` |
+| `RetryUtil` | `execute(op, maxRetries, delayMs)`, `executeWithBackoff(op, maxRetries, delay, multiplier[, maxDelay, retryOn])` |
+| `AsyncUtil` | `runAsync`, `supplyAsync`, `executeInParallel`, `waitAll`, `executeWithTimeout`, `setExecutor`, `shutdown` |
+| `Lazy<T>`, `Memoizer<K, V>` | Initialize once (`Lazy.of`); per-key cache with optional TTL in ms and a per-key lock |
+| `ContextPropagatingExecutor`, `ContextSnapshot`, `ContextSnapshotRegistry` | Executor decorator and the SPI that decides what crosses the thread hop |
+| `TypeConverter` | `convert`, `objectToMap`, `mapToObject`, `parseDate`, `parseDateTime`, `canConvert`, `registerConverter` (`TypeConverterSpi`) |
+| `Observable<T>` | In-process `subscribe` / `notifyObservers` with a `Subscription` handle |
+| `SnowflakeIdGenerator` | `nextId`, `getNodeId`, static `extractTimestamp` / `extractNodeId` / `extractSequence` |
+
+### Carry more than the MDC
+
+The default registry holds `MdcContextSnapshot` plus any `ContextSnapshot` listed in `META-INF/services/com.adhar.kit.core.util.ContextSnapshot`. To carry a thread-local such as [Commons](/adhar-kit/modules/commons)' `TenantContext`, implement a snapshot:
+
+```java
+public final class TenantContextSnapshot implements ContextSnapshot {
     public Object capture()           { return TenantContext.getTenantId(); }
     public void restore(Object token) { TenantContext.setTenantId((String) token); }
     public void reset()               { TenantContext.clear(); }
-});
+}
 ```
 
-> `reset()` is `MDC.clear()`. So a task that runs inline under `CallerRunsPolicy` clears the *caller's* MDC when it finishes. On a saturated `adharCoreAsyncExecutor`, the request thread that absorbed the task loses its own `correlationId` for the rest of the request. If that matters, give the hot path its own executor with an unbounded queue or an explicit rejection policy.
-
-**Memoizer resource bounds.** `Memoizer` holds a `ConcurrentHashMap` of values and a second map of per-key `ReentrantLock`s. Neither map is bounded, and neither is swept. An expired entry is only replaced when the same key is read again. A key's lock is never removed until `clear()`.
-
-The per-key lock is the stampede guard. Concurrent callers for the same key block on it, and exactly one computes. A failed computation propagates without being cached. Memoize a bounded key space (a currency code, a feature name), never a user or order id. When the key space is open, use [Cache](/adhar-kit/modules/cache).
-
-**Snowflake IDs.** `SnowflakeIdGenerator` produces positive, time-sortable 64-bit longs from a custom epoch (`2024-01-01T00:00:00Z`). Each ID has 41 timestamp bits, 10 node bits (0–1023), and 12 sequence bits.
-
-`nextId()` is `synchronized`, so one generator is a single lock. It has a hard ceiling of 4096 IDs per millisecond per node. Past that, it spins (`Thread.onSpinWait`) into the next millisecond rather than reusing a sequence.
-
-The node id is resolved in this order:
-
-1. an explicit non-negative constructor argument (the Spring bean passes `adhar.core.snowflake.node-id`);
-2. the `adhar.core.snowflake.node-id` **system property**;
-3. the `ADHAR_SNOWFLAKE_NODE_ID` **environment variable**;
-4. `Math.floorMod(hostname.hashCode(), 1024)`;
-5. a `SecureRandom` value in 0–1023, only if the hostname cannot be resolved.
-
-A configured value that is unparseable or above 1023 logs a warning and falls through to the hostname hash. A value above 1023 passed directly to the constructor throws `IllegalArgumentException`.
-
-**Clock skew is handled by waiting.** If the wall clock moves backwards, `nextId()` logs a warning. It then spins until the clock catches up with the last issued timestamp. It never emits a duplicate or out-of-order ID. But the calling thread blocks for the length of the skew while holding the generator's monitor, so every other caller blocks with it. A large NTP step backwards is a stall, not a correctness bug.
-
-> **One generator per process.** Two `SnowflakeIdGenerator` instances that resolve the same node id can emit identical IDs, because each has its own sequence counter. This is easy to hit by accident. The Spring `CoreFacade` bean and a stray `CoreFacade.getInstance()` call both construct a generator, and both auto-resolve to the same hostname hash. Inject the `CoreFacade` bean, and do not mix it with the static singleton.
-
-**Aspect behaviour.** `RetryAspect` converts `maxAttempts` into `maxAttempts - 1` retries. It delegates to `RetryUtil.executeWithBackoff`, filtering on `retryOn`. A non-matching exception is rethrown immediately.
-
-`MemoizeAspect` keeps one `Memoizer` per `value()`+`ttl()` pair. It keys entries on the declaring class, method name and parameter types. When `useAllParams` is true, it also adds `Arrays.deepToString(args)`. So the quality of each argument's `toString()` decides the quality of the key.
-
-`AsyncAspect` supports exactly two return types:
-
-- `void` methods are dispatched fire-and-forget. There is no future to complete, so **a thrown exception is logged at ERROR and otherwise swallowed**.
-- `CompletableFuture` methods return a future that completes with the result. `timeout` (milliseconds, `0` = none) is applied with `orTimeout`.
-
-Any other return type logs a warning and executes **synchronously**. The annotation silently does nothing useful.
-
-## Aspect and proxy mechanics
-
-`AspectsConfiguration` registers the aspects. It needs two things: `org.aspectj.lang.ProceedingJoinPoint` on the classpath, and `adhar.core.aspects.enabled` (default `true`). It applies `@EnableAspectJAutoProxy` itself. If either condition fails, the beans are never created. `@Retry`, `@Memoize` and `@Async` then become inert annotations, with no log line to tell you.
-
-> **Self-invocation bypasses every one of them.** `this.charge(request)` from inside `PaymentService` goes directly to the target object. You get no retry, no memoization, no async dispatch, and no error. Call through an injected reference to the bean, or move the annotated method to a collaborator. This is the most common reason these annotations "do nothing".
+Register it through `META-INF/services`. A `ContextPropagatingExecutor` copies the registry's snapshots when it is constructed, so `ContextSnapshotRegistry.getDefault().register(...)` at runtime does not reach `adharCoreAsyncExecutor` once that bean exists; it only affects executors created afterwards.
 
 ## Configuration
 
-| Property | Purpose | Default |
-|---|---|---|
-| `adhar.core.enabled` | Master switch for the auto-configuration | `true` |
-| `adhar.core.aspects.enabled` | Register the `@Retry` / `@Memoize` / `@Async` aspects | `true` |
-| `adhar.core.snowflake.node-id` | Node id, 0–1023; `-1` triggers auto-resolution | `-1` |
-| `adhar.core.async.pool-size` | Core threads for `adharCoreAsyncExecutor` | `10` |
-| `adhar.core.async.max-pool-size` | Maximum threads | `50` |
-| `adhar.core.async.queue-capacity` | Bounded queue depth | `100` |
-| `adhar.core.async.thread-name-prefix` | Worker thread name prefix | `adhar-async-` |
-| `adhar.core.async.keep-alive-seconds` | Idle thread keep-alive | `60` |
+All keys bind to `AdharCoreProperties` (`adhar.core`).
 
-`AdharCoreProperties` also binds `adhar.core.retry.*`, `adhar.core.circuit-breaker.*`, `adhar.core.cache.*` and `adhar.core.validation.*`. No code in this module reads them today. `@Retry` takes its retry behaviour from the annotation's own defaults, not from those properties: `maxAttempts = 3`, `delay = 1000`, `multiplier = 2.0`, `maxDelay = 30000`. Set the values on the annotation, or pass a `RetryUtil.RetryPolicy` explicitly.
+| Property | Type | Default | Description |
+|---|---|---|---|
+| `adhar.core.enabled` | boolean | `true` | Master switch for `CoreAutoConfiguration` |
+| `adhar.core.aspects.enabled` | boolean | `true` | Register `RetryAspect`, `MemoizeAspect`, `AsyncAspect` (also needs AspectJ) |
+| `adhar.core.snowflake.node-id` | long | `-1` | Node id for the bean's generator, 0–1023; `-1` auto-resolves |
+| `adhar.core.async.pool-size` | int | `10` | Core threads of `adharCoreAsyncExecutor` |
+| `adhar.core.async.max-pool-size` | int | `50` | Maximum threads (at least `pool-size`) |
+| `adhar.core.async.queue-capacity` | int | `100` | Bounded queue depth |
+| `adhar.core.async.thread-name-prefix` | string | `adhar-async-` | Worker thread name prefix |
+| `adhar.core.async.keep-alive-seconds` | int | `60` | Idle keep-alive for threads above the core size |
 
-## Testing
+`AdharCoreProperties` also binds `adhar.core.async.enabled`, `adhar.core.retry.*`, `adhar.core.circuit-breaker.*`, `adhar.core.cache.*` and `adhar.core.validation.*`, but no code reads them. `@Retry` uses its own annotation defaults (`maxAttempts = 3`, `delay = 1000`, `multiplier = 2.0`, `maxDelay = 30000`); set values on the annotation.
 
-- **Deterministic IDs.** `SnowflakeIdGenerator` has a constructor taking `(long nodeId, LongSupplier clock)`. Drive it with a mutable `long[]` clock. You can then assert monotonicity, sequence rollover at 4096 within one millisecond, and the clock-skew wait, with no sleeping and no flakes. `extractTimestamp` / `extractNodeId` / `extractSequence` are static and decode the IDs you produced.
-- **Isolate context propagation.** `ContextSnapshotRegistry.empty()` and `withDefaults()` build registries independent of the process-wide default. `ContextPropagatingExecutor` has a constructor taking an explicit `List<ContextSnapshot>`. Use these in tests. Do not mutate `getDefault()`, which leaks registrations across test classes.
-- **Memoization.** `MemoizeAspect.clearAll()` drops every cache it manages. Call it in `@AfterEach` when an aspect-level cache would otherwise carry results between tests. For direct `Memoizer` tests, `invalidate(key)`, `size()` and `containsKey(key)` are enough to assert hit/miss without timing.
-- **Turn the aspects off.** `adhar.core.aspects.enabled=false` makes a slice test exercise the plain method; `adhar.core.enabled=false` removes the executor and facade entirely.
-- **Async without races.** In tests, define a same-thread executor bean named `adharCoreAsyncExecutor`. Because of `@ConditionalOnMissingBean(name = "adharCoreAsyncExecutor")`, your definition wins. `@Async` work then completes before the assertion.
-- **Retry.** Assert the attempt count with a counting stub rather than a timer. Keep `delay` small in the test profile, because `RetryUtil.executeWithBackoff` sleeps for real.
+Override any bean by defining one with the same name or type: `adharCoreAsyncExecutor` (matched by name), `ObjectMapper`, `CoreFacade`, and each aspect.
 
-## Interaction with sibling modules
+## Operations
 
-`adharCoreAsyncExecutor` is the executor behind `@Async`. It propagates the MDC, so it keeps [Logging](/adhar-kit/modules/logging) output correlated across a thread hop. The `correlationId`, `requestId` and `tenantId` that [Commons](/adhar-kit/modules/commons)' filters put in the MDC all survive.
+**The async executor.** A `ThreadPoolExecutor` with daemon platform threads and `CallerRunsPolicy`. Threads grow to `pool-size`, then work queues, and only a full queue grows threads toward `max-pool-size`. When both are saturated the task runs on the submitting thread: backpressure instead of rejection, but your request threads slow down. On context close the bean's `shutdown()` stops new work and lets queued tasks drain; nothing is interrupted.
 
-Tracing context uses a different mechanism. The OpenTelemetry context is not in the MDC. For spans, use [Tracing](/adhar-kit/modules/tracing)'s `TraceContextTaskDecorator` or `wrapWithTraceContext`.
+**Snowflake IDs.** Positive, time-sortable 64-bit longs from a custom epoch of `2024-01-01T00:00:00Z`: 41 timestamp bits, 10 node bits, 12 sequence bits, so up to 4096 IDs per millisecond per generator. `nextId()` is `synchronized`; past 4096 in one millisecond it spins into the next. If the clock moves backwards it logs a warning and waits until the clock catches up, holding the lock, so every caller stalls for the skew. The node id resolves in this order:
 
-`@Retry` is a bare retry loop with no failure accounting. When you need a circuit breaker, bulkhead or rate limiter around the same call, use [Resilience](/adhar-kit/modules/resilience) instead of stacking retries.
+1. An explicit non-negative constructor argument (the Spring bean passes `adhar.core.snowflake.node-id`); above 1023 throws `IllegalArgumentException`.
+2. The `adhar.core.snowflake.node-id` JVM system property.
+3. The `ADHAR_SNOWFLAKE_NODE_ID` environment variable.
+4. `Math.floorMod(hostname.hashCode(), 1024)`.
+5. A `SecureRandom` value, if the hostname cannot be resolved.
 
-## Common pitfalls
+An unparseable or out-of-range value in steps 2–3 logs a warning and falls through to the hostname hash.
 
-| Symptom | Cause | Fix |
-|---|---|---|
-| `@Retry` / `@Memoize` silently ignored | Self-invocation, or `aspectjweaver` missing so the aspects were never registered | Call through the proxy; add `org.aspectj:aspectjweaver` |
-| Two pods emit colliding snowflake IDs | Both fell back to the same hostname hash or random node id | Set `ADHAR_SNOWFLAKE_NODE_ID` per replica (a StatefulSet ordinal works well) |
-| Colliding IDs inside one JVM | Two generators resolved the same node id | Use the `CoreFacade` bean only; do not also call `CoreFacade.getInstance()` |
-| `@Async` method returns a value but runs inline | Only `void` and `CompletableFuture` are dispatched | Change the return type, or use `AsyncUtil.supplyAsync` |
-| An `@Async void` failure vanishes | There is no future to carry it; it is logged at ERROR only | Return `CompletableFuture` and handle the failure |
-| `result.onSuccess(...)` does not compile | The methods are `ifSuccess` / `ifFailure` | Rename the call |
-| Tasks submitted to a raw pool lose `correlationId` | A plain `ExecutorService` copies no thread-locals | Wrap it in `ContextPropagatingExecutor` |
-| `@Memoize` entries never expire | `ttl` defaults to `-1`, meaning "never" | Set `ttl` explicitly — it is in **milliseconds** |
-| Memory climbs under `@Memoize` | The cache and its per-key locks are unbounded | Memoize a bounded key space, or use [Cache](/adhar-kit/modules/cache) |
+**Retry logging.** Each failed attempt logs at WARN; exhaustion logs at ERROR. Backoff sleeps the calling thread.
 
-## See also
+## Limits
 
-- [Commons](/adhar-kit/modules/commons) — the MDC and tenant context that `ContextPropagatingExecutor` carries
-- [Resilience](/adhar-kit/modules/resilience) — when you need circuit breaking and bulkheads, not retry alone
-- [Cache](/adhar-kit/modules/cache) — a managed cache when `Memoizer` outgrows its scope
-- [Concepts](/adhar-kit/concepts) — how the facades and module toggles fit together
+- **Self-invocation bypasses every aspect.** `@Retry`, `@Memoize` and `@Async` are Spring AOP proxies; `this.method()` runs the raw method with no warning. Without `aspectjweaver`, or with `adhar.core.aspects.enabled=false`, they are inert.
+- **Generators with the same node id collide.** Two `SnowflakeIdGenerator`s that resolve the same node id have separate sequence counters and can emit identical IDs. The Spring bean and `CoreFacade.getInstance()` (which `adhar.getUtils()` returns) each own one, and both auto-resolve to the same hostname hash. Use one of them, and set `ADHAR_SNOWFLAKE_NODE_ID` per replica (a StatefulSet ordinal works).
+- **`MDC.clear()` on a caller-run task.** The MDC snapshot resets with `MDC.clear()`. A task that `CallerRunsPolicy` runs inline clears the submitting thread's MDC when it finishes, so the request loses its `correlationId` for the rest of the request.
+- **Thread-locals other than the MDC do not travel** unless you register a `ContextSnapshot`. Tracing context is separate; see [Tracing](/adhar-kit/modules/tracing).
+- **`Memoizer` is unbounded.** Values and per-key locks are never swept; an expired entry is replaced only when its key is read again. Memoize a bounded key space (currency codes, feature names), never user or order ids; use [Cache](/adhar-kit/modules/cache) otherwise. `@Memoize` keys on class, method, parameter types and `Arrays.deepToString(args)`, so argument `toString()` quality decides key quality.
+- **`AsyncUtil` has its own pool** (`availableProcessors()` threads, no context propagation) unless you call `setExecutor`.
+- **`CoreFacade.retryWithBackoff` retries every exception** and wraps exhaustion in a `RuntimeException`; the `long` variant adds jitter and has no delay cap, the `Duration` variant caps at `maxDelay`.
+- **`RetryUtil.RetryPolicy` is a value only.** No method in core accepts it.
+- **Core is not dependency-free.** `spring-boot-starter-webmvc` and `spring-boot-starter-validation` are compile dependencies, so they land on any classpath that adds core.
+
+## Next steps
+
+- [Commons](/adhar-kit/modules/commons) — the MDC keys and `TenantContext` that the executor carries
+- [Resilience](/adhar-kit/modules/resilience) — circuit breakers, bulkheads and rate limiters beyond a retry loop
+- [Cache](/adhar-kit/modules/cache) — a managed, bounded cache when `Memoizer` is not enough
+- [Concepts](/adhar-kit/concepts) — how facades and module toggles fit together

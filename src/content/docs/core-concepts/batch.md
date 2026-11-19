@@ -11,7 +11,7 @@ A **BatchJob** runs a Spring Batch job on the platform: on a schedule, after oth
 
 You declare the job in Git. The platform turns it into a schedule, a template that every run is created from, the permissions a run needs, and its alerts. Operators run, stop, restart, backfill and hold it from the Console or `adhar batch`, without a commit.
 
-This page explains the model. For every field, condition, event and command, see the [BatchJob API reference](/docs/reference/batch-job-api).
+This page explains the model. To build one step by step, follow [Deploy a Batch Job](/docs/guides/deploy-a-batch-job). For every field, condition, event and command, see the [BatchJob API reference](/docs/reference/batch-job-api).
 
 > **Status:** what works today and what is still being finished.
 >
@@ -142,6 +142,7 @@ adhar batch backfill importer --env prod --from 2026-11-01 --to 2026-11-07 --par
 
 - Each date is its own run, named for its identity, so running the same backfill again starts nothing twice.
 - On plain Kubernetes, every date's Job is created suspended and released in date order, never more than `--parallel` (default `1`) at a time. If the command is interrupted, the rest stay suspended; run it again to release them. On Volcano, the job's queue decides how many start.
+- The Console's **Backfill** action on a job does the same, with a date range and a parallelism.
 - Each date goes into the job's `businessDate` parameter (or the first date parameter its schedule supplies); `-p` sets the others. A job with neither is refused. A backfill covers at most 366 dates.
 
 ### Parameters and a run's identity
@@ -335,6 +336,8 @@ Batch work never pushes a service aside.
 
 The `volcano` and `adhar-batch-volcano` packages are on together in the production profile. Locally, enable both with `adhar stack enable volcano adhar-batch-volcano`; every BatchJob on `scheduler: auto` then moves onto Volcano at its next reconcile, with no edit to the job. Disabling them moves it back.
 
+**The Volcano Dashboard**, at `https://volcano.<host>`, shows every queue, Volcano job, PodGroup and pod. It is read-only, and only `platform-admin` can sign in, because it lists pods in every namespace. Teams see their own queues in the Console instead.
+
 **Queues.** Each team gets three queues under the root `adhar-batch`, one per tier: `<organisation>-<team>-dev`, `-test` and `-prod`. A run uses the queue of its namespace's tier, and Kyverno refuses any other. Dev and test queues have no guaranteed share. The prod queue has one, so a prod run can take capacity back from dev or test runs, which stop at their next chunk boundary and resume later. The `QueueFits` condition warns when a run does not fit its queue.
 
 **Partitioned jobs.** `mode: partitioned` runs one manager and `workers` worker pods (default `2`) that share the job's partitions through the JobRepository. Two workers keep a default run (3 CPU, 3 × 1536Mi) inside an environment's default quota; raise `workers` and the Environment's quota together for a larger run.
@@ -438,7 +441,7 @@ nsv-batch-observer
 |---|---|
 | `run.requested` | A run appeared with a trigger other than `schedule`; the event names who asked |
 | `run.started`, `run.succeeded`, `run.failed`, `run.skipped` | The run's lifecycle. `skipped` replaces `succeeded` when the run had nothing to do |
-| `run.stopped`, `run.resumed` | Each stop and resume |
+| `run.stopped`, `run.resumed` | Each stop and resume. A backfill run still held back is queued, not stopped, so it publishes neither |
 | `run.lost` | An attempt ended with no summary: OOM-killed, node lost or pod vanished |
 | `schedule.held`, `schedule.released`, `schedule.missed` | Holds, and a cron slot that passed with no run |
 | `deadline.endangered`, `deadline.missed` | The `finishBy` forecast and outcome |
@@ -458,6 +461,7 @@ The event bus is Kafka, on in the production profile. Locally there is no bus, s
 - **Jobs** shows each job's schedule, next run, last run, last success and SLA, with totals for running, failed, held and SLA-breached jobs.
 - **Runs** shows each run's status, trigger, actor, business date, attempts, duration and exit code.
 - **Queues** shows each team's Volcano queues. The tab appears only on a cluster that runs Volcano.
+- **Backfill** on a job starts one run per business date in a range, as `adhar batch backfill` does.
 - A job's drawer has its overview, parameters, run history against `sla.maxDuration`, alerts, delivery and configuration. A run's drawer has its termination summary, pods and logs, events and CPU and memory use.
 
 Every action runs as the signed-in user, and the Console hides an action that the user's permissions would refuse:
@@ -529,6 +533,7 @@ Four more alerts read series that exist only in Mimir, so they are evaluated by 
 
 ## Next steps
 
+- **[Deploy a Batch Job](/docs/guides/deploy-a-batch-job)** — from the template to a scheduled run in prod, step by step
 - **[BatchJob API reference](/docs/reference/batch-job-api)** — every field, condition, event, alert, policy and `adhar batch` command
 - **[Functions](/docs/core-concepts/functions)** — for short, event-driven work
 - **[Promote Across Environments](/docs/guides/promote-across-environments)** — Freight, Stages and Releases in depth

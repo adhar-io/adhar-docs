@@ -100,7 +100,7 @@ $ adhar up -f config.yaml --env dev
   ⠋  GitOps sync - platform stack  26/75 apps Synced + Healthy
 ```
 
-`--apps-timeout` (default 15m) limits how long the CLI waits on the last stage. The catalogue keeps converging after the CLI returns; that is expected.
+`--apps-timeout` (default 45m on a cloud) limits how long the CLI waits on the last stage. The catalogue keeps converging after the CLI returns; that is expected.
 
 ## Cluster modes
 

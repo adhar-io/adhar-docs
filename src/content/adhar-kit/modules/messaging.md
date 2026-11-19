@@ -7,48 +7,41 @@ path: "/adhar-kit/modules/messaging"
 
 # Messaging
 
-Kafka and RabbitMQ have incompatible APIs. Neither gives you retry, dead-lettering, or idempotent consumption out of the box. `adhar-kit-messaging` **puts one publish/subscribe API over both. It wraps every subscription in the reliability handlers you would otherwise write for each consumer.** Payloads travel as CloudEvents 1.0. So a consumer in another language or another team can read them without knowing who produced them.
+`adhar-kit-messaging` gives you one publish/subscribe API, `MessagingFacade`, over Kafka, RabbitMQ or Dapr pub/sub. Every subscription runs through configurable retry, dead-lettering and deduplication, and an optional JDBC outbox publishes on commit. Use it when a Spring Boot service publishes or consumes domain events and you want those reliability handlers as configuration instead of code in every consumer.
 
 ## At a glance
 
 | | |
 | --- | --- |
 | Artifact | `com.adhar.kit:adhar-kit-messaging` |
-| Built on | Spring for Apache Kafka, Spring AMQP, CloudEvents Java SDK; optional Micrometer, Dapr |
-| Entry points | `MessagingFacade`, `Message`, `MessagePublisher`, `MessageListener` |
-| Config prefix | `adhar.messaging` |
-| Use it when | You publish domain events across services and need retry, DLQ, and dedup as defaults |
-
-> **Framework support:** only the Spring Boot auto-configuration path is implemented. The `@CloudEventPublisher` / `@CloudEventListener` / `@CloudEventHandler` annotations exist as types, but nothing in the repository reads them. There is no aspect, no bean post-processor and no registrar. Every attribute they declare (`condition`, `partitionKey`, `maxRetries`, `enableDlq`, `async`) does nothing. Use the facade.
-
-## The most dangerous behaviour on this page
-
-Broker wiring is conditional. `MessagingFacade` is built with whatever `MessagePublisher` and `MessageListener` beans happen to exist, and there may be none. The two halves then fail in opposite ways:
-
-- **Publishing fails loudly.** With no `MessagePublisher`, `publish` throws `MessagingException("No MessagePublisher configured - cannot publish to topic '<topic>'...")`. You find out immediately.
-- **Subscribing fails silently.** With no `MessageListener`, `subscribe` logs **one** warning: *"handler for topic X was stored but will never receive messages (using stub)"*. It stores your handler in a map and returns a normal-looking `sub-1` subscription id. `getSubscriptionCount()` goes up. But no broker subscription exists. **Nothing is logged again, ever.** A service wired this way looks healthy and processes nothing.
-
-Treat that single WARN at startup as fatal. The simplest guard is to assert at startup that `messaging.isConnected()` is true, and fail fast if it is not. (`isConnected()` returns whether a publisher is present.)
-
-What each broker needs before its beans are wired:
-
-- **Kafka** beans need `KafkaTemplate` on the classpath, `adhar.messaging.kafka.enabled` not set to `false`, and a `KafkaTemplate` bean. The listener also needs a `ConcurrentKafkaListenerContainerFactory` and a `KafkaListenerEndpointRegistry`.
-- **RabbitMQ** needs `RabbitTemplate` for the publisher and a `ConnectionFactory` for the listener.
-- **Dapr** needs `adhar.dapr.enabled=true` set explicitly.
-
-**A half-wired state is possible and common.** For example, a `KafkaTemplate` without a container factory gives you a working publisher and a silent consumer.
+| Toggle | `adhar.messaging.enabled` (default `true`) switches the auto-configuration. `adhar.kit.modules.messaging` (default `true`) gates `adhar.getMessaging()`; when `false` that call throws `IllegalStateException` |
+| Facade | Inject the `MessagingFacade` bean. `adhar.getMessaging()` (from `adhar-kit-starter`) returns a separate, unwired singleton unless you hand it the bean — see [Use it from `AdharFacade`](#use-it-from-adharfacade) |
+| Other beans | `MessagePublisher`, `MessageListener`, `RequestReplyClient`, `CloudEventAdapter`, `MessagingMetrics`; with the outbox on: `OutboxStore`, `OutboxRelay` |
+| Dependencies | Required: `adhar-kit-commons`, `spring-boot-starter`, CloudEvents SDK (`cloudevents-core`, `cloudevents-json-jackson`), `jackson-databind`. Optional, add the ones you use: `spring-kafka`, `spring-rabbit`, `adhar-kit-dapr`, `spring-jdbc`, `micrometer-core` |
+| Frameworks | Spring Boot auto-configuration only |
 
 ## How it works
 
-`MessagingFacade` holds a `MessagePublisher` and a `MessageListener`, both supplied by auto-configuration. Every subscription made through the facade is wrapped in a handler chain before your `Consumer<T>` runs.
-
 ```diagram
-kit-messaging-chain
+nkc-messaging-pipeline
 ```
 
-From the outside in, the chain is **dedup → retry → your handler**. Both outer layers are optional and are only added when enabled.
+- **Transport is chosen from the beans you have.** The publisher and the listener are picked independently, each from the first match in the order Kafka, RabbitMQ, Dapr. A bean of your own (`MessagePublisher`, `MessageListener`) replaces the built-in one.
+- **The facade does not wrap payloads in CloudEvents.** Kafka and RabbitMQ carry your payload as serialised by the broker client, plus a `messageId` header (Kafka) or AMQP message id (RabbitMQ) when `common.trace-enabled` is on. Dapr is the exception: the sidecar wraps every publish in a CloudEvents 1.0 envelope. To build a CloudEvent yourself, use `Message<T>` with `CloudEventAdapter` or `CloudEventUtils`.
+- **Each `subscribe` builds its own handler chain**: dedup (if enabled) → retry (if enabled) → your `Consumer<T>`, with the dead-letter publisher at the end of the retry step.
 
-## Install
+| Bean | Registered when |
+| --- | --- |
+| Kafka `MessagePublisher`, `RequestReplyClient` | `KafkaTemplate` on the classpath and as a bean, `adhar.messaging.kafka.enabled` not `false` |
+| Kafka `MessageListener` | As above, plus `ConcurrentKafkaListenerContainerFactory` and `KafkaListenerEndpointRegistry` beans |
+| RabbitMQ `MessagePublisher`, `RequestReplyClient` | `RabbitTemplate` bean, `adhar.messaging.rabbitmq.enabled` not `false` |
+| RabbitMQ `MessageListener` | `ConnectionFactory` bean |
+| Dapr `MessagePublisher`, `MessageListener` | `adhar-kit-dapr` on the classpath, a `DaprFacade` bean, and neither `adhar.dapr.enabled` nor `adhar.messaging.dapr.enabled` set to `false` |
+| `CloudEventAdapter` | CloudEvents SDK present, `adhar.messaging.cloudevents.enabled` not `false` |
+| `MessagingMetrics` | Micrometer on the classpath and a `MeterRegistry` bean |
+| `OutboxStore`, `OutboxRelay` | `adhar.messaging.outbox.enabled=true`. JDBC store with a `DataSource`, in-memory otherwise. The relay also needs a `MessagePublisher` |
+
+## Add it
 
 ```xml
 <dependency>
@@ -57,216 +50,221 @@ From the outside in, the chain is **dedup → retry → your handler**. Both out
     <version>0.1.0</version>
 </dependency>
 
-<!-- Choose your broker -->
+<!-- Pick a broker; Spring Boot's starter supplies KafkaTemplate and the listener factory -->
 <dependency>
-    <groupId>org.springframework.kafka</groupId>
-    <artifactId>spring-kafka</artifactId>
+    <groupId>org.springframework.boot</groupId>
+    <artifactId>spring-boot-starter-kafka</artifactId>
 </dependency>
+<!-- or: org.springframework.boot:spring-boot-starter-amqp -->
 ```
 
-## Key APIs
+Connection settings come from Spring Boot (`spring.kafka.*`, `spring.rabbitmq.*`), not from `adhar.messaging.*`. Configure JSON serialisation, because the listener does not convert payloads to the type you pass to `subscribe`:
 
-- **`MessagingFacade`** — `publish(topic, payload)`, `publish(topic, key, payload)`, `subscribe(topic, type, handler)`, `subscribe(topic, consumerGroup, type, handler)` (each `subscribe` returns a subscription id), `unsubscribe(id)`, `sendAndReceive(topic, request, replyType)`, `publishViaOutbox(destination, payload)`, `isConnected()`, `getSubscriptionCount()`.
-- **`Message<T>`** — the CloudEvents-shaped envelope: `id`, `payload`, `headers`, `timestamp`, `destination`, `routingKey`, `source`, `type`, `specVersion`, `dataContentType`, `dataSchema`, `subject`.
-  - `id` is always a fresh UUID and `timestamp` is always `Instant.now()`. You cannot set either. `Message.Builder` has **no** `id(...)` method, despite what some Javadoc examples show.
-  - Defaults: `source` = `urn:adhar:messaging`, `type` = the payload's simple class name, `specVersion` = `1.0`, `dataContentType` = `application/json`.
-- **`CloudEventAdapter`** — `toCloudEvent(message)` / `fromCloudEvent(cloudEvent)`. Registered whenever the CloudEvents SDK is present and `adhar.messaging.cloudevents.enabled` is not `false`.
-- **`MessagePublisher` / `MessageListener`** — the transport SPIs. Implement either to add a broker. Your bean wins over the built-ins.
-- **`RetryingMessageHandler`, `DeadLetterPublisher`, `DeduplicatingMessageHandler`** — the reliability chain. It is applied automatically, but you can also use each one on its own.
-- **`RequestReplyClient`** — backs `sendAndReceive`. `KafkaRequestReplyClient` and `RabbitRequestReplyClient` are wired alongside the matching broker.
-- **`OutboxStore` / `OutboxRelay`** — the module's own outbox, enabled by `adhar.messaging.outbox.enabled`. It uses `JdbcOutboxStore` when a `DataSource` exists, and in-memory storage otherwise.
-- **`MessagingMetrics`** — counters named `adhar.messaging.publish`, `.publish.failure`, `.consume`, `.consume.failure`, `.retry`, `.dlq`, `.duplicate`. Each is tagged `destination` (literally `unknown` when null). Registered when Micrometer and a `MeterRegistry` are present.
+```yaml
+spring:
+  kafka:
+    bootstrap-servers: localhost:9092
+    producer:
+      value-serializer: org.springframework.kafka.support.serializer.JacksonJsonSerializer
+    consumer:
+      value-deserializer: org.springframework.kafka.support.serializer.JacksonJsonDeserializer
+      properties:
+        spring.json.trusted.packages: com.example.orders
+```
 
-## Delivery semantics
+On RabbitMQ, register a JSON `MessageConverter` bean (for example `JacksonJsonMessageConverter`); both the publisher (through `RabbitTemplate`) and the listener use it. Without one the listener uses `SimpleMessageConverter` and hands you `byte[]` or `String`.
 
-**At-least-once at best, and at-most-once with the defaults.** Both listeners discard the handler's return value and swallow its exceptions:
+## Use it
 
-- **Kafka.** `enable-auto-commit` defaults to `true`, which selects Spring Kafka's `AckMode.BATCH`. The poll batch's offsets are committed after the records are handed to the listener, whether or not your handler succeeded.
-  - A handler that throws, or whose retries run out, does not hold the offset back.
-  - Exceptions inside the record loop are caught and logged at ERROR, and the offset still advances.
-  - Set `enable-auto-commit: false` and you get `AckMode.MANUAL`. But the facade's message context never calls `acknowledge()` on a real `Acknowledgment`. **So offsets are then never committed at all**, and the consumer re-reads from its last committed position on every restart.
-- **RabbitMQ.** The ack mode is read from the *Kafka* property `adhar.messaging.kafka.consumer.enable-auto-commit`.
-  - `true` (the default) means `AcknowledgeMode.AUTO`. A thrown exception nacks, and a `false` return acks.
-  - Set it to `false` and a failure does `basicReject(tag, requeue = true)`. That is an unbounded requeue loop with no redelivery counter.
-
-In practice: **make every handler idempotent, and never treat a successful `publish` as a successful consume.** For publish-on-commit, do not call `publish` inside a transaction. Use `publishViaOutbox`, or the [persistence](/adhar-kit/modules/persistence) outbox.
-
-## Ordering
-
-| Scope | Guarantee |
-| --- | --- |
-| `publish(topic, payload)` on Kafka | **None.** No key header is set, so records spread across partitions |
-| `publish(topic, key, payload)` on Kafka | Per-partition, which for a fixed key means **per-key**. The key becomes `KafkaHeaders.KEY` and the configured partitioner decides |
-| Consumption on Kafka | Per-partition. Your handler runs **synchronously on the container's poll thread**. The module has no dispatch executor, so the kit does not break ordering |
-| RabbitMQ | **None by default.** The listener container starts with `concurrency` 1 but `max-concurrency` 10, so it scales to ten competing consumers on one queue |
-
-Two things weaken even per-partition ordering:
-
-- Container concurrency comes from your own `ConcurrentKafkaListenerContainerFactory`; this module does not set it. With concurrency above one, several threads own separate partitions. That is still per-partition, but no longer per-thread.
-- Retry backoff sleeps on the poll thread (see below). So one failing message stalls its whole partition.
-
-## Deduplication
-
-`DeduplicatingMessageHandler` keys on the CloudEvents `ce-id` header. It falls back to a `messageId` header, and then to the context's message id. It wraps the retry handler, so **a duplicate is rejected before any attempt is made**.
-
-Dedup is off by default because the bundled `InMemoryProcessedMessageStore` is per-facade-instance. It is a `ConcurrentHashMap` of id to first-seen instant. It is purged lazily by a full `removeIf` scan on every single call.
-
-Its only bound is `ttl-ms` (default 600 000). So its steady-state size is ten minutes of distinct ids, and its cost is O(entries) per message. It is enough for redelivery within one consumer. It is **not** cross-instance exactly-once.
-
-Watch for two sharp edges:
-
-- The id is marked processed *before* your handler runs, and is never unmarked. So a message that runs out of retries and lands in the DLQ is still swallowed as a duplicate if the broker redelivers it.
-- When neither header is present, the context's message id is a freshly generated UUID. So dedup silently never fires.
-
-## Retry and dead-lettering
-
-`RetryingMessageHandler` catches **every** `Exception`. It does not sort errors into retryable and non-retryable. It also retries a handler that returns `false` without throwing.
-
-The sleep between attempts is `min(initialDelay × multiplier^(n-1), maxDelay)`, with no jitter. With the defaults that is 200 ms then 400 ms, so three attempts means two sleeps. **Those sleeps happen on the broker's consumer thread.** So long backoffs stall the partition. Past `max.poll.interval.ms`, they trigger a Kafka rebalance.
-
-When retries run out, `DeadLetterPublisher` forwards the message to `<destination><topic-suffix>`. It adds `x-dlq: true`, `x-dlq-original-destination` and `x-dlq-attempts`. When there was an exception, it also adds `x-dlq-exception-class` and `x-dlq-exception-message`.
-
-Two separate loop guards refuse to re-publish. One checks the `x-dlq` header. The other checks whether the destination already ends with the suffix. The DLQ message is sent without a partition key, so DLQ ordering is not preserved.
-
-If no `MessagePublisher` exists, no `DeadLetterPublisher` is built. A message that runs out of retries is then logged at ERROR and dropped.
-
-## Consumer groups
-
-`subscribe(topic, type, handler)` uses the literal group `"default-group"`. It does **not** fall back to `adhar.messaging.kafka.consumer.group-id`, which the facade cannot reach. Always pass a group explicitly.
-
-On Kafka, the group becomes the container's `group.id`. On RabbitMQ, it is used as the **queue name**, with the topic as the exchange. The binding routing key is the fixed `adhar.messaging.rabbitmq.default-routing-key`, not the topic or your publish key.
-
-> Calling `subscribe` twice for the same topic and group **in one process** creates two separate listener containers in the same consumer group. Kafka rebalances and splits the partitions between them, so each handler sees an arbitrary subset. On a single-partition topic, one of them sees nothing. Subscribe once per topic and group, and fan out in your own code.
-
-## A complete consumer and producer
+### Publish and consume
 
 ```java
-package com.example.orders;
-
 import com.adhar.kit.messaging.MessagingFacade;
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
 import org.springframework.stereotype.Service;
-import java.time.Instant;
 
 @Service
-public class OrderEventFlow {
+public class OrderEvents {
+
+    public record OrderCreated(String orderId, String customerId) {}
 
     private final MessagingFacade messaging;
-    private final FulfilmentService fulfilment;
     private String subscriptionId;
 
-    public OrderEventFlow(MessagingFacade messaging, FulfilmentService fulfilment) {
+    public OrderEvents(MessagingFacade messaging) {
         this.messaging = messaging;
-        this.fulfilment = fulfilment;
     }
 
-    public void publish(Order order) {
-        // key = customerId keeps one customer's events on one partition, in order
-        messaging.publish("order-events", order.getCustomerId(),
-            new OrderCreatedEvent(order.getId(), order.getCustomerId(), Instant.now()));
+    public void orderCreated(String orderId, String customerId) {
+        // The key keeps one customer's events on one Kafka partition, in order.
+        messaging.publish("order-events", customerId, new OrderCreated(orderId, customerId));
     }
 
     @PostConstruct
-    public void consume() {
-        if (!messaging.isConnected()) {
-            // no publisher means no broker wiring; subscribe would silently no-op
+    void start() {
+        if (!messaging.isConnected()) {               // true only when a publisher exists
             throw new IllegalStateException("No messaging broker configured");
         }
-        subscriptionId = messaging.subscribe(
-            "order-events", "fulfilment",          // always name the group explicitly
-            OrderCreatedEvent.class,
-            event -> fulfilment.reserve(event.orderId()));   // must be idempotent
+        subscriptionId = messaging.subscribe("order-events", "fulfilment",
+                OrderCreated.class, event -> reserveStock(event.orderId()));
     }
 
     @PreDestroy
-    public void stop() {
-        messaging.unsubscribe(subscriptionId);
+    void stop() {
+        messaging.unsubscribe(subscriptionId);         // stops the listener container
+    }
+
+    private void reserveStock(String orderId) { /* idempotent */ }
+}
+```
+
+Always pass the consumer group: the three-argument `subscribe` uses the literal group `default-group`.
+
+### Publish on commit (outbox)
+
+With `adhar.messaging.outbox.enabled=true`, `publishViaOutbox` writes a row instead of calling the broker. With the JDBC store the row joins the caller's transaction on the same `DataSource`, so it is rolled back with your data. `OutboxRelay` publishes pending rows in the background.
+
+```java
+@Transactional
+public void placeOrder(Order order) {
+    orders.save(order);
+    String entryId = messaging.publishViaOutbox("order-events", order.customerId(),
+            new OrderCreated(order.id(), order.customerId()));
+}
+```
+
+Without an `OutboxStore`, `publishViaOutbox` throws `MessagingException`. For an outbox written through JPA entities, see the [persistence](/adhar-kit/modules/persistence) outbox.
+
+### Request-reply
+
+```java
+StockLevel level = messaging.sendAndReceive("stock-queries", new StockQuery("sku-42"), StockLevel.class);
+```
+
+`sendAndReceive` blocks for up to `common.reply.timeout-ms` and throws `MessagingException` on timeout. You write the responder:
+
+| Broker | Request goes to | The responder must |
+| --- | --- | --- |
+| Kafka | Topic `<topic>` with headers `adhar_correlationId` and `adhar_replyTopic` | Publish the reply to the `adhar_replyTopic` value (`<topic>` + `common.reply.topic-suffix`), copying `adhar_correlationId` |
+| RabbitMQ | Exchange `rabbitmq.default-exchange`, routing key `<topic>`, via `RabbitTemplate.convertSendAndReceive` | Return a value from a standard Spring AMQP listener (reply-to) |
+
+Dapr has no request-reply client.
+
+### Use it from `AdharFacade`
+
+`adhar.getMessaging()`, `adhar.publish(...)` and `adhar.subscribe(...)` use `MessagingFacade.getInstance()`, which has no publisher or listener: publishing throws and subscribing never delivers. Hand the facade the auto-configured bean:
+
+```java
+import com.adhar.kit.messaging.MessagingFacade;
+import com.adhar.kit.starter.AdharFacadeCustomizer;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+
+@Configuration
+class MessagingWiring {
+    @Bean
+    AdharFacadeCustomizer messagingCustomizer(MessagingFacade messaging) {
+        return facade -> facade.setMessaging(messaging);
     }
 }
 ```
 
-```yaml
-adhar:
-  messaging:
-    kafka:
-      consumer: { enable-auto-commit: true }
-    common:
-      retry: { max-attempts: 5, initial-delay-ms: 500, backoff-multiplier: 2.0, max-delay-ms: 10000 }
-      dlq:   { enabled: true, topic-suffix: .dlq }
-      dedup: { enabled: true, ttl-ms: 900000 }
-```
-
-The `@PreDestroy` matters more than it looks. **`MessagingFacade` has no shutdown hook of its own.** The listener containers it creates are instantiated directly, not registered as beans, so Spring never stops them at context close. Without an explicit `unsubscribe`, they are orphaned, and nothing drains in-flight messages.
-
-The one exception is `OutboxRelay`, which is wired with `initMethod = "start"` and `destroyMethod = "stop"`. Its `stop()` calls `shutdownNow()` without waiting for termination, so a relay pass in progress is interrupted. That is safe only because its state lives in the store.
-
 ## Configuration
 
-| Property | Purpose | Default |
-| --- | --- | --- |
-| `adhar.messaging.enabled` | Master switch | `true` |
-| `adhar.messaging.kafka.enabled` | Wire Kafka publisher/listener | `true` |
-| `adhar.messaging.kafka.consumer.enable-auto-commit` | `true` → `AckMode.BATCH`; also drives the RabbitMQ ack mode | `true` |
-| `adhar.messaging.rabbitmq.enabled` | Wire RabbitMQ publisher/listener | `true` |
-| `adhar.messaging.rabbitmq.default-exchange` | Exchange used when unspecified | `adhar.default` |
-| `adhar.messaging.rabbitmq.default-routing-key` | Binding and fallback routing key | `adhar.default` |
-| `adhar.messaging.rabbitmq.listener.prefetch-count` | Unacked messages per consumer | `250` |
-| `adhar.messaging.rabbitmq.listener.concurrency` | Starting consumer threads | `1` |
-| `adhar.messaging.rabbitmq.listener.max-concurrency` | Ceiling the container scales to | `10` |
-| `adhar.messaging.cloudevents.enabled` | Register `CloudEventAdapter` | `true` |
-| `adhar.messaging.common.retry.enabled` | Wrap handlers in retry | `true` |
-| `adhar.messaging.common.retry.max-attempts` | Total attempts (so attempts − 1 sleeps) | `3` |
-| `adhar.messaging.common.retry.initial-delay-ms` | First retry delay | `200` |
-| `adhar.messaging.common.retry.backoff-multiplier` | Backoff growth | `2.0` |
-| `adhar.messaging.common.retry.max-delay-ms` | Backoff ceiling | `5000` |
-| `adhar.messaging.common.dlq.enabled` | Route exhausted messages to a DLQ | `true` |
-| `adhar.messaging.common.dlq.topic-suffix` | DLQ destination suffix | `.dlq` |
-| `adhar.messaging.common.dedup.enabled` | Idempotent consumption | `false` |
-| `adhar.messaging.common.dedup.ttl-ms` | How long an id is remembered | `600000` |
-| `adhar.messaging.common.reply.timeout-ms` | `sendAndReceive` timeout | `30000` |
-| `adhar.messaging.common.reply.topic-suffix` | Kafka reply topic suffix | `.reply` |
-| `adhar.messaging.outbox.enabled` | Module-local transactional outbox | `false` |
-| `adhar.messaging.outbox.table-name` | JDBC outbox table | `adhar_outbox` |
-| `adhar.messaging.outbox.relay-interval-ms` | Relay poll period | `1000` |
-| `adhar.messaging.outbox.max-attempts` | Attempts before `DEAD` | `5` |
+All keys are under `adhar.messaging`. Retry, DLQ and dedup settings apply to every subscription made through the facade.
 
-Several bound keys are never read, because the module relies on Spring Boot's own broker auto-configuration:
+| Property | Type | Default | Description |
+| --- | --- | --- | --- |
+| `enabled` | boolean | `true` | Master switch for the auto-configuration |
+| `kafka.enabled` | boolean | `true` | Register the Kafka publisher, listener and request-reply client |
+| `kafka.default-topic` | String | `default-topic` | Topic when a publish has no destination |
+| `kafka.consumer.enable-auto-commit` | boolean | `true` | `true` → `AckMode.BATCH`; `false` → `AckMode.MANUAL`. Also sets the RabbitMQ acknowledge mode |
+| `kafka.consumer.group-id` | String | `adhar-consumer-group` | Group for direct `MessageListener` calls without a group; the facade never uses it |
+| `rabbitmq.enabled` | boolean | `true` | Register the RabbitMQ publisher, listener and request-reply client |
+| `rabbitmq.default-exchange` | String | `adhar.default` | Exchange when none is given; request-reply exchange |
+| `rabbitmq.default-routing-key` | String | `adhar.default` | Publish routing key when none is given, and the key every subscription queue is bound with |
+| `rabbitmq.default-queue` | String | `adhar.default` | Queue for direct listener calls without a group |
+| `rabbitmq.publisher.confirms` | boolean | `false` | Wait for broker confirms in `MessagePublisher.publishAsync` |
+| `rabbitmq.publisher.exchange-durable` | boolean | `true` | Durability of exchanges the listener declares |
+| `rabbitmq.listener.auto-declare` | boolean | `true` | Declare the exchange, queue and binding on `subscribe` |
+| `rabbitmq.listener.queue-durable` / `queue-exclusive` / `queue-auto-delete` | boolean | `true` / `false` / `false` | Properties of declared queues |
+| `rabbitmq.listener.prefetch-count` | int | `250` | Unacknowledged messages per consumer |
+| `rabbitmq.listener.concurrency` | int | `1` | Starting consumers per subscription |
+| `rabbitmq.listener.max-concurrency` | int | `10` | Consumers a subscription can scale to |
+| `dapr.enabled` | boolean | `true` | Register the Dapr publisher and listener |
+| `dapr.pubsub-name` | String | — | Dapr pub/sub component; blank uses the component configured in `adhar-kit-dapr` |
+| `dapr.default-topic` | String | `default-topic` | Topic when a publish has no destination |
+| `cloudevents.enabled` | boolean | `true` | Register `CloudEventAdapter` |
+| `common.trace-enabled` | boolean | `true` | Add a generated `messageId` (and timestamp) to each Kafka/RabbitMQ publish |
+| `common.retry.enabled` | boolean | `true` | Wrap handlers in `RetryingMessageHandler` |
+| `common.retry.max-attempts` | int | `3` | Total attempts, including the first |
+| `common.retry.initial-delay-ms` | long | `200` | Delay before the second attempt |
+| `common.retry.backoff-multiplier` | double | `2.0` | Growth factor per attempt |
+| `common.retry.max-delay-ms` | long | `5000` | Delay ceiling |
+| `common.dlq.enabled` | boolean | `true` | Publish exhausted messages to a dead-letter destination |
+| `common.dlq.topic-suffix` | String | `.dlq` | Dead-letter destination = topic + suffix |
+| `common.dedup.enabled` | boolean | `false` | Wrap handlers in `DeduplicatingMessageHandler` |
+| `common.dedup.ttl-ms` | long | `600000` | How long a message id is remembered |
+| `common.reply.timeout-ms` | long | `30000` | `sendAndReceive` timeout |
+| `common.reply.topic-suffix` | String | `.reply` | Kafka reply topic = topic + suffix |
+| `outbox.enabled` | boolean | `false` | Register the outbox store and relay |
+| `outbox.table-name` | String | `adhar_outbox` | JDBC table (letters, digits, underscores) |
+| `outbox.initialize-schema` | boolean | `true` | Run `CREATE TABLE IF NOT EXISTS` at startup |
+| `outbox.relay-interval-ms` | long | `1000` | Delay between relay passes |
+| `outbox.batch-size` | int | `50` | Rows published per pass |
+| `outbox.max-attempts` | int | `5` | Attempts before a row is marked `DEAD` |
 
-- `adhar.messaging.kafka.bootstrap-servers`
-- the whole `kafka.producer.*` block
-- `kafka.consumer.auto-offset-reset`, `kafka.consumer.max-poll-records`, `kafka.consumer.group-id`
-- the RabbitMQ connection details
+These bound keys are not read by the module; set the Spring Boot equivalents instead: `kafka.bootstrap-servers`, `kafka.producer.*`, `kafka.consumer.auto-offset-reset`, `kafka.consumer.max-poll-records`, `kafka.properties`, the RabbitMQ connection keys (`host`, `port`, `username`, `password`, `virtual-host`), `rabbitmq.publisher.returns`, `exchange-type`, `exchange-auto-delete`, and `common.default-serialization-format`, `validation-enabled`, `default-timeout-ms`, `default-retries`, `default-backoff-ms`.
 
-Configure those under `spring.kafka.*` and `spring.rabbitmq.*` instead.
+## Operations
 
-`sendAndReceive` blocks and returns the reply directly; it is not a future. On timeout it throws `MessagingException`, not `TimeoutException`. The module ships **no responder side**. Nothing reads the `adhar_replyTopic` header and publishes a reply, so you must write that half yourself.
+**Metrics.** With `MessagingMetrics` registered, the module records counters tagged `destination` (`unknown` when null):
 
-## Testing
+| Counter | Incremented when |
+| --- | --- |
+| `adhar.messaging.publish` / `.publish.failure` | A facade or outbox-relay publish succeeds / fails |
+| `adhar.messaging.consume` | Your handler returns normally |
+| `adhar.messaging.retry` | An attempt failed and another is scheduled |
+| `adhar.messaging.consume.failure` | All retry attempts failed |
+| `adhar.messaging.dlq` | A message was published to the dead-letter destination |
+| `adhar.messaging.duplicate` | Dedup skipped a message |
 
-- **Assert the wiring, not only the logic.** A unit test with a stub facade never catches the silent-subscribe failure. Add a context test that asserts a `MessageListener` bean exists.
-- **Test the pipeline directly.** `RetryingMessageHandler` takes a `Sleeper` functional interface as a constructor argument. A test can pass a no-op and assert the attempt count without real delays. `InMemoryProcessedMessageStore` takes a `java.time.Clock`, so you can test TTL expiry without waiting.
-- **Use a real broker for anything about ordering, offsets or rebalancing.** None of it can be reproduced against a stub. `adhar-kit-test-commons` provides `KafkaIntegrationTest` and `KafkaTestContainer` (Confluent image, container reuse enabled). They register `spring.kafka.bootstrap-servers` through `@DynamicPropertySource`. There is no RabbitMQ container helper.
-- **Prove the DLQ path** by subscribing to `<topic>.dlq` in the test and asserting the `x-dlq-attempts` header. Do not assert on logs.
+Alert on `publish.failure` and `dlq`. The module has no health indicator.
 
-## Common pitfalls
+**Startup check.** The facade logs one INFO line naming its publisher, listener, outbox and request-reply client. `none (stub)` for the listener means `subscribe` will store handlers that never run; it logs a single WARN per call and returns a normal subscription id.
 
-| Symptom | Cause | Fix |
-| --- | --- | --- |
-| A consumer processes nothing and logs nothing | No `MessageListener` bean, so `subscribe` stored the handler and stopped | Add the broker starter and its container factory; check startup logs for the subscribe WARN |
-| `publish` throws `MessagingException` | No `MessagePublisher` bean | Add the broker starter and its connection config |
-| Events published for a transaction that rolled back | `publish` is not transactional | Use `publishViaOutbox`, or the [persistence](/adhar-kit/modules/persistence) outbox |
-| Duplicate side effects after a rebalance | At-least-once delivery, dedup off | Set `common.dedup.enabled: true`, and make handlers idempotent anyway |
-| Messages lost when a handler fails | Offsets commit regardless of handler outcome | Keep the DLQ enabled and alert on `adhar.messaging.dlq` |
-| Offsets never advance after disabling auto-commit | `AckMode.MANUAL` is selected but nothing acknowledges | Leave `enable-auto-commit` at `true` |
-| Per-entity events arrive out of order | Published without a key, so they spread across partitions | Pass the entity id as the key in `publish(topic, key, payload)` |
-| Consumer lag spikes on a failing message | Retry backoff sleeps on the poll thread | Lower `max-delay-ms` and `max-attempts`, and let the DLQ take the message |
-| Two handlers each see half the traffic | Two `subscribe` calls with the same topic and group in one process | Subscribe once and fan out in code |
-| A RabbitMQ handler receives `byte[]` instead of your type | The listener ignores the `Class<T>` argument; the default converter is `SimpleMessageConverter` | Register a `Jackson2JsonMessageConverter` bean |
+**Failure behaviour.**
 
-## See also
+| Situation | What happens |
+| --- | --- |
+| No `MessagePublisher` | `publish` throws `MessagingException` |
+| Broker send fails | Kafka/RabbitMQ publisher logs ERROR and returns `false`; the facade logs WARN and counts `publish.failure`. **`publish` does not throw** |
+| Handler throws, retry on | Retries with backoff on the consumer thread; on exhaustion, DLQ publish (if enabled and a publisher exists), then the listener sees a failure |
+| Failure reaches Kafka listener | Logged; the offset is committed with the batch anyway (`AckMode.BATCH`) |
+| Failure reaches RabbitMQ listener | `basicReject(requeue=true)`, so the message comes back with no redelivery limit — even after it was dead-lettered |
+| Failure reaches Dapr listener | Dapr is asked to redeliver (`RETRY`); unreadable payloads are dropped |
+| Retry off | No DLQ step: the exception goes straight to the listener |
+| Outbox publish fails | Row marked `FAILED` and retried every pass; `DEAD` after `outbox.max-attempts` |
 
-- [Event Sourcing](/adhar-kit/modules/event-sourcing) — its `KafkaEventBus` distributes domain events over the same broker.
-- [Persistence](/adhar-kit/modules/persistence) — the transactional outbox for publish-on-commit.
-- [Dapr](/adhar-kit/modules/dapr) — enables the pub/sub-component publisher path.
-- [Platform Services](/docs/core-concepts/platform-services) — the bundled Kafka to point your brokers at.
+**Shutdown.** Listener containers created by `subscribe` are not Spring beans, so the context does not stop them. Call `unsubscribe` in `@PreDestroy`. `OutboxRelay` stops with the context (`shutdownNow`, so a pass in progress is interrupted; state is in the store).
+
+## Limits
+
+- **Delivery is at-least-once at best.** With the Kafka defaults a failed message's offset still commits (effectively at-most-once for that message, rescued only by the DLQ). Setting `enable-auto-commit: false` selects `AckMode.MANUAL`, but nothing acknowledges, so offsets never advance. Make handlers idempotent.
+- **Ordering.** Kafka keeps per-partition order; `publish(topic, payload)` sets no key, so use `publish(topic, key, payload)` for per-entity order. Retry backoff sleeps on the poll thread, stalling the partition, and long sleeps can exceed `max.poll.interval.ms`. RabbitMQ subscriptions scale to `max-concurrency` (10) competing consumers, so they are unordered by default. Dead-lettered messages are published without a key.
+- **RabbitMQ topology.** The topic is the exchange and the consumer group is the queue name. Queues are bound with `default-routing-key`, so a message published with a different key does not reach facade subscribers. The module never declares the `<topic>.dlq` exchange — declare it yourself or dead letters are lost.
+- **Dedup is in-memory and per instance.** `InMemoryProcessedMessageStore` scans all entries on every message and is not shared across replicas. An id is marked before your handler runs and never unmarked, so a redelivery of a dead-lettered message is skipped. On RabbitMQ the AMQP message id is not a header, so dedup only works when the producer sets a `ce-id` or `messageId` header; without one, every message gets a fresh id and nothing is deduplicated. Dapr messages always carry `ce-id`.
+- **Retry does not classify errors.** Every exception is retried, with no jitter.
+- **One subscription per topic and group per process.** Two `subscribe` calls with the same topic and group create two containers in one group; Kafka splits partitions between them. Dapr ignores the group: replicas of an app share a subscription.
+- **Outbox.** The relay takes no row locks, so several replicas can publish the same row (at-least-once). Published rows are never deleted. The generated DDL uses `CLOB`, which PostgreSQL does not support; there, create the table yourself and set `outbox.initialize-schema: false`. The in-memory store is lost on restart.
+- **Annotations do nothing.** `@CloudEventPublisher`, `@CloudEventListener` and `@CloudEventHandler` exist as types, but no processor reads them. Use the facade.
+- **`Message<T>` ids are generated.** `id` is always a new UUID and `timestamp` is `Instant.now()`; the builder has no setter for either.
+- **Testing.** `RetryingMessageHandler` takes a `Sleeper` and `InMemoryProcessedMessageStore` takes a `Clock`, so both are testable without real delays. `adhar-kit-test-commons` provides `KafkaIntegrationTest` and `KafkaTestContainer`; there is no RabbitMQ helper.
+
+## Next steps
+
+- [Persistence](/adhar-kit/modules/persistence) — the JPA transactional outbox.
+- [Dapr](/adhar-kit/modules/dapr) — the pub/sub component behind the Dapr transport.
+- [Event Sourcing](/adhar-kit/modules/event-sourcing) — distributes domain events over the same brokers.
+- [Platform Services](/docs/core-concepts/platform-services) — the Kafka the platform provides.

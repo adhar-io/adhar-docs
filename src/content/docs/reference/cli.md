@@ -17,7 +17,7 @@ The `adhar` binary creates the platform, converges it, and inspects or drives ev
 |---|---|
 | **Aliases** | `adhar`, `a`, `ad` |
 | **Config file** | `-f/--file`, else `./config.yaml`, `~/.adhar/config.yaml`, `~/config.yaml` |
-| **Stack** | Built into the binary. Override with `-p` (`up`), `--stack-dir` (`stack`, `upgrade`) or `ADHAR_STACK_DIR`; inside a source checkout, `./platform/stack` is used |
+| **Stack** | Built into the binary, in every directory. Override with `-p` (`up`), `--stack-dir` (`stack`, `upgrade`) or `ADHAR_STACK_DIR` |
 | **Cluster** | `--kubeconfig`, else `$KUBECONFIG`, else `~/.kube/config` |
 | **Structured output** | `-o json` / `-o yaml` on inspection commands |
 | **Exit code** | `0` on success, `1` on failure (the error is printed once, to stderr) |
@@ -88,7 +88,7 @@ adhar up [flags]
 | `-d, --dry-run` | `false` | Preview without applying |
 | `--recreate` | `false` | **Destructive:** delete the existing cluster first |
 | `--kube-version <v>` | `v1.37.0` | Kubernetes version, on any provider |
-| `--apps-timeout <duration>` | `15m` | How long the CLI keeps driving apps to Synced + Healthy. `0` exits once the foundation is ready |
+| `--apps-timeout <duration>` | `15m` locally, `45m` on a cloud | How long the CLI waits for the Adhar Console to be Synced, Healthy and serving. `0` exits once the foundation is ready |
 | `--host <name>` | `adhar.localtest.me` | Platform host name (local) |
 | `--port <n>` | `8443` | HTTPS host port (local). HTTP is `n − 363` (8443 → 8080). A busy port moves to the next free one |
 | `--extra-ports <map>` | — | Extra host ports, for example `22:32222,9090:39090` |
@@ -146,7 +146,7 @@ Scaffolds, validates, views and edits `config.yaml`. `-f/--file` selects the fil
 |---|---|---|
 | `config create` | Scaffold a new file | `-p/--provider` (default `kind`), `-r/--region`, `-n/--name` (output path, default `./config.yaml`), `-t/--template` (default `nonprod-defaults`), `--force` |
 | `config validate [file]` | Validate a file | — |
-| `config view` | Print the resolved configuration | `-o yaml\|json` (default `yaml`) |
+| `config view` | Print the configuration as loaded; `config export --resolve` folds templates into each environment | `-o yaml\|json` (default `yaml`) |
 | `config get [key]` / `config set [key] [value]` | Read or edit a `globalSettings` value | — |
 | `config export` | Export the loaded configuration | `--resolve` (merge templates into each environment), `--format yaml\|json`, `-o/--output <file>` |
 | `config list-templates` | List environment templates | — |
@@ -178,7 +178,7 @@ npb-stack-change-flow
 | `stack sync [package]...` | Ask ArgoCD to re-compare now instead of at the next resync | — |
 | `stack verify` | Record each package's verification state from live health | `--write` |
 
-Persistent flags: `--profile local|production` (default: detected from the cluster), `--stack-dir` (default: the built-in stack, or `./platform/stack` inside a source checkout), `-n/--namespace` (default `adhar-system`), `--json`.
+Persistent flags: `--profile local|production` (default: detected from the cluster), `--stack-dir` (default: the built-in stack), `-n/--namespace` (default `adhar-system`), `--json`.
 
 ```bash
 adhar stack list --problems                # only packages that are not Synced and Healthy

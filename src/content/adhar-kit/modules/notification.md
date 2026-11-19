@@ -7,68 +7,45 @@ path: "/adhar-kit/modules/notification"
 
 # Notification
 
-"Send the customer an email" turns into a surprising amount of code. You need an SMTP client, a retry loop and template rendering. You need a way to stop a retry storm from sending the same message four times. And you need some record of what actually went out.
-
-`adhar-kit-notification` **turns that into one call against a channel-agnostic service**. It then adds the operational parts as configuration, not code: idempotency, rate limiting, preferences, digesting, and bounded history.
+`adhar-kit-notification` gives you one channel-agnostic `NotificationService` for email, webhooks, SMS, in-app messages and Dapr output bindings, with retry, idempotency, opt-out, rate limiting, digesting and a bounded delivery history around it. Use it when a service sends transactional messages and you want duplicate suppression and an auditable record of what went out, configured rather than hand-coded.
 
 ## At a glance
 
 | | |
 | --- | --- |
 | Artifact | `com.adhar.kit:adhar-kit-notification` |
-| Built on | `adhar-kit-commons`, Spring Boot Mail (`JavaMailSender`), WebFlux `WebClient`; optional Dapr bindings |
-| Entry points | `NotificationService`, `TemplateNotificationService`, `NotificationChannel` |
-| Config prefix | `adhar.notification` |
-| Use it when | A service sends transactional email, webhooks, SMS, or in-app messages and you want delivery outcomes you can audit |
+| Toggle | `adhar.notification.enabled` (default `true`) turns the auto-configuration on or off. The facade gate `adhar.kit.modules.notification` defaults to `false`; while it is off, `adhar.getNotification()` throws `IllegalStateException` |
+| Facade | `adhar.getNotification()` → `NotificationFacade`. **Not auto-wired**: the module registers no `NotificationFacade` bean, so facade calls throw `IllegalStateException: NotificationService is not configured` until you wire one ([below](#use-the-facade)). Inject the beans instead: `NotificationService`, `TemplateNotificationService`, `NotificationHistory`, `NotificationPreferenceStore`, `NotificationDigestService` |
+| Dependencies | Required: `adhar-kit-commons`. Optional: `spring-boot-starter-mail` (email), `spring-boot-starter-webflux` (webhook), `adhar-kit-dapr` (Dapr binding channel) |
+| Frameworks | Spring Boot auto-configuration (`NotificationAutoConfiguration`). No adapters for other runtimes; the classes are plain Java and can be constructed by hand |
 
 ## How it works
 
-A `Notification` is an immutable record: `id`, `type`, `recipient`, `subject`, `body`, `metadata`, `createdAt`. `DefaultNotificationService` routes it to a `NotificationChannel`, then runs the shared guards around that delivery.
+A `Notification` is an immutable record (`id`, `type`, `recipient`, `subject`, `body`, `metadata`, `createdAt`). `DefaultNotificationService.send` routes it to the first channel in the injected `List<NotificationChannel>` whose `supports(type)` is true, then runs the guards and delivery in this order:
 
 ```diagram
-kit-notification-send
+nkc-notification-send
 ```
 
-### The routing order, exactly
+1. **Channel lookup** — no supporting channel throws `UnsupportedOperationException` immediately, even for an opted-out recipient or a duplicate key.
+2. **Opt-out** — `NotificationPreferenceStore.isOptedOut(recipient, type)`; logs at INFO and returns.
+3. **Rate limit** — only when `rate-limit.enabled`; logs at WARN, records a failure entry `Rate limit exceeded`, returns.
+4. **Idempotency** — only when `metadata` has a non-blank `idempotencyKey` (`DefaultNotificationService.IDEMPOTENCY_KEY_METADATA`); a key registered within `ttl-ms` logs at INFO and returns.
+5. **Delivery** — `channel.send`, then a history entry. On failure the retry handler takes over.
 
-`send(notification)` does these steps in this order, and the order matters:
+The guards return `void`, so the caller cannot tell a suppressed send from a delivered one; only logs and history show the difference.
 
-1. **`findChannel(notification)`** — picks the first channel in the injected `List<NotificationChannel>` whose `supports(type)` returns true. If none matches, it throws `UnsupportedOperationException: No notification channel found for type: <TYPE>` **immediately**. Channel lookup happens *first*. So an unsupported type throws even for a recipient who has opted out, and even when an idempotency key would have suppressed the send.
-2. **Opt-out** — `NotificationPreferenceStore.isOptedOut(recipient, type)`. A match logs at INFO and returns. No history entry.
-3. **Rate limit** — `NotificationRateLimiter.tryAcquire(recipient, type)`. A rejection logs at WARN, records a **failure** history entry with `Rate limit exceeded`, and returns.
-4. **Idempotency** — runs only when the notification's metadata carries a non-blank `idempotencyKey` entry (the constant `DefaultNotificationService.IDEMPOTENCY_KEY_METADATA`). If the key was already registered within the TTL, it logs at INFO and returns. No history entry.
-5. **Delivery** — `channel.send(notification)`, then a history entry and (if a publisher is wired) a CloudEvent.
+`NotificationChannel` is a **sealed interface** permitting exactly five channels. You cannot add a sixth; to change behaviour, replace one of them with your own bean of the same type (each is `@ConditionalOnMissingBean`) or replace `NotificationService`.
 
-All three guards stop the send by returning `void`. From the return value, the caller cannot tell a suppressed send from a delivered one. Only the logs and the history show the difference.
+| Channel | `NotificationType` | Registered when | Delivers via |
+| --- | --- | --- | --- |
+| `InAppNotificationChannel` | `IN_APP` | `in-app.enabled` (default `true`) | An INFO log line only; nothing is stored |
+| `EmailNotificationChannel` | `EMAIL` | `email.enabled=true` and a `JavaMailSender` bean (`spring.mail.*`) | `SimpleMailMessage` (plain text); `cc`/`bcc` metadata, comma-separated |
+| `WebhookNotificationChannel` | `WEBHOOK` | `webhook.enabled=true` and a `WebClient.Builder` bean | JSON `POST` to `metadata.webhookUrl`, else `webhook.default-url` |
+| `SmsNotificationChannel` | `SMS` | `sms.enabled=true` | HTTP gateway call — but see [Limits](#limits): the auto-configured bean ignores `sms.*` |
+| `DaprBindingNotificationChannel` | `EMAIL`, `SMS`, `WEBHOOK` | `adhar-kit-dapr` on the classpath, `adhar.dapr.enabled=true` set explicitly, a `DaprFacade` bean, `notification.dapr.enabled` (default `true`) | `DaprFacade.invokeBinding` (`create` for email/SMS, `post` for webhook) |
 
-`NotificationChannel` is a **sealed interface**. It permits exactly `EmailNotificationChannel`, `WebhookNotificationChannel`, `InAppNotificationChannel`, `SmsNotificationChannel` and `DaprBindingNotificationChannel`. You cannot write a sixth implementation; the compiler will refuse. To reach more providers, you can:
-
-- configure the SMS or Dapr channel to point at a provider
-- replace one of the permitted channels with your own bean of that exact type
-- replace `NotificationService` outright
-
-Each channel is registered only under certain conditions, and the defaults are stricter than most readers expect:
-
-| Channel | Enabled by | Notes |
-| --- | --- | --- |
-| In-app | **`in-app.enabled`, default `true`** | The default implementation only writes an INFO log line. Nothing is persisted or delivered |
-| Email | `email.enabled=true` **and** `JavaMailSender` on the classpath | Default is `false` |
-| Webhook | `webhook.enabled=true` **and** `WebClient` on the classpath | Default is `false` |
-| SMS | `sms.enabled=true` | Default is `false`; needs `sms.url` and a `payload-template` |
-| Dapr binding | `adhar-kit-dapr` present, `adhar.dapr.enabled=true`, a `DaprFacade` bean, and `notification.dapr.enabled` (default `true`) | Registered after the native channels, so a configured native channel wins for its type |
-
-### Async means `sendAsync`, not `send`
-
-`adhar.notification.async` (default `true`) chooses the `Executor` used by `sendAsync` only:
-
-- `true` → `Executors.newVirtualThreadPerTaskExecutor()`
-- `false` → `Runnable::run`
-
-**`send(notification)` is always synchronous on the calling thread**, whatever the flag says. To keep a slow SMTP server off your request thread, call `sendAsync`. Switching `async` does not do it for you.
-
-With the virtual-thread executor, a blocked send parks a virtual thread instead of pinning a platform thread, so fan-out is cheap. It is also **unbounded**. Nothing limits how many sends can be in flight. The executor is never shut down, so in-flight sends are not drained on context close.
-
-## Install
+## Add it
 
 ```xml
 <dependency>
@@ -76,247 +53,234 @@ With the virtual-thread executor, a blocked send parks a virtual thread instead 
     <artifactId>adhar-kit-notification</artifactId>
     <version>0.1.0</version>
 </dependency>
+<!-- Email channel -->
+<dependency>
+    <groupId>org.springframework.boot</groupId>
+    <artifactId>spring-boot-starter-mail</artifactId>
+</dependency>
+<!-- Webhook channel -->
+<dependency>
+    <groupId>org.springframework.boot</groupId>
+    <artifactId>spring-boot-starter-webflux</artifactId>
+</dependency>
 ```
 
-## Key APIs
+`adhar-kit-starter` already depends on `adhar-kit-notification`.
 
-- **`NotificationService`** — the SPI, and the bean you should inject: `send(notification)`, `sendAsync(notification)` (returns `CompletableFuture<Void>`), `sendBatch(list)`. Provide your own bean to replace `DefaultNotificationService` entirely.
-- **`TemplateNotificationService`** — `registerTemplate(template)`, `sendFromTemplate(templateId, recipient, variables[, locale])`, `getTemplate`, `removeTemplate`, `templateCount`. Templates live in a `ConcurrentHashMap` on this bean instance.
-- **`Notification`** — the record above. `metadata` defaults to an empty map and `createdAt` to now.
-- **`NotificationTemplate`** — a record of `id`, `name`, `type`, `subjectTemplate`, `bodyTemplate`, `defaultMetadata`. Its `render(variables)` returns a `RenderedTemplate(subject, body)`. Placeholders are `${name}`. The record's own `render` does plain substitution with **no HTML escaping**. Only `TemplateNotificationService` escapes.
-- **`NotificationType`** — `EMAIL`, `WEBHOOK`, `IN_APP`, `SMS`.
-- **`NotificationHistory`** — `record(...)`, `getHistory(limit)`, `getFailedNotifications()`, `size()`, `clear()`. It is a bounded `ConcurrentLinkedDeque` that holds the most recent `history.max-size` entries.
-- **`NotificationEvent`** — a record emitted per attempt, built with `NotificationEvent.success(...)` / `.failure(...)`. It is wrapped as CloudEvents of type `com.adhar.notification.sent` and `com.adhar.notification.failed`. See the caveat below.
-- **Supporting beans** — `NotificationRetryHandler`, `NotificationPreferenceStore`, `NotificationRateLimiter`, `NotificationIdempotencyStore`, `NotificationDigestService`.
+## Use it
 
-> **`NotificationFacade` is not auto-configured.** The module registers no `NotificationFacade` bean, and nothing populates the `NotificationFacade.getInstance()` singleton. That singleton is built with all-null collaborators. So `adhar.getNotification().send(...)` throws `IllegalStateException: NotificationService is not configured`. Inject `NotificationService` and `TemplateNotificationService` directly. Or build a `NotificationFacade` bean yourself and pass it to `AdharFacade.setNotification(...)`.
-
-A second default catches people out in the same way.
-
-> **CloudEvents are off unless you wire them.** `DefaultNotificationService` accepts an `eventPublisher`, but the auto-configuration passes `null`. No CloudEvents are published out of the box. To get them, define your own `NotificationService` bean using the full `DefaultNotificationService` constructor and supply a `Consumer<AdharCloudEvent<?>>`.
-
-## Worked example: templated email with idempotency
+### Send with duplicate suppression
 
 ```java
-package com.example.orders;
-
 import com.adhar.kit.notification.DefaultNotificationService;
-import com.adhar.kit.notification.NotificationHistory;
 import com.adhar.kit.notification.NotificationService;
-import com.adhar.kit.notification.TemplateNotificationService;
 import com.adhar.kit.notification.model.Notification;
-import com.adhar.kit.notification.model.NotificationHistoryEntry;
-import com.adhar.kit.notification.model.NotificationTemplate;
 import com.adhar.kit.notification.model.NotificationType;
-import jakarta.annotation.PostConstruct;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import org.springframework.stereotype.Component;
-
-import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import org.springframework.stereotype.Component;
 
 @Component
-public class OrderNotifications {
-
-    private static final Logger log = LoggerFactory.getLogger(OrderNotifications.class);
+class OrderNotifications {
 
     private final NotificationService notifications;
-    private final TemplateNotificationService templates;
-    private final NotificationHistory history;
 
-    public OrderNotifications(NotificationService notifications,
-                              TemplateNotificationService templates,
-                              NotificationHistory history) {
+    OrderNotifications(NotificationService notifications) {
         this.notifications = notifications;
-        this.templates = templates;
-        this.history = history;
     }
 
-    @PostConstruct
-    void registerTemplates() {
-        templates.registerTemplate(new NotificationTemplate(
-                "order-confirmation",
-                "Order confirmation email",
-                NotificationType.EMAIL,
-                "Order ${orderId} confirmed",
-                "<p>Hi ${customerName}, your order ${orderId} for ${total} is on its way.</p>",
-                // HTML mode: every substituted variable is HTML-escaped.
-                Map.of("contentType", "text/html")));
-    }
-
-    /**
-     * sendFromTemplate cannot carry an idempotency key - the notification it builds
-     * takes only the template's defaultMetadata. Build the Notification by hand when
-     * duplicate suppression matters.
-     */
-    public void confirm(Order order) {
-        NotificationTemplate template = templates.getTemplate("order-confirmation");
-        // NOTE: NotificationTemplate.render does plain substitution with NO HTML
-        // escaping - only TemplateNotificationService escapes. Pass trusted values.
-        var rendered = template.render(Map.of(
-                "orderId",      order.getId().toString(),
-                "customerName", order.getCustomerName(),
-                "total",        order.getTotal().toString()));
-
-        Notification notification = new Notification(
+    void confirm(String orderId, String email) {
+        Notification n = new Notification(
                 UUID.randomUUID().toString(),
                 NotificationType.EMAIL,
-                order.getEmail(),
-                rendered.subject(),
-                rendered.body(),
-                Map.of(DefaultNotificationService.IDEMPOTENCY_KEY_METADATA,
-                       "order-confirmation:" + order.getId()),
-                null);
+                email,
+                "Order " + orderId + " confirmed",
+                "Your order " + orderId + " is on its way.",
+                // Derive the key from the business event, not per call:
+                // a retried request or redelivered message then sends once.
+                Map.of(DefaultNotificationService.IDEMPOTENCY_KEY_METADATA, "order-confirmed:" + orderId),
+                null); // createdAt defaults to now
 
-        try {
-            // Async so a slow SMTP server never blocks the request thread.
-            notifications.sendAsync(notification).exceptionally(ex -> {
-                // The future completes exceptionally only after retries are exhausted.
-                log.error("Order {} confirmation undeliverable", order.getId(), ex);
-                return null;
-            });
-        } catch (UnsupportedOperationException e) {
-            // No channel supports EMAIL - email.enabled is false, or no JavaMailSender.
-            log.error("Email channel not configured; cannot confirm order {}", order.getId(), e);
-        }
-    }
-
-    public List<NotificationHistoryEntry> triage() {
-        return history.getFailedNotifications();
+        notifications.sendAsync(n).exceptionally(ex -> {
+            // Completes exceptionally only after retries are exhausted.
+            System.err.println("Confirmation for " + orderId + " failed: " + ex);
+            return null;
+        });
     }
 }
 ```
 
-The idempotency key comes from the business event; it is not generated per call. That is the whole point. A retried HTTP request, a redelivered Kafka message and a duplicated job run all produce `order-confirmation:1234`, and only the first one sends.
+Use `sendAsync` for anything on a request thread: `send` is always synchronous and blocks through the retry backoff. `sendBatch(list)` calls `send` for each item, logs failures at ERROR and continues.
+
+### Templates
+
+```java
+import com.adhar.kit.notification.TemplateNotificationService;
+import com.adhar.kit.notification.model.NotificationTemplate;
+import com.adhar.kit.notification.model.NotificationType;
+import java.util.Map;
+
+void sendWelcome(TemplateNotificationService templates, String userId, String name) {
+    templates.registerTemplate(new NotificationTemplate(
+            "welcome", "Welcome message", NotificationType.IN_APP,
+            "Welcome, ${name}", "<p>Hello ${name}</p>",
+            Map.of("contentType", "text/html")));   // HTML-escape substituted values
+
+    templates.sendFromTemplate("welcome", userId, Map.of("name", name));
+}
+```
+
+- Placeholders are `${name}`, replaced literally; keys are case-sensitive, a missing key leaves the placeholder, a null value becomes empty.
+- With `contentType: text/html` or `html: true` in `defaultMetadata`, `TemplateNotificationService` escapes `& < > " '` in substituted values (never in the template text). `NotificationTemplate.render(...)` on its own does no escaping.
+- With a `MessageSource` bean, the four-argument `sendFromTemplate(id, recipient, vars, locale)` looks up `<id>.subject` and `<id>.body` first and falls back to the template text.
+- The notification it builds carries only the template's `defaultMetadata`, so it cannot carry a per-send `idempotencyKey` or `webhookUrl`. Render with `getTemplate(id).render(vars)` and build the `Notification` yourself when you need them.
+- An unknown template id throws `IllegalArgumentException`. Templates live in memory on the bean.
+
+### Webhooks
+
+```java
+notifications.send(new Notification(
+        UUID.randomUUID().toString(), NotificationType.WEBHOOK,
+        "billing-service", "invoice.paid", "{\"invoice\":\"INV-42\"}",
+        Map.of("webhookUrl", "https://hooks.example.com/billing"), null));
+```
+
+The native channel posts `{id, type, recipient, subject, body, metadata, createdAt}` and waits up to `webhook.timeout-ms`. It builds the payload with `Map.of`, so **`recipient`, `subject` and `body` must be non-null**. The URL comes from `metadata.webhookUrl` or `webhook.default-url`, never from `recipient`.
+
+### Opt-outs and digests
+
+```java
+preferences.optOut("user-42", NotificationType.EMAIL);   // NotificationPreferenceStore
+digests.submit(notification);                            // NotificationDigestService
+```
+
+`NotificationDigestService` (registered when `digest.enabled=true`) does not intercept `send`; you call `submit` explicitly. It buckets by recipient and type, and on `window-ms` expiry or `max-batch-size` sends one notification whose subject is `subject-template` and whose body lists `- <subject>: <body>` per item. A bucket of one is sent unchanged. Digest notifications carry only `digest` and `digest.count` metadata, so per-item idempotency keys and webhook URLs are dropped. `flushAll()` sends everything pending; closing the bean flushes too.
+
+### Use the facade
+
+To make `adhar.getNotification()` work, enable the gate and set a facade built from the beans:
 
 ```yaml
 adhar:
-  notification:
-    async: true
-    email:
-      enabled: true
-      from: no-reply@example.com
-    webhook:
-      enabled: true
-      timeout-ms: 5000
-    retry:
-      max-retries: 5
-      backoff-ms: 1000
-      max-backoff-ms: 30000
-    idempotency:
-      enabled: true
-      ttl-ms: 86400000
-    rate-limit:
-      enabled: true
-      max-per-window: 30
-      window-ms: 60000
+  kit:
+    modules:
+      notification: true
 ```
 
-## How it behaves
+```java
+import com.adhar.kit.notification.NotificationFacade;
+import com.adhar.kit.notification.NotificationHistory;
+import com.adhar.kit.notification.NotificationService;
+import com.adhar.kit.notification.TemplateNotificationService;
+import com.adhar.kit.starter.AdharFacadeCustomizer;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
 
-- **Thread-safety.** `DefaultNotificationService` is a stateless singleton over its collaborators. All of these are safe to share, and none serialise across unrelated recipients:
-  - `NotificationHistory` uses a `ConcurrentLinkedDeque`.
-  - `TemplateNotificationService` uses a `ConcurrentHashMap`.
-  - The idempotency store uses a `ConcurrentHashMap` with an atomic `compute`.
-  - The rate limiter uses a `ConcurrentHashMap` of per-key deques, each guarded by its own monitor.
-- **Retry blocks the caller.** `NotificationRetryHandler.retry(...)` is `retryAsync(...).join()`, and `DefaultNotificationService.send` calls it on the failure path. Backoff is exponential: `backoff-ms × 2^attempt`, capped at `max-backoff-ms`. A **single-threaded daemon scheduler** named `notification-retry-scheduler` runs the backoff, and the retried attempts also run on that one thread.
+@Configuration
+class NotificationFacadeWiring {
+    @Bean
+    AdharFacadeCustomizer notificationFacade(NotificationService service,
+                                             TemplateNotificationService templates,
+                                             NotificationHistory history) {
+        return adhar -> adhar.setNotification(new NotificationFacade(service, templates, history));
+    }
+}
+```
 
-  With the defaults (3 retries, 1 s base), a final failure blocks the caller for 1 s + 2 s + 4 s before throwing. Concurrent failing sends queue behind one another on that single thread. This is the strongest argument for using `sendAsync`.
-- **Failure propagation.**
-  - With a retry handler present and all attempts used up, `send` records a failure entry and throws `RuntimeException("Failed to send notification [id=…] after retries", cause)`.
-  - With no retry handler, it records the failure and rethrows the original exception.
-  - `sendAsync` reports that as a failed future, **which is silently discarded if you never call `exceptionally` or `join`**.
-  - `sendBatch` catches errors per notification, logs at ERROR and continues. So one bad address does not stop the batch.
-- **Lifecycle.** `NotificationRetryHandler` implements `AutoCloseable`. So Spring's inferred destroy method shuts its scheduler down with `shutdownNow()`, and retries still scheduled at shutdown are dropped. The virtual-thread executor behind `sendAsync` is not registered for shutdown at all, so in-flight async sends are not drained.
-- **Resource bounds.**
-  - `NotificationHistory` is bounded by `history.max-size` (default 1000) and drops the oldest entry on write.
-  - The idempotency store purges expired keys lazily on every `register`. So its size is the number of distinct keys within the TTL. A 24-hour default TTL with high-cardinality keys is a real memory cost.
-  - **`NotificationRateLimiter` never evicts its per-`recipient|type` deques.** Its map grows with the number of distinct recipients for the life of the process. It is sized for a bounded set of recipients, not for arbitrary public input.
-- **Everything in-memory is per-pod.** History, preferences, idempotency keys and rate-limit windows all live in the JVM. Across replicas, the same idempotency key can send once per pod, and a restart forgets everything. For shared, durable state, replace `NotificationIdempotencyStore`, `NotificationPreferenceStore` or `NotificationHistory` with your own bean (all are `@ConditionalOnMissingBean`).
+The facade adds `sendEmail`, `sendSms`, `sendInApp`, `sendWebhook`, `sendFromTemplate`, `registerTemplate`, `getHistory(limit)`, `getFailedNotifications()` and `health()`. `adhar.notify(recipient, subject, body)` is `sendEmail`. Avoid `sendWebhook(url, payload)` and `adhar.webhook(...)` with the native webhook channel: they pass the URL as `recipient` and a null subject, so the send fails.
 
-### Template rendering
+### Publish CloudEvents
 
-`${name}` placeholders are filled by literal string replacement from the variable map:
+The auto-configured service passes a `null` event publisher, so no CloudEvents are emitted. Define your own `NotificationService` to get `com.adhar.notification.sent` / `com.adhar.notification.failed` events (source `adhar-kit/notification`, data `NotificationEvent`):
 
-- Keys are exact and case-sensitive.
-- An absent key leaves the placeholder text in the output.
-- A null value is replaced with an empty string.
+```java
+@Bean
+NotificationService notificationService(List<NotificationChannel> channels,
+                                        NotificationRetryHandler retry,
+                                        NotificationHistory history,
+                                        NotificationPreferenceStore preferences,
+                                        ObjectProvider<NotificationRateLimiter> rateLimiter,
+                                        NotificationIdempotencyStore idempotency,
+                                        ApplicationEventPublisher events) {
+    return new DefaultNotificationService(channels, Executors.newVirtualThreadPerTaskExecutor(),
+            retry, history, events::publishEvent,
+            preferences, rateLimiter.getIfAvailable(), idempotency);
+}
+```
 
-When the template's `defaultMetadata` contains `contentType: text/html` or `html: true`, **substituted values are HTML-escaped** (`&`, `<`, `>`, `"`). That is what stops a customer name from becoming an injection vector. The template text itself is never escaped.
-
-Localised text works when a `MessageSource` bean is present and you pass a `Locale` to the four-argument `sendFromTemplate`. The subject and body are then looked up as `<templateId>.subject` and `<templateId>.body` first. If the code is missing, it falls back to the template's own text. An unknown `templateId` throws `IllegalArgumentException`.
+A publisher that throws is logged at WARN and does not fail the send.
 
 ## Configuration
 
-| Property | Purpose | Default |
-| --- | --- | --- |
-| `adhar.notification.enabled` | Master switch | `true` |
-| `adhar.notification.async` | Executor for `sendAsync` (virtual threads vs inline) | `true` |
-| `adhar.notification.email.enabled` | Register the email channel | `false` |
-| `adhar.notification.email.from` | Sender address | — |
-| `adhar.notification.email.template-path` | Template lookup root | `classpath:templates/` |
-| `adhar.notification.webhook.enabled` | Register the webhook channel | `false` |
-| `adhar.notification.webhook.default-url` | Fallback webhook target | — |
-| `adhar.notification.webhook.timeout-ms` | HTTP timeout | `5000` |
-| `adhar.notification.in-app.enabled` | Register the in-app (log-only) channel | `true` |
-| `adhar.notification.sms.enabled` | Register the SMS channel | `false` |
-| `adhar.notification.sms.url` / `.method` / `.content-type` | SMS provider endpoint | — / `POST` / `application/json` |
-| `adhar.notification.sms.auth-header-name` / `.auth-header-value` | Provider credential header | `Authorization` / — |
-| `adhar.notification.sms.payload-template` | Provider request body | `{"to":"${recipient}","message":"${body}"}` |
-| `adhar.notification.sms.timeout-ms` | SMS HTTP timeout | `5000` |
-| `adhar.notification.retry.max-retries` | Attempts after the first failure | `3` |
-| `adhar.notification.retry.backoff-ms` | Initial backoff | `1000` |
-| `adhar.notification.retry.max-backoff-ms` | Backoff ceiling | `30000` |
-| `adhar.notification.history.max-size` | Entries retained in memory | `1000` |
-| `adhar.notification.rate-limit.enabled` | Per-recipient, per-channel throttling | `false` |
-| `adhar.notification.rate-limit.max-per-window` | Sends allowed per window | `60` |
-| `adhar.notification.rate-limit.window-ms` | Sliding window length | `60000` |
-| `adhar.notification.idempotency.enabled` | Register the idempotency store | `true` |
-| `adhar.notification.idempotency.ttl-ms` | How long a key is remembered | `86400000` (24 h) |
-| `adhar.notification.digest.enabled` | Batch instead of sending each | `false` |
-| `adhar.notification.digest.window-ms` | Batching window | `60000` |
-| `adhar.notification.digest.max-batch-size` | Messages per digest | `50` |
-| `adhar.notification.digest.subject-template` | Digest subject | `You have ${count} new notifications` |
-| `adhar.notification.dapr.enabled` | Register the Dapr binding channel | `true` |
-| `adhar.notification.dapr.email-binding` / `.sms-binding` / `.http-binding` | Dapr output binding names | `smtp` / `sms` / `webhook` |
+All keys are under `adhar.notification`.
 
-## Testing
+| Property | Type | Default | Description |
+| --- | --- | --- | --- |
+| `enabled` | boolean | `true` | Master switch for the auto-configuration |
+| `async` | boolean | `true` | Executor for `sendAsync`: virtual thread per task (`true`) or the caller thread (`false`). Does not affect `send` |
+| `email.enabled` | boolean | `false` | Register the email channel |
+| `email.from` | String | — | Sender address |
+| `email.template-path` | String | `classpath:templates/` | Declared but not read by the module |
+| `webhook.enabled` | boolean | `false` | Register the webhook channel |
+| `webhook.default-url` | String | — | Target when `metadata.webhookUrl` is absent |
+| `webhook.timeout-ms` | int | `5000` | Blocking wait for the HTTP response |
+| `in-app.enabled` | boolean | `true` | Register the in-app (log-only) channel |
+| `sms.enabled` | boolean | `false` | Register the SMS channel |
+| `sms.url` | String | — | Gateway URL; unset means the channel only logs |
+| `sms.method` | String | `POST` | HTTP method |
+| `sms.content-type` | String | `application/json` | Request content type; a JSON type escapes values in the payload |
+| `sms.auth-header-name` | String | `Authorization` | Credential header name |
+| `sms.auth-header-value` | String | — | Credential header value |
+| `sms.payload-template` | String | `{"to":"${recipient}","message":"${body}"}` | Body template; also `${subject}`, `${id}`, `${metadata.<key>}` |
+| `sms.timeout-ms` | int | `5000` | Connect and request timeout |
+| `retry.max-retries` | int | `3` | Retry attempts after the immediate resend |
+| `retry.backoff-ms` | long | `1000` | Initial backoff, doubled per attempt |
+| `retry.max-backoff-ms` | long | `30000` | Backoff ceiling |
+| `history.max-size` | int | `1000` | Entries kept; oldest dropped first |
+| `rate-limit.enabled` | boolean | `false` | Register the per-recipient, per-type limiter |
+| `rate-limit.max-per-window` | int | `60` | Sends allowed per window |
+| `rate-limit.window-ms` | long | `60000` | Sliding window length |
+| `idempotency.enabled` | boolean | `true` | Register the in-memory idempotency store |
+| `idempotency.ttl-ms` | long | `86400000` | How long a key is remembered (24 h) |
+| `digest.enabled` | boolean | `false` | Register `NotificationDigestService` |
+| `digest.window-ms` | long | `60000` | Time a bucket stays open |
+| `digest.max-batch-size` | int | `50` | Bucket size that triggers an immediate flush |
+| `digest.subject-template` | String | `You have ${count} new notifications` | Digest subject |
+| `dapr.enabled` | boolean | `true` | Register the Dapr binding channel (when Dapr is active) |
+| `dapr.email-binding` / `dapr.email-enabled` | String / boolean | `smtp` / `true` | Binding for `EMAIL`; metadata `emailTo`, `subject` |
+| `dapr.sms-binding` / `dapr.sms-enabled` | String / boolean | `sms` / `true` | Binding for `SMS`; metadata `toNumber` |
+| `dapr.http-binding` / `dapr.webhook-enabled` | String / boolean | `webhook` / `true` | Binding for `WEBHOOK`; `recipient` becomes metadata `path` |
 
-`adhar-kit-test-commons` has no notification helper. But `WireMockIntegrationTest` is the right base for webhook and SMS channels, and `MockRestServer` suits simpler stubs.
+## Operations
 
-1. **Routing and guards** — build `DefaultNotificationService` directly. Give it a fake channel that records what it received, and `Runnable::run` as the executor. You get a fully synchronous service with no Spring context. You can then assert the guard order: a type with no supporting channel must throw even with an opted-out recipient.
-2. **Idempotency** — send the same notification twice with the same `idempotencyKey` metadata. Assert the fake channel saw exactly one send. `InMemoryNotificationIdempotencyStore` has a constructor that takes a `LongSupplier` clock, so you can move past the TTL without sleeping.
-3. **Rate limiting** — `NotificationRateLimiter` takes the same injectable clock. Use it instead of `Thread.sleep` to test window rollover.
-4. **Retry** — pass your own `ScheduledExecutorService` to the `NotificationRetryHandler(properties, scheduler)` constructor. The handler does not shut down a scheduler it does not own. So you can use a deterministic one and assert attempt counts without waiting out real backoff.
-5. **Templates** — call `TemplateNotificationService.registerTemplate`, then `sendFromTemplate` against a fake `NotificationService`. Assert the rendered subject and body. Cover the HTML path with a variable containing `<script>`, and assert it was escaped.
-6. **Suppressing side effects in a unit test** — either:
-   - set `adhar.notification.enabled: false` to turn off the whole auto-configuration, or
-   - set `adhar.notification.in-app.enabled: false` with every other channel already off. A stray send then fails loudly with `UnsupportedOperationException` instead of silently logging.
+- **Retry.** After a failed send, `NotificationRetryHandler` resends immediately, then up to `max-retries` more times with `backoff-ms × 2^n` delays (capped at `max-backoff-ms`), so one failing notification reaches the channel up to `max-retries + 2` times. With the defaults, `send` blocks the caller for 1 s + 2 s + 4 s before throwing `RuntimeException("Failed to send notification [id=…] after retries")`. Delayed attempts run on a single daemon thread, `notification-retry-scheduler`, shared by all failing sends.
+- **Failure surface.** A failed `sendAsync` future that nobody inspects is silently dropped; attach `exceptionally` or `whenComplete`.
+- **History.** `NotificationHistory.getHistory(limit)` (newest first) and `getFailedNotifications()` are the delivery audit. Opt-outs and duplicates leave no entry; rate-limited sends leave a failure entry.
+- **Health and metrics.** The module registers no health indicator or Micrometer meters. `NotificationFacade.health()` returns a map (`historySize`, `failedCount`, `templateCount`, …) if you wire the facade.
+- **Shutdown.** Closing the context shuts the retry scheduler down with `shutdownNow()` (pending retries are dropped) and flushes pending digests. The `sendAsync` virtual-thread executor is never shut down, so in-flight async sends are not drained.
+- **Testing.** Construct `DefaultNotificationService` directly with a fake channel and `Runnable::run`. `InMemoryNotificationIdempotencyStore` and `NotificationRateLimiter` accept a `LongSupplier` clock; `NotificationRetryHandler` and `NotificationDigestService` accept your own `ScheduledExecutorService`, which they do not shut down.
 
-## Common pitfalls
+## Limits
 
-| Symptom | Cause | Fix |
-| --- | --- | --- |
-| `adhar.getNotification().send(…)` throws `IllegalStateException` | `getNotification()` itself succeeds: it lazily builds `NotificationFacade.getInstance()`, which has all-null collaborators. The guard fires on the call, not the lookup | Inject `NotificationService` / `TemplateNotificationService` instead, or build a `NotificationFacade` yourself and pass it to `AdharFacade.setNotification(…)` |
-| `UnsupportedOperationException: No notification channel found for type` | No enabled channel `supports(type)` | Enable the channel for that `NotificationType`; there is no fallback |
-| In-app notifications "work" but nobody sees them | The default in-app channel only writes a log line | Replace `InAppNotificationChannel` with your own bean of that type |
-| Email silently not sent | `email.enabled` defaults to `false`, or no `JavaMailSender` bean exists | Set the flag and configure `spring.mail.*` |
-| No CloudEvents arrive | The auto-configuration passes a `null` event publisher | Define your own `NotificationService` with the full constructor |
-| The caller blocks for seconds on a failing send | `send` runs retries inline with exponential backoff | Use `sendAsync`, and lower `retry.max-retries` or `max-backoff-ms` |
-| `async: true` but `send` still blocks | The flag only chooses the executor for `sendAsync` | Call `sendAsync` |
-| An async failure disappears | `sendAsync` returns a future nobody inspects | Attach `.exceptionally(...)` or log the result |
-| Placeholders appear literally in the body | Variable names in the map do not match the `${…}` names | Keys are exact and case-sensitive |
-| Template sends are never deduplicated | `sendFromTemplate` copies only the template's `defaultMetadata`, so no per-send idempotency key gets through | Build the `Notification` by hand with the key, as above |
-| Duplicate messages across replicas | The idempotency store is in-memory and per-instance | Provide your own `NotificationIdempotencyStore` bean backed by shared state |
-| History is empty after a restart | `NotificationHistory` is a bounded in-memory deque | Replace the bean, or persist the entries yourself |
-| A send returns quietly and nothing arrives | An opt-out, rate-limit, or idempotency guard short-circuited it | Check the INFO/WARN logs, the preference store, and the history for a `Rate limit exceeded` entry |
-| Heap grows in a public-facing service | The rate limiter never evicts its per-recipient windows | Keep rate limiting for a bounded recipient set, or supply your own limiter |
+- **The auto-configured SMS channel ignores `adhar.notification.sms.*`.** It is created with `new SmsNotificationChannel()`, which reads built-in defaults (no URL), so every SMS is only logged. Define the bean yourself to use your gateway:
 
-## See also
+  ```java
+  @Bean
+  SmsNotificationChannel smsNotificationChannel(NotificationProperties properties) {
+      return new SmsNotificationChannel(properties.getSms());
+  }
+  ```
 
-- [Messaging](/adhar-kit/modules/messaging) — where you would publish the sent/failed CloudEvents once you wire a publisher.
-- [Dapr](/adhar-kit/modules/dapr) — routes delivery through output bindings instead of direct clients.
-- [Commons](/adhar-kit/modules/commons) — defines the `AdharCloudEvent` envelope used here.
+- **Email is plain text.** `EmailNotificationChannel` sends a `SimpleMailMessage`, so an HTML body arrives as literal tags. Replace the bean for MIME/HTML mail.
+- **In-app delivers nothing** beyond a log line. Replace `InAppNotificationChannel` to store or push messages.
+- **One channel per type.** When a native channel and the Dapr channel both support a type, the first in the injected list wins. Enable only one, or turn the Dapr side off per type (`dapr.email-enabled: false`, …).
+- **Everything is in memory and per pod**: history, templates, opt-outs, idempotency keys, rate-limit windows and digest buckets. Across replicas the same idempotency key can send once per pod, and a restart forgets all of it. Replace `NotificationIdempotencyStore`, `NotificationPreferenceStore` or `NotificationHistory` with shared-state beans when that matters.
+- **Unbounded growth.** The rate limiter never evicts per-`recipient|type` windows, and the idempotency store holds every distinct key for `ttl-ms`. Size both for a bounded recipient set, not arbitrary public input.
+- **`sendAsync` is unbounded.** The virtual-thread executor has no concurrency limit.
+
+## Next steps
+
+- [Messaging](/adhar-kit/modules/messaging) — publish the sent/failed CloudEvents to Kafka or RabbitMQ.
+- [Dapr](/adhar-kit/modules/dapr) — deliver through Dapr output bindings.
+- [Commons](/adhar-kit/modules/commons) — the `AdharCloudEvent` envelope.
 - [Concepts](/adhar-kit/concepts) — module gating, auto-configuration and the facade model.

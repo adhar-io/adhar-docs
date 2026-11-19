@@ -7,66 +7,37 @@ path: "/adhar-kit/modules/ai"
 
 # AI
 
-`adhar-kit-ai` is one interface over several AI/LLM providers, built on Spring AI. It covers chat, embeddings, RAG, image generation, vision, function calling and streaming.
-
-Why it exists: **a bare `ChatModel` call has no budget ceiling, no PII guard, no cache, and no cost accounting**. Every team that ships one ends up writing the same wrapper. This module is that wrapper. It behaves the same whether you call the facade, the REST endpoint or an annotated method.
+`adhar-kit-ai` wraps a Spring AI `ChatModel` in one request pipeline: a response cache, request validation, a per-user rate limit, input guardrails, response PII redaction, and token and cost metrics. You reach it through `AiFacade`, an injectable `AiService`, `@AiChat` methods or REST endpoints. Use it on Spring Boot when you want LLM calls with those guardrails already in place, instead of calling a bare `ChatModel`.
 
 ## At a glance
 
 | | |
 |---|---|
-| Artifact | `com.adhar.kit:adhar-kit-ai` |
-| Built on | Spring AI 2.0 (`spring-ai-starter-model-openai` / `-ollama` / `-anthropic`, `spring-ai-vector-store`), Micrometer, Caffeine, AspectJ |
-| Entry points | `AiFacade` (via `adhar.getAi()`), the Spring-managed `AiService`, `/api/v1/ai/*` |
-| Annotations | `@AiChat`, `@AiEmbedding`, `@AiCache`, `@AiMetrics`, `@AiRag`, `@AiVision`, `@AiImageGeneration`, `@AiFunction` |
-| Auto-configured | `AiAutoConfiguration` only — the service layer needs component scanning (see below) |
-| Use it when | You want provider-portable LLM calls with guardrails, rate limiting, caching, and cost tracking already wired |
+| Artifact | `com.adhar.kit:adhar-kit-ai` (package `com.adhar.kit.ai`) |
+| Module toggle | `adhar.kit.modules.ai`, default `false`. It gates `adhar.getAi()` |
+| Module switch | `adhar.ai.enabled`, default `true`. It removes `AiAutoConfiguration` |
+| Facade | `AiFacade` (`adhar.getAi()`, `adhar.chat(...)`); Spring service `com.adhar.kit.ai.service.AiService` |
+| Required dependencies | `spring-ai-model`, Spring Boot web MVC, AOP, cache, actuator, Caffeine, Micrometer, Reactor, `adhar-kit-commons` |
+| Optional dependencies | One model starter (`spring-ai-starter-model-openai`, `-ollama` or `-anthropic`) and `spring-ai-vector-store` — you add them |
+| Frameworks | Spring Boot only for real calls. Elsewhere `AiFacade.getInstance()` exists but has no provider, so every generative call fails |
 
 ## How it works
 
-There is one pipeline and three ways in. `AiServiceImpl` owns the pipeline. It is the Spring bean behind the `com.adhar.kit.ai.service.AiService` interface. The REST controller, the `@AiChat` aspect and `AiFacade` all route into it.
+`AiServiceImpl.chat(request)` is the pipeline. The `@AiChat` aspect and the REST controller call it directly. `AiFacade` calls it once it is connected (see below).
 
 ```diagram
-kit-ai-pipeline
+nkb-ai-pipeline
 ```
 
-### The initialisation mechanism, exactly
+`AiAutoConfiguration` is the only auto-configuration the module registers. The service layer is made of plain `@Service`, `@Component` and `@Configuration` classes, so it exists only when you scan or import it.
 
-`AiFacade` is a singleton, created lazily. Its `provider` field starts as the private no-op `DefaultAiProvider`. In that state the facade is *constructed and reachable*: `getInstance()` works, `isAvailable()` returns `true`, and `health()` reports `{"status": "not_configured"}`. But every generative call throws `UnsupportedOperationException("AI provider not configured")`.
+```diagram
+nkb-ai-wiring
+```
 
-Three methods deliberately do not throw:
+At startup `AiFacadeInitializer` looks for the Spring `AiService`. If it finds one, it calls `AiFacade.connect(...)`, and `getProvider()` changes from `"default"` to `"spring-ai"`. If it finds none, it logs *"No Spring AI chat service available; AiFacade left in graceful-degradation mode"*. In that mode every generative facade call throws `AiFacade.AiException` ("… AI provider not configured"). `listModels()` returns an empty list, `countTokens` returns `text.length() / 4`, and `estimateCost` returns `0.0`.
 
-- `listModels()` returns an empty list.
-- `countTokens(text)` returns `text.length() / 4`.
-- `estimateCost(text)` returns `0.0`.
-
-Prompt templates also work, because they live on the facade's own registry, not on the provider.
-
-At startup, `AiFacadeInitializer.connect()` (a `@PostConstruct`) looks up the Spring-managed `AiService` through an `ObjectProvider`. If there is none, the initializer logs *"No Spring AI chat service available; AiFacade left in graceful-degradation mode"* and returns. If there is one, it calls `facade.connect(service, embeddingModel, toolCallingService, promptRegistry)`. This swaps in a `SpringServiceProvider` that delegates to `AiServiceImpl`.
-
-> **The one thing to check first.** The auto-configuration registry lists only `AiAutoConfiguration`. `AiServiceImpl`, `AiConfiguration`, `AiRateLimiter`, `AiMetricsCollector`, `AiSecurityValidator` and `AiController` are plain `@Service`/`@Component`/`@Configuration` classes under `com.adhar.kit.ai.*`. They become beans only when your component scan reaches that package. The dependency alone gives you `AiFacade` and the aspects, but **no** `AiService`, no REST endpoints, and a facade stuck on the no-op provider. Add `@ComponentScan("com.adhar.kit.ai")` and a `spring-ai-starter-model-*` provider. `AiServiceImpl` also needs `ChatModel`, `EmbeddingModel` and `VectorStore` beans.
-
-### The request pipeline
-
-`AiServiceImpl.chat(request)` is annotated `@Cacheable(value = "ai-chat", key = "#request.message + '-' + #request.model", condition = "#request.sessionId == null")`, This means the cache sits **outside** everything else:
-
-1. **Response cache.** A hit returns at once and skips validation, guardrails and the rate limiter. The key is message plus model only. Temperature, `maxTokens` and conversation history are *not* in it, so two requests that differ only in system prompt collide. Set a `sessionId` to opt out.
-2. **Validation.** Each of these throws `ValidationException`: a null or blank message, a message over 10,000 characters, or a model missing from `adhar.ai.security.allowed-models`.
-3. **Rate limit.** `checkRateLimit(identifier)` is keyed on `userId`, else `tenantId`, else the literal `"anonymous"`. Going over any of the minute/hour/day counters throws `ServiceException("RATE_LIMIT_EXCEEDED")` before a token is spent.
-4. **Guardrails.** `AiSecurityValidator.validateRequest` runs the `GuardrailChain` if one is wired. Otherwise it falls back to its own inline checks.
-5. **Model call.** `chatModel.call(prompt)` — blocking.
-6. **Sanitize.** Emails, SSNs, card numbers and phone numbers in the response become `[EMAIL_REDACTED]` and friends.
-7. **Metrics.** Token counts, duration, and — only when the provider returned usage metadata — estimated cost.
-
-Three guardrail rejections surprise people. All three are on by default:
-
-- A prompt that contains `password`, `secret`, `token`, `api_key`, `private_key`, `confidential`, `restricted` or `classified` throws `ValidationException("SENSITIVE_CONTENT")`. The match is a case-insensitive substring, so "Explain how OAuth tokens work" is rejected.
-- A prompt that matches an email, SSN, credit-card or phone pattern throws `ValidationException("PII_DETECTED")`. Confusingly, this is gated on `adhar.ai.security.validate-api-keys`. Set it to `false` to downgrade to a log warning.
-- A prompt over 50,000 characters throws `ValidationException("CONTENT_TOO_LONG")`. This is a separate, looser bound than the 10,000-character validation limit.
-
-Set `adhar.ai.security.enabled: false` to bypass the whole validator.
-
-## Install
+## Add it
 
 ```xml
 <dependency>
@@ -74,33 +45,42 @@ Set `adhar.ai.security.enabled: false` to bypass the whole validator.
     <artifactId>adhar-kit-ai</artifactId>
     <version>0.1.0</version>
 </dependency>
+<!-- Exactly one model provider. Versions come from spring-ai-bom via adhar-kit-bom. -->
+<dependency>
+    <groupId>org.springframework.ai</groupId>
+    <artifactId>spring-ai-starter-model-openai</artifactId>
+</dependency>
 ```
 
-Spring AI versions come from the `spring-ai-bom` (2.0.0), which `adhar-kit-bom` imports. Do not pin them yourself.
+Then do three things:
 
-## Key APIs
+1. **Configure the provider through Spring AI's own keys**, for example `spring.ai.openai.api-key` and `spring.ai.openai.chat.options.model`. The module's `adhar.ai.open-ai.*`, `adhar.ai.azure.*` and `adhar.ai.ollama.*` keys do not configure a client.
+2. **Provide the beans `AiServiceImpl` requires**: a `ChatModel`, an `EmbeddingModel` and a `VectorStore`. The provider starter supplies the first two. The `VectorStore` comes from a Spring AI vector-store starter or your own bean. If any of them is missing, the context fails to start once the service is scanned.
+3. **Scan the service layer and import `AiConfiguration`.** Scan only the packages below:
+   - Leave out `com.adhar.kit.ai.aspect`. The aspects are already auto-configured, and a scanned `AiCacheAspect` (built with its no-argument constructor) replaces the auto-configured one and has no semantic cache.
+   - Leave out `config`. Scanning it registers a second `AiProperties` bean, so import `AiConfiguration` instead.
+   - Leave out `controller` unless you want the REST endpoints.
 
-`AiFacade` implements the `com.adhar.kit.ai.api.AiService` interface, so one type covers the whole surface:
+```java
+import com.adhar.kit.ai.config.AiConfiguration;
 
-- **Chat** — `chat(message)`, `chat(systemPrompt, message)`, `chatWithContext(history, message)`, `chat(ChatRequest)`, `chatAsync`, `chatStream(message, Consumer<String>)`.
-- **Embeddings** — `embed`, `embedBatch`, `similarity`, `findSimilar`. `embedBatch` makes one call per text, so it is no cheaper than `embed`.
-- **RAG** — `storeDocument`, `storeDocuments`, and `queryDocuments(question, topK)`, which returns a `RagResponse` of `answer`, `sources`, `confidence`.
-- **Tools** — `chatWithFunctions(message, functions)` returns a `FunctionCallResponse`. Its `hasFunctionCalls()` says whether the model asked for a tool. `executeFunction(call)` runs one, bounded by `tools.max-iterations`.
-- **Operational** — `registerPromptTemplate` / `renderPrompt` (usable before connect), `isAvailable()`, `getProvider()` (`"default"` before connect, `"spring-ai"` after), `health()`, `countTokens`, `estimateCost`.
+@SpringBootApplication
+@ComponentScan(basePackages = {
+        "com.example.app",                 // your own packages
+        "com.adhar.kit.ai.service",
+        "com.adhar.kit.ai.component",
+        "com.adhar.kit.ai.security"})
+@Import(AiConfiguration.class)             // ai-chat cache manager, aiTaskExecutor
+public class App { }
+```
 
-> **Not everything survives `connect()`.** The `SpringServiceProvider` adapter still throws `UnsupportedOperationException` for `generateImage`, `analyzeImage`, `deleteDocument` and `useModel`, because the Spring service has no equivalent. Pick the model per request instead of calling `useModel`. `findSimilar` also throws if no `EmbeddingModel` bean was passed to `connect`.
+Enable the facade accessor with `adhar.kit.modules.ai=true`.
 
-`AdharFacade` exposes `adhar.chat("message")` and `adhar.chat("system prompt", "message")`.
+## Use it
 
-REST endpoints under `/api/v1/ai`: `POST /chat`, `/chat/async`, `/chat/stream` (SSE), `/embed`, `/search`, `/rag/chat`, `/rag/documents`, plus `GET /models` and `GET /health`.
+### Through the service
 
-## Worked example — a budgeted summariser
-
-This is a complete service. It does three things:
-
-- It names the caller, so the rate limiter keys per user instead of lumping everyone into `"anonymous"`.
-- It stays under the 10,000-character validation bound.
-- It degrades instead of failing the request.
+Inject `com.adhar.kit.ai.service.AiService` and send an `AiChatRequest`. Set `userId` or `tenantId`, because that is the rate-limit key. Without either, every caller shares the `"anonymous"` bucket.
 
 ```java
 import com.adhar.kit.ai.model.AiChatRequest;
@@ -111,202 +91,194 @@ import com.adhar.kit.commons.exception.ValidationException;
 import org.springframework.stereotype.Service;
 
 @Service
-public class ArticleSummariser {
-
-    private static final int MAX_PROMPT_CHARS = 9_000;
+public class Summariser {
 
     private final AiService ai;
 
-    public ArticleSummariser(AiService ai) {   // requires @ComponentScan("com.adhar.kit.ai")
+    public Summariser(AiService ai) {
         this.ai = ai;
     }
 
-    public Summary summarise(String userId, String tenantId, Article article) {
-        String body = article.body().length() > MAX_PROMPT_CHARS
-                ? article.body().substring(0, MAX_PROMPT_CHARS)
-                : article.body();
-
+    public String summarise(String userId, String text) {
         AiChatRequest request = AiChatRequest.builder()
-                .message("Summarise in three bullet points:\n" + body)
-                .userId(userId)        // rate-limit key; without it everyone shares "anonymous"
-                .tenantId(tenantId)
-                .model("gpt-4")        // must appear in adhar.ai.security.allowed-models
+                .message("Summarise in three bullet points:\n" + text)  // at most 10,000 chars
+                .userId(userId)
                 .build();
-
         try {
             AiChatResponse response = ai.chat(request);
-            var usage = response.getUsage();
-            long tokens = usage != null && usage.getTotalTokens() != null ? usage.getTotalTokens() : 0L;
-            return new Summary(response.getContent(), tokens, false);
-
+            return response.getContent();
         } catch (ValidationException e) {
-            // Guardrail rejection: PII, a sensitive keyword, an over-long or
-            // disallowed prompt. Not retryable — the prompt is the problem.
-            return Summary.degraded(article);
-
+            return null;   // the prompt was rejected: too long, PII, a sensitive keyword
         } catch (ServiceException e) {
-            // RATE_LIMIT_EXCEEDED, or AI_CHAT_ERROR for anything the provider did wrong.
-            return Summary.degraded(article);
+            return null;   // RATE_LIMIT_EXCEEDED, or AI_CHAT_ERROR from the provider (see getCause())
         }
-    }
-
-    public record Summary(String text, long tokensUsed, boolean degraded) {
-        static Summary degraded(Article a) { return new Summary(a.firstParagraph(), 0L, true); }
     }
 }
 ```
 
-Note the exceptions. A refused connection, a vendor 429 and a read timeout all arrive as `ServiceException("AI_CHAT_ERROR", "Failed to process chat request", cause)`. To tell them apart, inspect `getCause()`.
+The same interface also offers `chatStream` (a `Flux`), `chatAsync` (a `Mono`), `embed`, `search`, `ragChat`, `addDocuments`, `chatWithTemplate` and `chatWithTools`.
 
-## Worked example — declarative methods
-
-`@AiChat` turns a method into an LLM call. The aspect fills `{param}` placeholders from the method's parameter names, and returns the model's answer instead of running the body. Nested paths such as `{order.customer.name}` resolve through JavaBean getters. A placeholder that cannot be resolved becomes an empty string, not an error.
+### Through the facade
 
 ```java
+AiFacade ai = adhar.getAi();   // needs adhar.kit.modules.ai=true
+String answer = ai.chat("You are terse.", "What is a circuit breaker?");
+
+ai.registerPromptTemplate("review", "Review this {language} code:\n{code}");
+String prompt = ai.renderPrompt("review", Map.of("language", "Java", "code", source));
+```
+
+`PromptTemplateRegistry` also loads every `classpath*:ai/prompts/*.txt` at startup, named after the file. After `connect()`, some facade methods still throw `UnsupportedOperationException`, wrapped in `AiException`: `generateImage`, `analyzeImage`, `deleteDocument` and `useModel`.
+
+### Declaratively
+
+`@AiChat` replaces the method body with a model call. `{param}` placeholders come from parameter names, and nested paths such as `{order.customer.name}` resolve through getters. A placeholder that cannot be resolved becomes an empty string. Compile with `-parameters`.
+
+```java
+import com.adhar.kit.ai.annotation.AiCache;
+import com.adhar.kit.ai.annotation.AiChat;
+import com.adhar.kit.ai.annotation.AiMetrics;
+
 @Service
 public class ReviewService {
 
-    @AiChat(
-        systemPrompt = "You are an expert code reviewer. Reply in markdown.",
-        prompt = "Review this {language} code:\n{code}",
-        temperature = 0.3,
-        maxTokens = 1000,
-        model = "gpt-4",
-        stopSequences = {"END-OF-REVIEW"})
-    @AiCache(ttl = 1800, cacheName = "code-review", excludeParams = {"requestId"})
+    @AiChat(systemPrompt = "You are a code reviewer. Reply in markdown.",
+            prompt = "Review this {language} code:\n{code}")
+    @AiCache(cacheName = "code-review", ttl = 1800, excludeParams = {"requestId"})
     @AiMetrics(metricName = "review.code", latencyAlertThreshold = 8000)
-    public String reviewCode(String language, String code, String requestId) { return null; }
+    public String review(String language, String code, String requestId) {
+        return null;   // runs only when no AiService bean exists
+    }
 }
 ```
 
-### How the interception works
+Behaviour to know:
 
-`AiChatAspect` is an `@Around("@annotation(aiChat)")` advice. `AiAutoConfiguration` registers it when `adhar.ai.annotations.enabled` is not `false`. (`AiProperties` also declares per-annotation flags such as `ai-chat-enabled`, but nothing reads them. The single `annotations.enabled` switch is the real gate.)
+- **No `AiService` bean means the aspect runs your method body.** It logs a warning first. A `null` from an `@AiChat` method usually means "no provider".
+- **Self-invocation skips every AI aspect.** `this.review(...)` runs the raw body, so call annotated methods through another bean.
+- **Aspect order**, outermost first: `@AiMetrics` (order 10), then `@AiCache` (50), then `@AiChat` and `@AiEmbedding` (100). A cache hit is still timed.
+- **`async = true`** returns a `CompletableFuture<String>` that runs on the common fork-join pool.
+- **`@AiCache`** keeps one Caffeine cache per `cacheName`. The first method to use a name sets its `ttl` (seconds) and `maxEntries`. `null` results are not cached. `condition`, `keyGenerator` and `cacheProvider` are not read.
+- **`@AiEmbedding`** sends the first `String` argument, or the first `List` when `batch = true`, to `AiFacade.embed` or `embedBatch`. Unlike `@AiChat`, it throws when no provider is connected.
 
-The aspect looks up the `AiService` lazily, through an `ObjectProvider`. It does this because that bean exists only once the service layer is scanned and a `ChatModel` is configured.
+### Tools and guardrails
 
-Two consequences follow, and both surprise people:
+`ToolCallingService` runs a function-calling loop against the `ChatModel` and stops after `adhar.ai.tools.max-iterations` rounds. It calls the model directly, so tool calls bypass the cache, rate limiter and guardrails.
 
-1. **With no `AiService` bean, the aspect calls `joinPoint.proceed()`.** Your method body runs instead, and a startup warning is logged. If the body is `return null`, the method silently returns `null`. Treat a `null` from an `@AiChat` method as "no provider", not "the model said nothing".
-2. **Self-invocation bypasses the aspect entirely.** Spring AOP works through a proxy. So `this.reviewCode(...)` from inside `ReviewService` runs the raw body: no prompt, no model call, no cache, no metrics, no error. Call annotated methods from another bean, or inject a self-reference. The same caveat applies to `@AiCache`, `@AiMetrics` and `@AiEmbedding`.
+```java
+AiTool weather = AiTool.of("get_weather", "Current weather for a city",
+        "{\"type\":\"object\",\"properties\":{\"city\":{\"type\":\"string\"}}}",
+        args -> weatherClient.current((String) args.get("city")));
 
-The aspects run in this order, outermost first: `@AiMetrics` (`@Order(10)`), then `@AiCache` (`@Order(50)`), then `@AiChat` (`@Order(100)`). So a cache hit is still timed and counted.
+ToolCallResult result = aiService.chatWithTools("Is it raining in Pune?", List.of(weather));
+```
 
-`AiCacheAspect` keeps one Caffeine cache per `cacheName`. The annotation's `maxEntries` sets its size and `ttl` sets its expiry. `null` results are never cached.
+A tool that throws is reported back to the model as `ERROR: tool '<name>' failed: …`. It does not fail the call.
 
-The semantic path adds a second lookup. It turns on when `adhar.ai.caching.semantic.enabled` is true *and* exactly one `EmbeddingModel` bean exists. On an exact-hash miss, the aspect then scans a bounded LRU of recent embeddings for a cosine match at or above `similarity-threshold`. The bean is resolved with `getIfUnique`, so two model starters silently disable the semantic path.
+To add a guardrail, publish a `Guardrail` bean. `GuardrailChain` collects every one of them in `getOrder()` order. The built-in guardrails use orders 10 (content-safety), 20 (pii) and 30 (sensitive-data).
 
-`AiMetricsAspect` records `<metricName>.latency` and `<metricName>.total` (default base name `ai.operation`). It logs an alert when `latencyAlertThreshold` is exceeded. The annotation has `trackTokens` and `trackCost` attributes, but this aspect records neither. Token and cost accounting happens inside `AiServiceImpl`.
+```java
+@Bean
+Guardrail noInternalHosts() {
+    return new Guardrail() {
+        public String getName() { return "no-internal-hosts"; }
+        public int getOrder() { return 40; }
+        public void validateRequest(GuardrailRequest request) {
+            if (request.content().contains(".internal")) {
+                throw new ValidationException("INTERNAL_HOST", "Prompt names an internal host");
+            }
+        }
+    };
+}
+```
 
-## How it behaves
+The built-in request checks all throw `ValidationException`:
 
-**Thread safety and concurrency.** `AiFacade` is a singleton whose `provider`, `promptRegistry` and `available` fields are `volatile`. So `connect()` publishes safely to concurrent readers. `AiServiceImpl`, `AiRateLimiter`, `AiMetricsCollector` and `AiSecurityValidator` are singletons that are either stateless or concurrent, so they are safe to share.
+| Check | Code | Trigger |
+|---|---|---|
+| content-safety | `CONTENT_VIOLATION` | Phrases such as "how to hack" or "create virus" |
+| content-safety | `CONTENT_TOO_LONG` | Over 50,000 characters |
+| pii | `PII_DETECTED` | An email, SSN, card or phone pattern. Only when `security.validate-api-keys` is `true`; otherwise a warning |
+| sensitive-data | `SENSITIVE_CONTENT` | A case-insensitive substring: `password`, `secret`, `token`, `api_key`, `private_key`, `confidential`, `restricted`, `classified` |
 
-There is no global queue and no ordering guarantee. Concurrent callers go straight to the provider. Only the rate limiter and the Spring AI starter's connection pool bound them. The module defines an `aiTaskExecutor` bean (`ThreadPoolTaskExecutor`, core 5, max 20, queue 100, prefix `ai-async-`, `CallerRunsPolicy`). When both the pool and the queue are full, async work runs on the calling thread instead of being rejected.
-
-**Streaming versus blocking.** Both exist, and they are not equivalent. `chatStream` runs validation and guardrails, then returns `chatModel.stream(prompt)` mapped to chunks. Unlike the blocking path:
-
-- It is **not** cached.
-- Its chunks are **not** passed through `sanitizeContent`.
-- On completion it records a chat request with a token count of `0`. So streamed traffic adds nothing to the `ai.tokens.total` or `ai.cost.total.usd` gauges.
-
-If budget accounting matters, use the blocking path.
-
-**Rate limiting is in-process.** `AiRateLimiter` holds a `ConcurrentHashMap<identifier, counters>` in heap, with three windows that reset independently. This has two consequences:
-
-- Quotas are per JVM. A three-replica deployment admits three times `requests-per-minute`.
-- The map has no eviction. One entry builds up per distinct id for the life of the process. If you have many users, key by tenant instead of user.
-
-**Failure behaviour.** An unreachable provider surfaces differently depending on how you called it:
-
-- From the service: `ServiceException("AI_CHAT_ERROR")`.
-- From the facade: `AiFacade.AiException`.
-- From the `@AiChat` aspect: `RuntimeException("AI chat failed: ...")`.
-
-In every case an `ai.errors` counter is incremented first. There is no retry, circuit breaker or fallback here. `adhar.ai.max-retries` is bound but not used. If you need one, wrap the call with [Resilience](/adhar-kit/modules/resilience).
-
-**Metrics.** When a `MeterRegistry` is present, `AiMetricsCollector` publishes `ai.chat.requests.total`, `ai.chat.response.time`, `ai.chat.requests{provider,model}`, the equivalent `ai.embedding.*` and `ai.rag.*` meters, `ai.errors{type,provider,operation}`, `ai.rate_limit.exceeded`, `ai.cache.events{result,operation}`, `ai.vector_store.operation.time{operation}`, and the `ai.cost.total.usd` / `ai.tokens.total` gauges.
-
-**Resource bounds.**
-
-- The Spring response cache is bounded by Caffeine, using `adhar.ai.caching.max-size` / `.ttl`.
-- Each `@AiCache` cache is bounded by its own annotation.
-- Each semantic store is a bounded LRU of `semantic.max-entries` embeddings.
-
-The rate-limiter map and the `PromptTemplateRegistry` are the two unbounded structures.
-
-## Testing
-
-There is no AI helper in `adhar-kit-test-commons`. Test against the interface instead.
-
-- **Unit tests** — Inject a Mockito mock of `com.adhar.kit.ai.service.AiService`. Stub `chat(any())` to return `AiChatResponse.builder().content("...").build()`.
-- **Aspect tests** — Build the aspect directly (`new AiChatAspect(provider)` with a mocked `ObjectProvider<AiService>`). Drive it with a mocked `ProceedingJoinPoint`. You need no Spring context. The module's own `AiChatAspectTest` works this way.
-- **Disabling side effects** — `adhar.ai.enabled: false` removes the whole auto-configuration. `adhar.ai.annotations.enabled: false` keeps the facade but silences the aspects. Leaving the service layer unscanned also works as a "no AI in tests" setup: `@AiChat` methods fall through to their bodies.
-- **Guardrails in tests** — A fixture prompt that contains an email address or the word "token" is rejected. Set `adhar.ai.security.enabled: false` unless the guardrail is what you are testing.
+The substring match is broad: "Explain how OAuth tokens work" is rejected.
 
 ## Configuration
 
-| Property | Purpose | Default |
+Properties bind under `adhar.ai` (`AiProperties`). These are the keys the code reads:
+
+| Property | Type | Default | Description |
+|---|---|---|---|
+| `adhar.ai.enabled` | boolean | `true` | Registers `AiAutoConfiguration` |
+| `adhar.ai.annotations.enabled` | boolean | `true` | Registers the `@AiChat` and `@AiEmbedding` aspects |
+| `adhar.ai.cache.enabled` | boolean | `true` | Registers the `@AiCache` aspect. This is a different key from `caching.enabled` |
+| `adhar.ai.metrics.enabled` | boolean | `true` | Registers the `@AiMetrics` aspect (needs a `MeterRegistry`) |
+| `adhar.ai.caching.enabled` | boolean | `true` | Creates the Caffeine `aiCacheManager` behind `ai-chat` and `ai-embeddings` |
+| `adhar.ai.caching.ttl` | Duration | `30m` | Write expiry of the response caches |
+| `adhar.ai.caching.max-size` | int | `1000` | Entries per response cache |
+| `adhar.ai.caching.semantic.enabled` | boolean | `false` | Adds embedding-similarity lookups to `@AiCache`. Needs exactly one `EmbeddingModel` bean |
+| `adhar.ai.caching.semantic.similarity-threshold` | double | `0.95` | Minimum cosine similarity for a semantic hit |
+| `adhar.ai.caching.semantic.max-entries` | int | `1000` | Embeddings kept per cache (LRU) |
+| `adhar.ai.rate-limiting.enabled` | Boolean | `true` | In-process quota enforcement |
+| `adhar.ai.rate-limiting.requests-per-minute` | Integer | `60` | Per identifier, per JVM |
+| `adhar.ai.rate-limiting.requests-per-hour` | Integer | `1000` | Per identifier, per JVM |
+| `adhar.ai.rate-limiting.requests-per-day` | Integer | `10000` | Per identifier, per JVM |
+| `adhar.ai.security.enabled` | Boolean | `true` | Runs the request guardrails |
+| `adhar.ai.security.validate-api-keys` | Boolean | `true` | Despite the name, makes `PII_DETECTED` throw instead of warn |
+| `adhar.ai.security.allowed-models` | String[] | `gpt-3.5-turbo, gpt-4, llama2` | Request `model` allowlist; also the body of `GET /models` |
+| `adhar.ai.guardrails.enabled` | boolean | `true` | Registers the built-in guardrails and `GuardrailChain` |
+| `adhar.ai.tools.enabled` | boolean | `true` | Registers `ToolCallingService` (needs a `ChatModel`). `AiServiceImpl` needs it too |
+| `adhar.ai.tools.max-iterations` | int | `5` | Cap on tool-calling rounds |
+| `adhar.ai.open-ai.model` | String | `gpt-3.5-turbo` | Model name recorded on a response when the request names none; selects the cost row |
+| `adhar.ai.costs.models.<model>.prompt-cost-per1k` | double | `gpt-3.5-turbo` `0.0005`, `gpt-4` `0.03` | USD per 1,000 prompt tokens |
+| `adhar.ai.costs.models.<model>.completion-cost-per1k` | double | `gpt-3.5-turbo` `0.0015`, `gpt-4` `0.06` | USD per 1,000 completion tokens |
+| `adhar.ai.costs.default-cost.*` | double | `0.0` | Used for a model missing from the table |
+
+`AiProperties` also binds keys that no code reads: `provider`, `default-model`, `max-tokens`, `temperature`, `timeout`, `max-retries`, `open-ai.api-key`/`base-url`/…, `azure.*`, `ollama.*`, `vector-store.*`, `rate-limiting.window-size`, `caching.provider`, `security.log-requests`, `security.audit-enabled`, `metrics.track-*`, `metrics.export-prometheus` and the per-annotation `annotations.ai-*-enabled` flags. Setting them changes nothing.
+
+The cost table is an estimate you maintain. It does not track any vendor's price list.
+
+## Operations
+
+**Metrics.** `AiMetricsCollector` (it needs a `MeterRegistry`) records:
+
+| Meter | Type | Recorded when |
 |---|---|---|
-| `adhar.ai.enabled` | Master switch | `true` |
-| `adhar.ai.provider` / `.default-model` | Provider name and fallback model | `openai` / `gpt-3.5-turbo` |
-| `adhar.ai.max-tokens` / `.temperature` / `.timeout` / `.max-retries` | Module-level generation defaults | `1000` / `0.7` / `30` / `3` |
-| `adhar.ai.openai.api-key` / `.base-url` / `.model` | OpenAI credentials and endpoint | — / `https://api.openai.com` / `gpt-3.5-turbo` |
-| `adhar.ai.azure.api-key` / `.endpoint` / `.deployment-name` | Azure OpenAI wiring | (none) |
-| `adhar.ai.ollama.base-url` / `.model` | Local Ollama | `http://localhost:11434` / `llama2` |
-| `adhar.ai.vector-store.type` / `.index-name` / `.dimensions` / `.similarity-function` | `redis`, `chroma` or `pinecone`, and the index shape | `redis` / `adhar-vectors` / `1536` / `cosine` |
-| `adhar.ai.rate-limiting.enabled` | In-process quota enforcement | `true` |
-| `adhar.ai.rate-limiting.requests-per-minute` / `-hour` / `-day` | Quotas, **per JVM** | `60` / `1000` / `10000` |
-| `adhar.ai.caching.enabled` / `.ttl` / `.max-size` | Spring response cache (`ai-chat`, `ai-embeddings`) | `true` / `30m` / `1000` |
-| `adhar.ai.caching.semantic.enabled` / `.similarity-threshold` / `.max-entries` | Embedding-similarity layer in `@AiCache` | `false` / `0.95` / `1000` |
-| `adhar.ai.cache.enabled` | Registers `AiCacheAspect` — a *different* key from `caching.enabled` | `true` |
-| `adhar.ai.tools.enabled` / `.max-iterations` | Tool-calling loop bound | `true` / `5` |
-| `adhar.ai.guardrails.enabled` | Register the default guardrail chain | `true` |
-| `adhar.ai.security.enabled` | Master switch for request validation and response sanitizing | `true` |
-| `adhar.ai.security.validate-api-keys` | Despite the name: makes PII detection *throw* rather than warn | `true` |
-| `adhar.ai.security.log-requests` | Logs prompts; can capture PII | `false` |
-| `adhar.ai.security.allowed-models` | Model allowlist, also the body of `GET /models` | `gpt-3.5-turbo, gpt-4, llama2` |
-| `adhar.ai.metrics.enabled` | Register `AiMetricsAspect` | `true` |
-| `adhar.ai.costs.models.<model>.prompt-cost-per1k` / `.completion-cost-per1k` | Cost table, USD per 1,000 tokens | `gpt-3.5-turbo` 0.0005/0.0015, `gpt-4` 0.03/0.06 |
-| `adhar.ai.costs.default-cost.*` | Fallback for models absent from the table | `0.0` |
-| `adhar.ai.annotations.enabled` | Register `AiChatAspect` and `AiEmbeddingAspect` | `true` |
+| `ai.chat.requests.total`, `ai.chat.response.time` | counter, timer | Every chat, including streamed and RAG calls |
+| `ai.chat.requests{provider,model}` | counter | Every chat |
+| `ai.rag.requests.total`, `ai.rag.requests{knowledge_base}` | counter | Every `ragChat` |
+| `ai.errors.total`, `ai.errors{type,provider,operation}` | counter | `AI_CHAT_ERROR` and `AI_STREAM_ERROR` failures |
+| `ai.cost.total.usd`, `ai.tokens.total` | gauge | Registered on the first costed response |
+| `<metricName>.latency`, `<metricName>.total{success}` | timer, counter | Each `@AiMetrics` method (default base `ai.operation`) |
 
-```yaml
-adhar:
-  ai:
-    provider: openai
-    openai: { api-key: "${OPENAI_API_KEY}", model: gpt-4 }
-    caching:
-      ttl: 30m
-      semantic: { enabled: true, similarity-threshold: 0.95 }
-    rate-limiting: { requests-per-minute: 60 }
-    tools: { max-iterations: 5 }
-```
+Use `AiMetricsCollector.getSummary()` for running token and cost totals. The two gauges are registered once, from a snapshot value, and do not track later updates. `ai.embedding.*`, `ai.rate_limit.exceeded` and `ai.vector_store.*` are registered but nothing increments them.
 
-> The cost table is a rough, configurable estimate. It does not mirror any vendor's price list. Update `adhar.ai.costs.models` when your pricing changes, or `estimateCost` will drift. A model that is not listed falls back to `default-cost`, which is zero. So a model that shows as free is a configuration gap, not a bargain.
+**Health.** `AiFacade.health()` returns `available`, `provider` and the adapter status. `GET /api/v1/ai/health` calls `isHealthy()`, which sends a real "Hello" chat on every probe. That spends tokens and counts against the `"anonymous"` rate-limit bucket, so do not wire it to a liveness probe.
 
-## Common pitfalls
+**Failures.** There is no retry, circuit breaker or fallback. A provider failure surfaces differently depending on the entry point:
 
-| Symptom | Cause | Fix |
-|---|---|---|
-| `UnsupportedOperationException: AI provider not configured` | `AiFacade` still holds the no-op provider | Scan `com.adhar.kit.ai` and configure a `spring-ai-starter-model-*` provider |
-| No `AiService` bean to inject | Only `AiAutoConfiguration` is auto-registered | Add `@ComponentScan("com.adhar.kit.ai")` |
-| An `@AiChat` method returns `null` | No `AiService` bean, so the aspect ran the original body | Same fix; check the startup warning |
-| The annotation does nothing at all | Self-invocation, or `adhar.ai.annotations.enabled` is off | Call via the injected bean, not `this.` |
-| `ValidationException: SENSITIVE_CONTENT` on a harmless prompt | The prompt contains `token`, `secret`, `password`… as a substring | Reword, or set `adhar.ai.security.enabled: false` |
-| `ValidationException: PII_DETECTED` | An email/phone/SSN/card pattern in the prompt | Redact before sending, or set `validate-api-keys: false` to warn instead |
-| Two different prompts return the same answer | The `ai-chat` cache key is message + model only | Set a `sessionId` on the request to bypass the cache |
-| A `{placeholder}` renders empty | The name does not match a parameter name or a resolvable bean path | Match the parameter name; compile with `-parameters` |
-| Streaming calls show zero tokens and zero cost | `chatStream` records a token count of `0` by design | Use the blocking path where accounting matters |
-| Semantic cache never hits | Two `EmbeddingModel` beans, so `getIfUnique` returned `null` | Keep one embedding starter on the classpath |
-| Costs read as zero | The model is absent from `adhar.ai.costs.models`, so `default-cost` (0.0) applied | Add the model to the cost table |
-| Rate limits admit more than configured | Counters are per JVM, not distributed | Divide the quota by replica count, or enforce at the gateway |
+| Entry point | What you get |
+|---|---|
+| `AiService` | `ServiceException("AI_CHAT_ERROR")`; inspect `getCause()` |
+| `AiFacade` | `AiFacade.AiException` |
+| `@AiChat` | `RuntimeException("AI chat failed: …")` |
 
-On the [Adhar Platform](/docs), point the provider base URL at the in-cluster AI gateway instead of a public endpoint. The code stays the same, and the platform routes and meters the calls. The gateway is also a natural place to enforce the cross-replica quota that the in-process limiter cannot.
+Wrap calls with [Resilience](/adhar-kit/modules/resilience) if you need retries.
 
-## See also
+## Limits
 
-- [Concepts](/adhar-kit/concepts) — the facade, module-gating and auto-configuration model this page assumes
-- [Cache](/adhar-kit/modules/cache) — the caching vocabulary behind `@AiCache`
-- [Metrics](/adhar-kit/modules/metrics) — where the token and cost meters land
-- [Security](/adhar-kit/modules/security) — the validation the guardrails adapt
+- **Request options do not reach the provider.** `AiServiceImpl` builds the prompt from the messages only. Temperature, `maxTokens` and stop sequences on `AiChatRequest`, and on `@AiChat`, are ignored. The request `model` is only checked against the allowlist and used in the cache key and cost lookup. The provider's `spring.ai.*` options decide the real model and settings.
+- **The `ai-chat` cache key is message plus model.** System prompt, history and options are not part of it, so two requests that differ only there share an answer. Set a `sessionId` to skip the cache. A cache hit also skips validation, rate limiting and guardrails.
+- **Rate limits are per JVM.** Three replicas admit three times the quota. The counter map keeps one entry per identifier for the life of the process.
+- **Streaming is not accounted.** `chatStream` is not cached, its chunks are not redacted, and it records zero tokens.
+- **RAG is basic.** `ragChat` always retrieves 5 documents and does not filter by knowledge base; the name is only a tag on the response. `search` reports a score of `0.0`. Facade `queryDocuments` returns a confidence of `1.0`.
+- **No processor for `@AiRag`, `@AiVision`, `@AiImageGeneration` or `@AiFunction`.** The annotations exist, but nothing intercepts them.
+- **One provider at a time.** Two model starters create two `ChatModel` beans, which `AiServiceImpl` cannot choose between. Two `EmbeddingModel` beans also switch the semantic cache off.
+- **The REST endpoints have no authentication of their own.** If you scan `com.adhar.kit.ai.controller`, protect `/api/v1/ai/**` with [Security](/adhar-kit/modules/security).
+
+## Next steps
+
+- [Concepts](/adhar-kit/concepts) — module toggles, facades and auto-configuration
+- [Cache](/adhar-kit/modules/cache) — general-purpose caching next to `@AiCache`
+- [Metrics](/adhar-kit/modules/metrics) — where the `ai.*` meters land
+- [Resilience](/adhar-kit/modules/resilience) — retries and circuit breakers around model calls

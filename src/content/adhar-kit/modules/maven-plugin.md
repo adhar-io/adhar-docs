@@ -7,114 +7,33 @@ path: "/adhar-kit/modules/maven-plugin"
 
 # Maven Plugin
 
-`adhar-kit-maven-plugin` is build-time tooling, not a runtime library. It:
-
-- computes semantic versions from Conventional Commits
-- runs releases
-- scaffolds components
-- enforces code and architecture standards
-- reports on dependency hygiene and CVEs
-
-It exists because **conventions that live only in a wiki decay**. Think of the layering rule nobody enforces, the version bump someone forgets, or the transitive dependency that drifts off the BOM. Wiring these goals into the build turns those conventions into build failures.
-
-Nothing on this page ends up in your application. There are no beans, no annotations, no auto-configuration and no runtime cost. The artifact is a `maven-plugin` packaging that runs inside Maven's JVM. It touches your working tree, your git repository and, for two goals, the network.
+`adhar-kit-maven-plugin` is build-time tooling: it generates code from your OpenAPI specs and checks them against the API contract, enforces code and layering conventions, reports on dependency hygiene and CVEs, computes versions from Conventional Commits, and scaffolds services, components and ADRs. Use it when you want the kit's conventions to fail a build instead of living in a wiki. Nothing here ships in your application — no beans, no auto-configuration, no runtime cost.
 
 ## At a glance
 
 | | |
 |---|---|
-| Plugin | `com.adhar.kit:adhar-kit-maven-plugin`, packaging `maven-plugin` |
-| Goal prefix | `adhar` (configured via `maven-plugin-plugin`'s `goalPrefix`) |
-| Built on | Maven Plugin API 3.9.9, JavaPoet (generation), JGit 7 + semver4j (versioning), Sonatype OSS Index (CVEs) |
-| Requires | Maven 3.9.9+, Java 25+ |
-| Mutates | `pom.xml`, git tags and refs, `CHANGELOG.md`, `RELEASE_NOTES.md`, `docs/adr/`, `target/` |
-| Use it when | You want Adhar Kit's conventions checked in CI and its scaffolding available on the command line |
+| Artifact | `com.adhar.kit:adhar-kit-maven-plugin` (packaging `maven-plugin`), goal prefix `adhar` |
+| Goals | `openapi`, `openapi-lint`, `openapi-diff`, `catalog`, `validate`, `deps`, `bom`, `cve`, `version`, `release`, `generate`, `scaffold`, `adr` |
+| Default phases | `validate`, `generate-sources`, `verify`, `deploy`; `scaffold`, `adr` and `catalog` have none |
+| Requirements | Maven 3.9.9+ (the plugin API it is built against) on JDK 25+; every goal needs a project (`pom.xml`); `version`, `release` and `openapi-diff -Dadhar.openapi.diff.against` need a git work tree |
+| Dependencies | openapi-generator, openapi-diff, JGit, semver4j, JavaPoet, Jackson, `adhar-kit-commons` |
+| Network | `cve` (Sonatype OSS Index), `openapi-diff` with a `baseline` artifact, `version -Dversion.push=true` |
 
 ## How it works
 
-Each goal is a Maven Mojo (a plugin goal class) with a default lifecycle phase. Bind the goals you want to enforce, and run the rest by hand.
+Each goal is a Mojo with a default lifecycle phase. List a goal in `<executions>` and it runs in that phase; run the rest from the command line.
 
 ```diagram
-kit-maven-goals
+nkc-maven-plugin-phases
 ```
 
-The goals fall into three groups that behave differently. Knowing which is which saves time:
+- **Spec-first API goals** — `openapi-lint`, `openapi`, `openapi-diff`, `catalog`. They find one spec per major version at `api/v<major>/openapi.yaml`. `adhar-kit-parent` binds `openapi-lint` (validate) and `openapi` (generate-sources) in its `pluginManagement`, so a service with that parent only declares the plugin.
+- **Reporters** — `validate`, `deps`, `bom`, `cve`. They read sources or the dependency tree and write a report under `target/`. They fail the build only when their `fail` flag is on (default `false`).
+- **Git-aware mutators** — `version`, `release`. They rewrite `pom.xml` and create tags.
+- **Generators** — `generate`, `scaffold`, `adr`. `generate` and `scaffold` write under `target/` by default; `adr` writes to `docs/adr` in your tree.
 
-- **Read-only reporters** — `validate`, `deps`, `bom`, `cve`. They walk sources or the resolved dependency tree and write a report under `target/`. They fail the build only when their `failOnError` flag is on. They are safe to run anywhere, including on a dirty tree.
-- **Git-aware mutators** — `version`, `release`. They need a real git repository. By default `version` rewrites `pom.xml`. Rehearse these before running them for real.
-- **File generators** — `generate`, `scaffold`, `adr`. They write new files. `generate` and `scaffold` default to a path under `target/`, so they are harmless until you redirect them. `adr` is the exception: by default it writes to `${project.basedir}/docs/adr`, inside your working tree.
-
-## Goals
-
-| Goal | Default phase | Purpose |
-|---|---|---|
-| `adhar:version` | `validate` | Compute the next semantic version from commit history; optionally tag and push |
-| `adhar:release` | `deploy` | Version, tag, changelog, release notes, and deploy |
-| `adhar:generate` | `generate-sources` | Scaffold an entity, repository, service, controller, DTO, or all of them |
-| `adhar:scaffold` | none | Generate a whole new service project |
-| `adhar:validate` | `validate` | Enforce package structure, naming, annotations, documentation, and architecture rules |
-| `adhar:deps` | `validate` | Dependency hygiene report |
-| `adhar:bom` | `validate` | BOM alignment report (resolves test-scope dependencies) |
-| `adhar:cve` | `verify` | Scan dependencies against Sonatype OSS Index |
-| `adhar:adr` | none | Write an Architecture Decision Record |
-
-`bom` and `cve` are declared with `requiresDependencyResolution = ResolutionScope.TEST`. So binding either one forces Maven to resolve the full test-scope dependency tree before the phase runs. On a cold local repository, that is the slowest part of the build. It is also why those two goals are the ones that misbehave offline.
-
-## Semantic versioning from commit history
-
-`adhar:version` with `-Dversion.type=auto` walks commit history through JGit. It classifies each message with three patterns:
-
-| Bump | Pattern | Matching |
-|---|---|---|
-| MAJOR | `BREAKING[\s-]CHANGE` | Case-insensitive, found **anywhere** in the full message, including the footer |
-| MINOR | `^feat(\(.+\))?:` | Case-insensitive, anchored to the **very start of the full message** |
-| PATCH | `^fix(\(.+\))?:` | Case-insensitive, same anchoring |
-
-Four consequences are easy to get wrong:
-
-1. **The patterns are not multiline.** `^` anchors to the first character of the whole commit message. So `feat:` must be the first thing in the subject line. A `feat:` that appears only in the body is invisible.
-2. **The classification is an if/else chain per commit.** A commit with both a `BREAKING CHANGE` footer and a `feat:` subject counts only as breaking. The flags are then OR'd across all commits, and the highest wins.
-3. **No matching commit means no bump.** The current version is returned unchanged; it does not default to a patch.
-4. **Scope is required to be non-empty if present.** `(\(.+\))?` matches `feat(api):` and `feat:`, but not `feat():`.
-
-`getLastTag()` picks the highest tag that parses as a semantic version, allowing a leading `v` or `V`. If no tag parses, it falls back to the lexicographic maximum.
-
-The commit walk is then meant to stop at that tag. But it stops on `commit.getName().startsWith(lastTag)`. That compares a 40-character SHA against a tag name like `v1.2.0`, which never matches. **So in practice `auto` analyses the entire reachable history, not just the commits since the last tag.** Once any `feat:` exists anywhere in the history, `auto` keeps computing at least a minor bump from the current POM version.
-
-Prefer an explicit `-Dversion.type=minor` in CI. Treat `auto` as a suggestion you read, not a decision you automate.
-
-> **`updatePom` rewrites the first `<version>` element in the document.** In a child module whose `<parent>` block comes before its own coordinates, that is the *parent's* version. The POM is also rewritten through a DOM transformer, so formatting and comments can shift. Run with `-Dversion.updatePom=false` first and read the computed version from the log. If you do let it write, review the diff before committing.
-
-## Architecture rules
-
-`adhar:validate` splits into two validators that count differently.
-
-`CodeStandardsValidator` produces:
-
-- **errors** from package structure, naming conventions, annotations, and exception handling
-- **warnings** from documentation and logging
-
-Only errors can fail the build. A build with `failOnError = true` and nothing but Javadoc warnings still passes. Two of its checks surprise people when they first adopt it:
-
-- `validatePackageStructure` expects all six of `controller`, `service`, `repository`, `model`, `dto` and `config` to exist as directory segments *somewhere* under the source root. A library module with no controllers reports a missing-package error for each one it lacks.
-- `validateNamingConventions` checks file names by folder. A file under a `controller` segment must contain `Controller` in its name. Under `service` it must contain `Service` or `ServiceImpl`, and under `repository` it must contain `Repository`. Matching is on path *components*, so Windows and Unix separators behave the same.
-
-`ArchitectureRuleValidator` enforces the layering direction `controller -> service -> repository`. It is a text scan, not a compile:
-
-1. It extracts the file's own package with `^\s*package\s+([\w.]+)\s*;` (multiline).
-2. It assigns a layer. It scans the package's dot-separated segments for a component equal to `controller`, `service` or `repository`, so `com.example.service.impl` is SERVICE. A package with no such segment is **neutral**: the file is skipped entirely as an owner.
-3. It extracts every import with `^\s*import\s+(?:static\s+)?([\w.]+(?:\.\*)?)\s*;`. It works out each import's package (handling `.*` wildcards correctly) and assigns it a layer the same way.
-4. It reports a violation when the owner's rank (`REPOSITORY` 1, `SERVICE` 2, `CONTROLLER` 3) is **lower** than the import's.
-
-So:
-
-- A repository importing a service is a violation.
-- A controller importing a service is fine.
-- `dto`, `model`, `config`, `mapper`, `util` — anything without a layer segment — is exempt on both sides.
-
-Matching is on whole segments, so `com.example.servicecontroller` is not mistaken for either layer. The validator reads imports only. So it cannot see a cross-layer reference written as a fully-qualified inline name, or one between two classes in the same package.
-
-## Setup
+## Add it
 
 ```xml
 <build>
@@ -123,25 +42,44 @@ Matching is on whole segments, so `com.example.servicecontroller` is not mistake
       <groupId>com.adhar.kit</groupId>
       <artifactId>adhar-kit-maven-plugin</artifactId>
       <version>0.1.0</version>
+      <configuration>
+        <basePackage>com.example.orders</basePackage>
+      </configuration>
       <executions>
         <execution>
-          <id>validate-standards</id>
-          <phase>validate</phase>
-          <goals><goal>validate</goal></goals>
+          <id>adhar-openapi</id>
+          <goals>
+            <goal>openapi-lint</goal>
+            <goal>openapi</goal>
+          </goals>
+        </execution>
+        <execution>
+          <id>adhar-standards</id>
+          <goals>
+            <goal>validate</goal>
+          </goals>
+          <configuration>
+            <failOnError>true</failOnError>
+          </configuration>
+        </execution>
+        <execution>
+          <id>adhar-cve</id>
+          <goals>
+            <goal>cve</goal>
+          </goals>
+          <configuration>
+            <failOnError>true</failOnError>
+          </configuration>
         </execution>
       </executions>
-      <configuration>
-        <validatePackageStructure>true</validatePackageStructure>
-        <validateNaming>true</validateNaming>
-        <validateArchitecture>true</validateArchitecture>
-        <failOnError>false</failOnError>
-      </configuration>
     </plugin>
   </plugins>
 </build>
 ```
 
-Register the plugin group in `~/.m2/settings.xml` so the short `adhar:` prefix resolves:
+If your project's parent is `adhar-kit-parent`, drop the `adhar-openapi` execution: the parent already binds it.
+
+To use the short `adhar:` prefix outside a project that declares the plugin, register the group in `~/.m2/settings.xml`:
 
 ```xml
 <settings>
@@ -151,206 +89,298 @@ Register the plugin group in `~/.m2/settings.xml` so the short `adhar:` prefix r
 </settings>
 ```
 
-## Worked example — wiring it into CI
+## Use it
 
-Start permissive, then turn on the gates once the backlog is clear. `failOnError` defaults to `false` on every reporting goal so that adopting the plugin does not break an existing build on day one.
+### `adhar:openapi` — generate code from specs
 
-On a multi-module build, put the plugin in the parent's `<pluginManagement>`. Put the `<executions>` in the modules that have a `src/main/java`. The aggregator POM has no source directory, so `validate` reports nothing there.
+Each `api/v<major>/openapi.yaml` generates into `<basePackage>.api.v<major>` (models in `.model`) and becomes a compile source root. Server specs are also copied into the artifact as `api/v<major>/openapi.yaml`, where `adhar-kit-commons` serves them at `GET /api/v<major>/openapi.yaml`. Generation is skipped when the spec bytes, presets, packages, options and plugin version are unchanged.
+
+| Preset | Generates | Linted and shipped |
+|---|---|---|
+| `spring` (default) | Spring MVC interfaces for Spring Boot 4 (Jackson 3, JSpecify, Bean Validation); `skipDefaultInterface`, so a missing operation is a compile error | Yes |
+| `jaxrs` | `jakarta.ws.rs` interfaces for Quarkus REST | Yes |
+| `spring-client` | Spring `@HttpExchange` clients for another service's API, into `<basePackage>.client.v<major>` | No |
+
+Add other services' specs with `<specs>`:
 
 ```xml
-<plugin>
-  <groupId>com.adhar.kit</groupId>
-  <artifactId>adhar-kit-maven-plugin</artifactId>
-  <version>0.1.0</version>
-  <executions>
-    <execution>
-      <id>standards</id>
-      <phase>validate</phase>
-      <goals><goal>validate</goal></goals>
-      <configuration>
-        <validateArchitecture>true</validateArchitecture>
-        <validatePackageStructure>false</validatePackageStructure>
-        <validateDocumentation>false</validateDocumentation>
-        <failOnError>true</failOnError>
-        <reportFile>${project.build.directory}/adhar-validation-report.txt</reportFile>
-      </configuration>
-    </execution>
-    <execution>
-      <id>security</id>
-      <phase>verify</phase>
-      <goals><goal>cve</goal></goals>
-      <configuration>
-        <cvssThreshold>7.0</cvssThreshold>
-        <failOnError>true</failOnError>
-        <cacheDir>${maven.multiModuleProjectDirectory}/.cve-cache</cacheDir>
-      </configuration>
-    </execution>
-  </executions>
-</plugin>
+<configuration>
+  <specs>
+    <spec>
+      <file>${project.basedir}/api-clients/payments/v1/openapi.yaml</file>
+      <preset>spring-client</preset>
+      <packageName>com.example.orders.clients.payments.v1</packageName>
+    </spec>
+  </specs>
+</configuration>
 ```
 
-A matching CI step, with the report archived whether or not the build passes:
+A `<spec>` takes `file` (required), `preset`, `packageName` and `major` (defaults to the `v<major>` directory, else the major of `info.version`). Two specs that generate into one package, or two server specs for the same major, fail the build.
+
+### `adhar:openapi-lint` — check the API contract
+
+Every rule below is an error unless marked as a warning:
+
+| Rule | Requirement |
+|---|---|
+| `openapi-version` | `openapi: 3.0.x` (Swagger 2.0 and 3.1 are rejected) |
+| `info-version` | A quoted semantic version whose major matches the `v<major>` directory |
+| `servers` | Host only; no base path |
+| `path-prefix` | Every path starts with `/api/v<major>` |
+| `operation-id` | Every operation has a unique `operationId` |
+| `operation-tags` | Every operation has a tag (the first names the generated `<Tag>Api`) |
+| `responses`, `problem-json` | Every operation declares responses; every 4xx, 5xx and `default` response uses `application/problem+json` |
+| `external-ref`, `unresolved-ref` | No `$ref` outside the document; every `$ref` resolves |
+| `inline-schema` (warning) | Request and response bodies use named schemas |
 
 ```bash
-mvn -B verify
-# Reports are written even when failOnError is false:
-#   target/adhar-validation-report.txt
-#   target/adhar-cve-report.txt
-#   target/adhar-dependency-report.txt
-#   target/adhar-bom-alignment-report.txt
+mvn adhar:openapi-lint -Dadhar.openapi.lint.failOnWarnings=true
 ```
 
-`cacheDir` points at the repository root instead of `target/` on purpose. `clean` wipes `target`, so the OSS Index cache would never survive a CI run. Cache that directory between runs, and the CVE scan stops re-querying unchanged coordinates.
+### `adhar:openapi-diff` — block breaking changes
 
-`adhar:cve` is deliberately lenient about the network. If OSS Index is unreachable, it logs `OSS Index unreachable, skipping CVE check: ...` and **returns successfully**. A build on an air-gapped runner does not fail; it silently stops scanning.
+Compares each server spec with a baseline and fails on a change that breaks clients of that major (a removed operation, a new required request field, a changed type). A breaking change belongs in a new `api/v<major+1>/openapi.yaml`. Every change is written to `target/openapi-diff.md`. With no baseline set, the goal logs and does nothing.
 
-If the scan must be mandatory, do not rely on the goal's exit status. Instead, assert on the presence and content of `target/adhar-cve-report.txt` in a separate CI step. Use `-Dcve.skip=true` to skip it explicitly and visibly.
+```bash
+mvn adhar:openapi-diff -Dadhar.openapi.diff.against=origin/main                    # git revision
+mvn adhar:openapi-diff -Dadhar.openapi.diff.baseline=1.4.0                         # released version of this project
+mvn adhar:openapi-diff -Dadhar.openapi.diff.baseline=com.example:orders:1.4.0      # any artifact
+```
 
-## Testing: dry-running a goal
+In a shallow CI clone, fetch the revision first (`git fetch origin main`).
 
-"Testing" a build plugin means running a goal and confirming what it would do, without changing the repository. Every goal that changes files has a way to do that.
+### `adhar:catalog` — declare APIs in `catalog-info.yaml`
 
-| Goal | Dry run | What it still does |
+Writes one `kind: API` entity per server spec (annotated `adhar.io/generated-by: adhar-kit-maven-plugin`) and the Component's `spec.providesApis`. Other lines and documents are left as written. Run it when you add or remove a major; use `check` in CI to fail when the catalog lags behind the specs.
+
+```bash
+mvn adhar:catalog
+mvn adhar:catalog -Dadhar.catalog.check=true
+```
+
+### `adhar:validate` — code standards and layering
+
+| Check | Flag | Finding |
 |---|---|---|
-| `version` | `-Dversion.type=auto -Dversion.updatePom=false` (and omit `-Dversion.tag`) | Reads git, logs current and next version |
-| `release` | `-Drelease.dryRun=true` | **Still validates**: branch matches `release.branch`, working directory is clean, tests pass. Everything after that is skipped |
-| `generate` | `-Dgenerate.outputDir=/tmp/adhar-gen -Dgenerate.withTests=false` | Writes to the given directory only |
-| `scaffold` | `-Dscaffold.outputDir=/tmp/adhar-svc` | Writes a project tree under that directory |
-| `adr` | `-Dadr.dir=/tmp/adr` | Writes the ADR there instead of `docs/adr` |
-| `validate`, `deps`, `bom` | — | Read-only by construction; only `target/` reports are written |
-| `cve` | `-Dcve.skip=true` to skip entirely | Read-only; writes `target/adhar-cve-report.txt` |
+| Packages `controller`, `service`, `repository`, `model`, `dto`, `config` all exist somewhere under the source root | `validatePackageStructure` | Error per missing package |
+| Files under `controller`/`service`/`repository` have `Controller`/`Service`/`Repository` in their name | `validateNaming` | Error |
+| Controllers carry `@RestController`/`@Controller`; classes under `service/impl` carry `@Service` | `validateAnnotations` | Error |
+| Repositories carry `@Repository` or extend `JpaRepository`/`CrudRepository` | `validateAnnotations` | Warning |
+| Public types have Javadoc | `validateDocumentation` | Warning |
+| Controllers contain `@ExceptionHandler`/`@ControllerAdvice` | `validateExceptions` | Warning |
+| Services have a logger; no `System.out.println` | `validateLogging` | Warning |
+| Imports flow `controller → service → repository`, never backwards | `validateArchitecture` | Error |
+
+Only errors fail the build (with `failOnError`). The layering check is a text scan of `package` and `import` lines: a package's layer is its first segment equal to `controller`, `service` or `repository`; packages without one (`dto`, `model`, `config`, …) are exempt.
 
 ```bash
-# 1. See what the next version would be, without touching anything
-mvn adhar:version -Dversion.type=auto -Dversion.updatePom=false
-
-# 2. Generate a component into a scratch directory and inspect it
-mvn adhar:generate -Dgenerate.type=all -Dgenerate.name=User \
-                   -Dgenerate.package=com.acme.orders \
-                   -Dgenerate.tableName=users \
-                   -Dgenerate.outputDir=/tmp/adhar-gen
-
-# 3. Rehearse the release — preconditions run, nothing is written
-mvn adhar:release -Drelease.type=minor -Drelease.dryRun=true
-
-# 4. Cut it for real
-mvn adhar:release -Drelease.type=minor -Drelease.deploy=true -Drelease.sign=true
+mvn adhar:validate -Dvalidate.fail=true -Dvalidate.packageStructure=false
 ```
 
-`release.dryRun` is checked *after* `validateRelease()`. So a dry run on the wrong branch or a dirty tree fails. That is the point: it is a precondition check as much as a preview. A real run on a tree that fails those preconditions never reaches the steps that change anything either.
+### `adhar:deps`, `adhar:bom`, `adhar:cve` — dependency reports
 
-Other common invocations:
+| Goal | Reports | Fails on (with `fail=true`) |
+|---|---|---|
+| `deps` | Duplicate declarations, versions that diverge from `<dependencyManagement>`, unmanaged hard-coded versions. Reads the model only; no resolution, no network | Duplicates and convergence conflicts (unmanaged versions are informational) |
+| `bom` | Resolved versions that differ from the managed (BOM) version | Any misalignment |
+| `cve` | Resolved dependencies with a CVSS score at or above `cve.threshold`, from Sonatype OSS Index | Any violation |
+
+`bom` and `cve` resolve the full test-scope dependency tree.
 
 ```bash
-mvn adhar:validate -Dvalidate.fail=true -Dvalidate.documentation=false
 mvn adhar:deps -Ddeps.fail=true
 mvn adhar:bom -Dbom.fail=true
 mvn adhar:cve -Dcve.threshold=8.0 -Dcve.fail=true
+```
+
+### `adhar:version` — next version from commits
+
+`version.type=auto` classifies commits by their full message: `BREAKING CHANGE` / `BREAKING-CHANGE` anywhere → major; `feat:` or `feat(scope):` at the start → minor; `fix:` at the start → patch. The highest wins; no match keeps the current version. `-SNAPSHOT` is dropped from the result.
+
+```bash
+mvn adhar:version -Dversion.type=minor -Dversion.updatePom=false   # log the next version only
+mvn adhar:version -Dversion.type=minor -Dversion.tag=true -Dversion.push=true
+```
+
+### `adhar:release` — cut a release
+
+In order: check the branch (`release.branch`, `main`, `master` or `develop`), check the tree is clean, run `mvn test -q`. With `dryRun` it stops there. Otherwise it sets the version in `pom.xml`, runs `mvn test` again (unless `skipTests`), writes `CHANGELOG.md` and `RELEASE_NOTES.md`, creates the annotated tag `v<version>`, and runs `mvn deploy -DskipTests` if `deploy` is set. `release.type=auto` removes `-SNAPSHOT`; `major`/`minor`/`patch` bump.
+
+```bash
+mvn adhar:release -Drelease.type=minor -Drelease.dryRun=true
+mvn adhar:release -Drelease.type=minor -Drelease.deploy=true
+```
+
+### `adhar:generate`, `adhar:scaffold`, `adhar:adr` — generators
+
+```bash
+# Entity, repository, service, controller and DTO (plus an integration test) for User
+mvn adhar:generate -Dgenerate.type=all -Dgenerate.name=User -Dgenerate.package=com.acme.orders
+
+# A Spring Boot service on adhar-kit-parent and adhar-kit-starter
 mvn adhar:scaffold -Dscaffold.name=BillingService -Dscaffold.package=com.acme.billing
+
+# docs/adr/NNNN-adopt-dapr-for-pub-sub.md, numbered after the highest existing record
 mvn adhar:adr -Dadr.title="Adopt Dapr for pub/sub" -Dadr.status=Accepted
 ```
 
-`adhar:generate` adds its `outputDirectory` to the project's compile source roots. When `generateTests` is on, it also adds its `testOutputDirectory` to the test compile source roots. So when the goal is bound to `generate-sources`, generated code compiles in the same build.
+`generate` adds its output directory to the compile source roots (and the test directory to the test roots when it writes tests), so binding it to `generate-sources` compiles the result in the same build. Generated repositories extend `JpaRepository` and `JpaSpecificationExecutor`; entities use `AuditingEntityListener`.
 
-## Parameters
+## Configuration
 
-Every parameter has a `-D` user property, shown in the middle column.
+Set a parameter in `<configuration>` by name, or on the command line with `-D<user property>`.
 
-### `adhar:version`
+### OpenAPI goals (shared by `openapi`, `openapi-lint`, `openapi-diff`, `catalog`)
 
-| Parameter | Property | Default |
-|---|---|---|
-| `versionType` | `version.type` — `auto`, `major`, `minor`, `patch` | `auto` |
-| `createTag` | `version.tag` | `false` |
-| `pushTag` | `version.push` (requires `createTag`) | `false` |
-| `tagPrefix` | `version.tagPrefix` | `v` |
-| `updatePom` | `version.updatePom` | `true` |
-| `gitDirectory` | `version.gitDir` | `${project.basedir}` |
-| `snapshotSuffix` | `version.snapshotSuffix` | `SNAPSHOT` |
+| Parameter | User property | Type | Default | Description |
+|---|---|---|---|---|
+| `apiDirectory` | `adhar.openapi.apiDirectory` | File | `${project.basedir}/api` | Holds `v<major>/openapi.yaml` |
+| `discover` | `adhar.openapi.discover` | boolean | `true` | Find specs under `apiDirectory` |
+| `preset` | `adhar.openapi.preset` | String | `spring` | `spring`, `jaxrs` or `spring-client` |
+| `basePackage` | `adhar.openapi.basePackage` | String | `${project.groupId}` | Package prefix; invalid characters become `_` |
+| `specs` | — | List | — | Extra `<spec>` entries |
+| `skip` | `adhar.openapi.skip` | boolean | `false` | Skip all four goals |
 
-### `adhar:release`
+### `adhar:openapi`
 
-| Parameter | Property | Default |
-|---|---|---|
-| `releaseType` | `release.type` | `auto` |
-| `dryRun` | `release.dryRun` | `false` |
-| `deploy` | `release.deploy` | `false` |
-| `signArtifacts` | `release.sign` | `false` |
-| `generateChangelog` | `release.changelog` | `true` |
-| `generateReleaseNotes` | `release.notes` | `true` |
-| `createRelease` | `release.createRelease` | `false` |
-| `changelogFile` | `release.changelogFile` | `${project.basedir}/CHANGELOG.md` |
-| `releaseNotesFile` | `release.notesFile` | `${project.basedir}/RELEASE_NOTES.md` |
-| `releaseBranch` | `release.branch` | `main` |
-| `skipTests` | `release.skipTests` | `false` |
+| Parameter | User property | Type | Default | Description |
+|---|---|---|---|---|
+| `outputDirectory` | `adhar.openapi.outputDirectory` | File | `${project.build.directory}/generated-sources/openapi` | Generated sources |
+| `resourcesDirectory` | `adhar.openapi.resourcesDirectory` | File | `${project.build.directory}/generated-resources/openapi` | Where shipped specs are copied |
+| `shipSpecs` | `adhar.openapi.shipSpecs` | boolean | `true` | Ship server specs in the artifact |
+| `additionalProperties` | — | Map | — | openapi-generator options that override the preset |
 
-### `adhar:generate`
+### `adhar:openapi-lint`
 
-| Parameter | Property | Default |
-|---|---|---|
-| `type` (required) | `generate.type` — `entity`, `service`, `controller`, `repository`, `dto`, `all` | — |
-| `name` (required) | `generate.name` | — |
-| `basePackage` | `generate.package` | `${project.groupId}` |
-| `outputDirectory` | `generate.outputDir` | `${project.build.directory}/generated-sources/adhar` |
-| `testOutputDirectory` | `generate.testOutputDir` | `${project.build.directory}/generated-test-sources/adhar` |
-| `generateTests` | `generate.withTests` | `true` |
-| `useLombok` | `generate.useLombok` | `true` |
-| `withOpenApi` | `generate.withOpenApi` | `true` |
-| `tableName` | `generate.tableName` | (derived) |
+| Parameter | User property | Type | Default | Description |
+|---|---|---|---|---|
+| `failOnWarnings` | `adhar.openapi.lint.failOnWarnings` | boolean | `false` | Warnings fail the build too |
+| `skipLint` | `adhar.openapi.lint.skip` | boolean | `false` | Skip linting only |
+
+### `adhar:openapi-diff`
+
+| Parameter | User property | Type | Default | Description |
+|---|---|---|---|---|
+| `against` | `adhar.openapi.diff.against` | String | — | Git branch, tag or commit to compare with |
+| `baseline` | `adhar.openapi.diff.baseline` | String | — | `groupId:artifactId:version`, or a version of this project (used when `against` is unset) |
+| `failOnBreaking` | `adhar.openapi.diff.failOnBreaking` | boolean | `true` | A breaking change fails the build |
+| `requireVersionBump` | `adhar.openapi.diff.requireVersionBump` | boolean | `false` | A changed spec must raise `info.version` |
+| `reportFile` | `adhar.openapi.diff.report` | File | `${project.build.directory}/openapi-diff.md` | Markdown report of every change |
+
+### `adhar:catalog`
+
+| Parameter | User property | Type | Default | Description |
+|---|---|---|---|---|
+| `catalogFile` | `adhar.catalog.file` | File | `${project.basedir}/catalog-info.yaml` | Must exist |
+| `component` | `adhar.catalog.component` | String | — | Component to update when the file has several |
+| `check` | `adhar.catalog.check` | boolean | `false` | Fail instead of writing when out of date |
 
 ### `adhar:validate`
 
-| Parameter | Property | Default |
-|---|---|---|
-| `sourceDirectory` | `validate.sourceDir` | `${project.build.sourceDirectory}` |
-| `failOnError` | `validate.fail` | `false` |
-| `validatePackageStructure` | `validate.packageStructure` | `true` |
-| `validateNaming` | `validate.naming` | `true` |
-| `validateAnnotations` | `validate.annotations` | `true` |
-| `validateDocumentation` (warnings only) | `validate.documentation` | `true` |
-| `validateExceptions` | `validate.exceptions` | `true` |
-| `validateLogging` (warnings only) | `validate.logging` | `true` |
-| `validateArchitecture` | `validate.architecture` | `true` |
-| `minCoverage` — bound, but not consulted | `validate.minCoverage` | `80` |
-| `generateReport` / `reportFile` | `validate.report` / `validate.reportFile` | `true` / `${project.build.directory}/adhar-validation-report.txt` |
+| Parameter | User property | Type | Default | Description |
+|---|---|---|---|---|
+| `sourceDirectory` | `validate.sourceDir` | File | `${project.build.sourceDirectory}` | Sources to scan |
+| `failOnError` | `validate.fail` | boolean | `false` | Errors fail the build |
+| `validatePackageStructure` | `validate.packageStructure` | boolean | `true` | Six expected packages |
+| `validateNaming` | `validate.naming` | boolean | `true` | Class names per layer |
+| `validateAnnotations` | `validate.annotations` | boolean | `true` | Stereotype annotations |
+| `validateDocumentation` | `validate.documentation` | boolean | `true` | Javadoc (warnings) |
+| `validateExceptions` | `validate.exceptions` | boolean | `true` | Controller exception handling (warnings) |
+| `validateLogging` | `validate.logging` | boolean | `true` | Loggers, `System.out` (warnings) |
+| `validateArchitecture` | `validate.architecture` | boolean | `true` | Layering direction |
+| `minCoverage` | `validate.minCoverage` | int | `80` | Accepted but not used |
+| `generateReport` | `validate.report` | boolean | `true` | Write the report |
+| `reportFile` | `validate.reportFile` | File | `${project.build.directory}/adhar-validation-report.txt` | Report path |
 
-### `adhar:cve`, `adhar:deps`, `adhar:bom`, `adhar:scaffold`, `adhar:adr`
+### `adhar:deps` and `adhar:bom`
 
-| Parameter | Property | Default |
-|---|---|---|
-| `cvssThreshold` | `cve.threshold` | `7.0` |
-| `failOnError` (cve) | `cve.fail` | `false` |
-| `skip` | `cve.skip` | `false` |
-| `cacheDir` | `cve.cacheDir` | `${project.build.directory}/adhar-cve-cache` |
-| `reportFile` (cve) | `cve.reportFile` | `${project.build.directory}/adhar-cve-report.txt` |
-| `failOnError` / `generateReport` / `reportFile` (deps) | `deps.fail` / `deps.report` / `deps.reportFile` | `false` / `true` / `${project.build.directory}/adhar-dependency-report.txt` |
-| `failOnError` / `generateReport` / `reportFile` (bom) | `bom.fail` / `bom.report` / `bom.reportFile` | `false` / `true` / `${project.build.directory}/adhar-bom-alignment-report.txt` |
-| `name` (required, scaffold) | `scaffold.name` | — |
-| `basePackage` / `artifactId` / `outputDirectory` | `scaffold.package` / `scaffold.artifactId` / `scaffold.outputDir` | `${project.groupId}` / (derived) / `${project.build.directory}/generated-service` |
-| `title` (required, adr) | `adr.title` | — |
-| `status` / `adrDirectory` | `adr.status` / `adr.dir` | `Proposed` / `${project.basedir}/docs/adr` |
+| Parameter | User property | Type | Default | Description |
+|---|---|---|---|---|
+| `failOnError` | `deps.fail` / `bom.fail` | boolean | `false` | Findings fail the build |
+| `generateReport` | `deps.report` / `bom.report` | boolean | `true` | Write the report |
+| `reportFile` | `deps.reportFile` / `bom.reportFile` | File | `${project.build.directory}/adhar-dependency-report.txt` / `…/adhar-bom-alignment-report.txt` | Report path |
 
-## Common pitfalls
+### `adhar:cve`
 
-| Symptom | Cause | Fix |
-|---|---|---|
-| `No plugin found for prefix 'adhar'` | The plugin group is not registered | Add `com.adhar.kit` to `pluginGroups` in `settings.xml`, or use the full coordinates |
-| `auto` bumps minor on a release with only fixes | The commit walk never stops at the last tag, so the whole history is classified | Use an explicit `-Dversion.type=patch` in CI |
-| A `feat:` commit was ignored | The patterns are anchored to the start of the full message and are not multiline | Put `feat:` at the start of the subject line, not in the body |
-| `version` rewrote the parent version | `updatePomVersion` edits the first `<version>` element in the document | Review the diff; use `-Dversion.updatePom=false` and set the version another way |
-| Version goals fail outside a git checkout | JGit needs a repository at `version.gitDir` | Run inside the checkout, or point `version.gitDir` at it — a shallow CI clone may also lack the tag history |
-| Validation reports nothing | `sourceDirectory` does not exist for this module | Skip the goal on POM-packaging aggregator modules |
-| Six "Missing recommended package" errors on a library | `validatePackageStructure` expects all six conventional packages | Set `validatePackageStructure` to `false` on modules that are not services |
-| `failOnError=true` but the build still passes | Documentation and logging findings are warnings, not errors | Expected; only errors fail the build |
-| A known cross-layer call is not reported | The validator reads `import` statements only | Avoid fully-qualified inline references; same-package calls are invisible to it |
-| Architecture violations in `dto` or `model` | Those packages are neutral by design | Move the class into a layered package if it should be governed |
-| `adhar:cve` passes on an offline runner | An unreachable OSS Index is logged as a warning and the goal returns | Cache `cve.cacheDir`, or assert on the report file in CI |
-| `adhar:bom` or `adhar:cve` is slow on a cold build | Both declare `requiresDependencyResolution = TEST` | Expected; warm the local repository, and persist the CVE cache |
-| A release half-completed | `release.dryRun` was not used first | Rehearse with `-Drelease.dryRun=true`; preconditions still run, nothing is written |
+| Parameter | User property | Type | Default | Description |
+|---|---|---|---|---|
+| `cvssThreshold` | `cve.threshold` | double | `7.0` | Minimum CVSS score reported |
+| `failOnError` | `cve.fail` | boolean | `false` | Violations fail the build |
+| `skip` | `cve.skip` | boolean | `false` | Skip the scan |
+| `cacheDir` | `cve.cacheDir` | File | `${project.build.directory}/adhar-cve-cache` | OSS Index response cache |
+| `reportFile` | `cve.reportFile` | File | `${project.build.directory}/adhar-cve-report.txt` | Report path |
 
-## See also
+### `adhar:version`
 
-- [Concepts](/adhar-kit/concepts) — the conventions `adhar:validate` enforces
-- [Building & Contributing](/adhar-kit/build) — building the kit itself
-- [Modules Overview](/adhar-kit/modules/overview) — what the generated components depend on
-- [Security Best Practices](/docs/security/security-best-practices) — where the CVE gate fits
+| Parameter | User property | Type | Default | Description |
+|---|---|---|---|---|
+| `versionType` | `version.type` | String | `auto` | `auto`, `major`, `minor`, `patch` |
+| `updatePom` | `version.updatePom` | boolean | `true` | Write the version to `pom.xml` |
+| `createTag` | `version.tag` | boolean | `false` | Create a tag |
+| `pushTag` | `version.push` | boolean | `false` | Push the tag (only with `createTag`) |
+| `tagPrefix` | `version.tagPrefix` | String | `v` | Tag name prefix |
+| `gitDirectory` | `version.gitDir` | String | `${project.basedir}` | Repository location |
+| `snapshotSuffix` | `version.snapshotSuffix` | String | `SNAPSHOT` | Accepted but not used |
+
+### `adhar:release`
+
+| Parameter | User property | Type | Default | Description |
+|---|---|---|---|---|
+| `releaseType` | `release.type` | String | `auto` | `auto` (drop `-SNAPSHOT`), `major`, `minor`, `patch` |
+| `dryRun` | `release.dryRun` | boolean | `false` | Run the precondition checks only |
+| `releaseBranch` | `release.branch` | String | `main` | Added to the allowed set `main`, `master`, `develop` |
+| `skipTests` | `release.skipTests` | boolean | `false` | Skip the second test run |
+| `generateChangelog` | `release.changelog` | boolean | `true` | Prepend to the changelog |
+| `changelogFile` | `release.changelogFile` | String | `${project.basedir}/CHANGELOG.md` | Changelog path |
+| `generateReleaseNotes` | `release.notes` | boolean | `true` | Write release notes |
+| `releaseNotesFile` | `release.notesFile` | String | `${project.basedir}/RELEASE_NOTES.md` | Release notes path |
+| `deploy` | `release.deploy` | boolean | `false` | Run `mvn deploy -DskipTests` |
+| `signArtifacts` | `release.sign` | boolean | `false` | Logs `maven-gpg-plugin` instructions only |
+| `createRelease` | `release.createRelease` | boolean | `false` | Logs a `gh release create` command only |
+
+### `adhar:generate`
+
+| Parameter | User property | Type | Default | Description |
+|---|---|---|---|---|
+| `type` | `generate.type` | String | required | `entity`, `repository`, `service`, `controller`, `dto`, `all` |
+| `name` | `generate.name` | String | required | Class or entity name |
+| `basePackage` | `generate.package` | String | `${project.groupId}` | Package |
+| `outputDirectory` | `generate.outputDir` | File | `${project.build.directory}/generated-sources/adhar` | Sources |
+| `testOutputDirectory` | `generate.testOutputDir` | File | `${project.build.directory}/generated-test-sources/adhar` | Tests (`all` only) |
+| `generateTests` | `generate.withTests` | boolean | `true` | Write an integration test (`all` only) |
+| `useLombok` | `generate.useLombok` | boolean | `true` | Lombok on entity, service, DTO |
+| `withOpenApi` | `generate.withOpenApi` | boolean | `true` | OpenAPI annotations on the controller |
+| `tableName` | `generate.tableName` | String | derived | Entity table name |
+
+### `adhar:scaffold` and `adhar:adr`
+
+| Parameter | User property | Type | Default | Description |
+|---|---|---|---|---|
+| `name` | `scaffold.name` | String | required | Service name, e.g. `OrderService` |
+| `basePackage` | `scaffold.package` | String | `${project.groupId}` | Package and groupId |
+| `artifactId` | `scaffold.artifactId` | String | kebab-case of `name` | Generated artifactId |
+| `outputDirectory` | `scaffold.outputDir` | File | `${project.build.directory}/generated-service` | Project root |
+| `title` | `adr.title` | String | required | Decision title |
+| `status` | `adr.status` | String | `Proposed` | ADR status |
+| `adrDirectory` | `adr.dir` | File | `${project.basedir}/docs/adr` | Where records go |
+
+## Limits
+
+- **`version.type=auto` reads the whole history.** The walk does not stop at the last tag, so every reachable commit is classified: once any `feat:` exists, `auto` always proposes at least a minor bump. Pass an explicit `-Dversion.type=major|minor|patch` in CI and use `auto` only as a hint.
+- **Commit patterns are anchored to the start of the full message.** A `feat:` that is not the first text of the subject is ignored; `feat():` (empty scope) does not match.
+- **`version` rewrites the first `<version>` element.** In a module whose `<parent>` comes first, that is the parent's version. The POM is reserialised, so formatting can change. Run with `-Dversion.updatePom=false` first and review the diff.
+- **`release` neither commits nor pushes.** It edits `pom.xml`, `CHANGELOG.md` and `RELEASE_NOTES.md` in the work tree and tags `HEAD`, so the tag points at the commit before those edits. Commit, move the tag (`git tag -f -a v<version>`), and push yourself. The tag prefix is always `v`.
+- **`release` runs Maven as a subprocess** (`mvn test -q` as a precondition, even with `dryRun` or `skipTests`; `mvn deploy` with `deploy`). `mvn` must be on `PATH`, and each subprocess is killed after 10 minutes.
+- **The changelog range uses the last tag by name, not by version.** With `v1.9.0` and `v1.10.0`, it may start from the wrong tag. Check the generated entry.
+- **`cve` passes when OSS Index is unreachable.** It logs `OSS Index unreachable, skipping CVE check` and returns success. Cached responses never expire: delete `cacheDir` to pick up newly published CVEs. To make the scan mandatory, check `target/adhar-cve-report.txt` in a separate CI step.
+- **`validate` fails on a module without sources.** With `validatePackageStructure` on, a POM-packaging aggregator has no `src/main/java` and the goal errors. Bind it only in modules with sources.
+- **`validate` counts are approximate.** The logged error and warning totals can exceed the distinct findings; architecture violations appear in the log but not in the report file. Read both.
+- **Only the OpenAPI goals are marked thread-safe.** Maven warns about the others in a parallel build (`-T`).
+- **`release.sign` and `release.createRelease` do not sign or publish.** Configure `maven-gpg-plugin` and use `gh release create` instead.
+
+## Next steps
+
+- [Commons](/adhar-kit/modules/commons) — serves the shipped specs at `/api/v<major>/openapi.yaml`.
+- [Concepts](/adhar-kit/concepts) — the conventions `adhar:validate` enforces.
+- [Building the kit](/adhar-kit/build) — how the kit itself is built and released.
+- [Modules overview](/adhar-kit/modules/overview) — what generated and scaffolded code depends on.

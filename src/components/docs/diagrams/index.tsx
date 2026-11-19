@@ -19,6 +19,9 @@ import { rw_ops } from "./rw-ops";
 import { rw_providers_a } from "./rw-providers-a";
 import { rw_providers_b } from "./rw-providers-b";
 import { rw_pe } from "./rw-pe";
+import { rw_kit_a } from "./rw-kit-a";
+import { rw_kit_b } from "./rw-kit-b";
+import { rw_kit_c } from "./rw-kit-c";
 
 /**
  * Every docs diagram, keyed by the name a ```diagram fence uses.
@@ -45,4 +48,7 @@ export const DIAGRAMS: Record<string, ComponentType> = {
   ...rw_providers_a,
   ...rw_providers_b,
   ...rw_pe,
+  ...rw_kit_a,
+  ...rw_kit_b,
+  ...rw_kit_c,
 };
