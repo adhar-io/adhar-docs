@@ -62,7 +62,7 @@ const InteractiveArchitecture = () => {
         { name: 'Adhar Console', icon: '/favicon.svg', color: TILE, description: 'Developer portal and console' },
         { name: 'Crossplane', icon: 'https://cdn.jsdelivr.net/gh/cncf/artwork@main/projects/crossplane/icon/color/crossplane-icon-color.svg', color: TILE, description: 'Self-service infrastructure APIs' },
         { name: 'Cilium', icon: 'https://cdn.jsdelivr.net/gh/cncf/artwork@main/projects/cilium/icon/color/cilium_icon-color.svg', color: TILE, description: 'eBPF networking & Gateway API' },
-        { name: 'Velero', icon: 'https://cdn.jsdelivr.net/gh/cncf/artwork@main/projects/velero/icon/color/velero-icon-color.svg', color: TILE, description: 'Backup & disaster recovery' }
+        { name: 'Gitea', icon: 'https://cdn.jsdelivr.net/gh/devicons/devicon/icons/gitea/gitea-original.svg', color: TILE, description: 'In-cluster Git, the source of truth' }
       ]
     },
     {
@@ -140,7 +140,7 @@ const InteractiveArchitecture = () => {
       color: 'bg-gradient-to-br from-purple-50 to-fuchsia-50',
       tools: [
         { name: 'Airbyte', icon: 'https://cdn.simpleicons.org/airbyte', color: TILE, description: 'Data integration / ELT' },
-        { name: 'dbt', icon: 'https://github.com/dbt-labs.png?size=96', color: TILE, description: 'Data transformation' },
+        { name: 'Prefect', icon: 'https://cdn.simpleicons.org/prefect', color: TILE, description: 'Data pipeline orchestration' },
         { name: 'Kubeflow', icon: 'https://cdn.jsdelivr.net/gh/cncf/artwork@main/projects/kubeflow/icon/color/kubeflow-icon.svg', color: TILE, description: 'Machine-learning workflows' },
         { name: 'Metabase', icon: 'https://cdn.simpleicons.org/metabase', color: TILE, description: 'Business intelligence' },
       ]

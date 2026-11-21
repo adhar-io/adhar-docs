@@ -53,7 +53,9 @@ const Footer = () => {
 
   return (
     <footer className="dark bg-gray-950 text-foreground border-t border-border">
-      <div className="section-padding">
+      {/* The top keeps the page's section rhythm; the bottom only needs to clear
+          the copyright row, not a full section's worth of space. */}
+      <div className="pt-16 sm:pt-20 lg:pt-24 pb-8 sm:pb-10">
         <div className="max-width-content container-padding">
           <div className="grid grid-cols-2 md:grid-cols-5 gap-x-6 gap-y-10 md:gap-12 mb-10 md:mb-16">
             {/* Company info section */}
@@ -130,7 +132,7 @@ const Footer = () => {
             ))}
           </div>
           
-          <Separator className="my-8 md:my-12 bg-border" />
+          <Separator className="my-8 md:my-10 bg-border" />
 
           {/* Bottom section with improved layout */}
           <div className="flex flex-col lg:flex-row justify-between items-center space-y-4 lg:space-y-0">

@@ -16,13 +16,13 @@ const PlatformStack = ({ platformCategories }: PlatformStackProps) => {
   const TILE = "bg-white shadow-sm ring-1 ring-black/5";
   const additionalCategories: PlatformCategory[] = [
     {
-      name: "Automation & Chaos",
+      name: "Performance & Chaos",
       color: "bg-gradient-to-br from-orange-50 to-amber-50",
       tools: [
-        { name: "n8n", icon: "https://cdn.simpleicons.org/n8n", color: TILE, description: "Workflow automation" },
+        { name: "Pyroscope", icon: "https://cdn.jsdelivr.net/gh/grafana/pyroscope@main/pkg/api/static/pyroscope-logo.png", color: TILE, description: "Continuous profiling" },
         { name: "LitmusChaos", icon: "https://cdn.jsdelivr.net/gh/cncf/artwork@main/projects/litmus/icon/color/litmus-icon-color.svg", color: TILE, description: "Chaos engineering" },
         { name: "k6", icon: "https://cdn.simpleicons.org/k6", color: TILE, description: "Load & performance testing" },
-        { name: "Baserow", icon: "https://cdn.simpleicons.org/baserow", color: TILE, description: "No-code database" }
+        { name: "Beyla", icon: "https://cdn.jsdelivr.net/gh/grafana/beyla@main/docs/sources/assets/logo.png", color: TILE, description: "eBPF latency & RED metrics" }
       ]
     },
     {

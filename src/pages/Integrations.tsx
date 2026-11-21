@@ -6,7 +6,7 @@ import Navigation from "@/components/landing/Navigation";
 import Footer from "@/components/landing/Footer";
 import Reveal from "@/components/Reveal";
 import { Sheet, SheetContent, SheetTitle, SheetDescription } from "@/components/ui/sheet";
-import { INTEGRATIONS, INTEGRATIONS_SOURCE, type Integration, type IntegrationCategory } from "@/data/integrations";
+import { INTEGRATIONS, type Integration, type IntegrationCategory } from "@/data/integrations";
 
 /* ------------------------------------------------------------------ */
 /* Categories                                                          */
@@ -269,6 +269,7 @@ const Integrations = () => {
     <div className="min-h-screen bg-background text-foreground overflow-x-hidden">
       <Navigation />
 
+      <main className="pt-16">
       {/* Hero */}
       <section className="relative section-padding container-padding overflow-hidden">
         <div className="absolute inset-0 bg-mesh opacity-70 pointer-events-none" />
@@ -283,7 +284,7 @@ const Integrations = () => {
               <span className="text-muted-foreground">under the hood.</span>
             </h1>
             <p className="section-subheading mt-6">
-              The {INTEGRATIONS.length} open-source projects in the Adhar {INTEGRATIONS_SOURCE.release} platform, each wired in
+              The open-source projects behind the Adhar platform, each wired in
               as a GitOps package. Search, filter, and open any tool to see how Adhar uses it and which profiles turn it on.
             </p>
           </Reveal>
@@ -425,6 +426,7 @@ const Integrations = () => {
           </div>
         </div>
       </section>
+      </main>
 
       <Footer />
     </div>
