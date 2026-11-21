@@ -207,7 +207,7 @@ adhar batch backfill importer --env test --from 2026-11-01 --to 2026-11-07 --par
 | A manual run is refused at admission | The run differs from the run template | Start runs with `adhar batch run` or the Console, never by editing a Job |
 | A run stays `pending` | The environment's quota or the cluster has no room | `kubectl -n dev describe resourcequota`; `BatchRunStuckPending` fires after 15 minutes |
 | The smoke run never appears in test | `smoke` is not set on the BatchJob, or the new image has not reached the run template yet | `adhar batch describe importer --env test`; verification waits until the template carries the new image |
-| `adhar batch history` returns nothing | No event bus: Kafka is on in the production profile only | Use `adhar batch runs`, which reads the cluster |
+| `adhar batch history` shows only archived runs, or says the archive was not consulted | Locally there is no event bus, so history is the run-summary archive alone; reading the archive needs read access to `adhar-system/root-creds` | Use `adhar batch runs` for recent runs, or ask a platform admin for archive access |
 
 ## Clean up
 

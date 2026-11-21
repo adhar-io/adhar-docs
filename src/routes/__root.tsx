@@ -20,6 +20,7 @@ export const Route = createRootRoute({
           "ADHAR streamlines cloud-native application development with integrated Define, Design, Develop, Deliver, Discover, and Decide workflows.",
       },
       { name: "author", content: "ADHAR Platform" },
+      { name: "theme-color", content: "#6366F1" },
       { property: "og:title", content: "ADHAR - The Open Foundation" },
       {
         property: "og:description",
@@ -35,9 +36,11 @@ export const Route = createRootRoute({
     ],
     links: [
       { rel: "stylesheet", href: appCss },
-      { rel: "icon", href: "/favicon.svg", type: "image/svg+xml" },
-      { rel: "icon", href: "/favicon.png", type: "image/png" },
-      { rel: "apple-touch-icon", href: "/apple-touch-icon.png" },
+      // The Adhar Console's favicon (adhar-console apps/console/public/favicon.svg).
+      // The SVG is the only `icon`, as in the Console, so browsers never fall back to
+      // a raster copy. /favicon.ico (same mark) serves clients that request it directly.
+      { rel: "icon", href: "/favicon.svg", type: "image/svg+xml", sizes: "any" },
+      { rel: "apple-touch-icon", href: "/apple-touch-icon.png", sizes: "180x180" },
       { rel: "preconnect", href: "https://fonts.googleapis.com" },
       { rel: "preconnect", href: "https://fonts.gstatic.com", crossOrigin: "anonymous" },
       {

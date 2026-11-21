@@ -469,9 +469,9 @@ Runs and operates [batch jobs](/docs/core-concepts/batch). Aliases: `batchjob`, 
 | `batch stop <run>` / `resume <run>` / `restart <run>` | Stop at the next chunk boundary / resume from the last commit / restart a failed run as `<run>-r<n>` | — |
 | `batch hold <job>` / `release <job>` | Hold or release a job's schedule | `--reason` (required on `hold`) |
 | `batch backfill <job>` | Run once per business date in a range, at most 366 dates | `--from`, `--to` (`yyyy-mm-dd`), `--parallel` (default `1`), `-p/--param`, `--wait` |
-| `batch history <job>` | 90 days of the job's `adhar.batch` events. Needs the event bus (production profile) | `--since`, `--limit` (default `200`) |
-| `batch dlq <job>` | Dead-lettered item counts per execution; `--replay` re-processes them (`status:in-progress`) | `--replay`, `--execution`, `--wait` |
-| `batch recover <run>` / `abandon <run>` | Recover an execution left `STARTED` by a dead owner / mark one `ABANDONED` so its identity can run again (`status:in-progress`) | `--execution`, `--wait` |
+| `batch history <job>` | The job's `adhar.batch` events (90 days) and the run-summary archive beyond them | `--since`, `--limit` (default `200`), `--archive` (default `true`), `--archive-url` |
+| `batch dlq <job>` | Dead-lettered item counts per execution; `--replay` re-processes them | `--replay`, `--execution`, `--wait` |
+| `batch recover <run>` / `abandon <run>` | Recover an execution left `STARTED` by a dead owner / mark one `ABANDONED` so its identity can run again | `--execution`, `--wait` |
 | `batch queues` / `schedules` | Volcano queues / schedules that services report | `--team <org>-<team>` on `queues`; `-A` on `schedules` |
 
 Persistent flags: `-n/--namespace` (default: the `dev` environment), `--env dev|test|prod`, `--project` (default `adhar`), `-o table|json|yaml`.

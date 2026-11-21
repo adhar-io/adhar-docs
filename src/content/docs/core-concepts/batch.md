@@ -13,11 +13,7 @@ You declare the job in Git. The platform turns it into a schedule, a template th
 
 This page explains the model. To build one step by step, follow [Deploy a Batch Job](/docs/guides/deploy-a-batch-job). For every field, condition, event and command, see the [BatchJob API reference](/docs/reference/batch-job-api).
 
-> **Status:** what works today and what is still being finished.
->
-> - `status:complete` — scheduled and on-demand runs, holds, restarts, backfill, `dependsOn` chains, `sla.finishBy` deadlines, the smoke-run gate, workflow steps, `adhar.batch` events and history, and in-service jobs on the kit's Quartz engine.
-> - `status:in-progress` — business calendars, JobRepository retention, and the ops commands `recover`, `abandon` and `dlq --replay`. The platform composes them; each needs an adhar-kit runner that acts on it.
-> - `status:complete` — the Volcano scheduler, queues and partitioned jobs, on in the production profile and off locally. See [Scheduler](#scheduler).
+> **Status:** `status:complete` — scheduled and on-demand runs, holds, restarts and backfill; `dependsOn` chains, `sla.finishBy` deadlines and business calendars; the smoke-run gate and workflow steps; execution repair, dead-letter replay and JobRepository retention; Volcano queues, partitioned and chunked runs, and batch node pools; a job's bucket and lineage; `adhar.batch` events and the run-summary archive; and in-service jobs on the kit's Quartz engine.
 
 ## At a glance
 
@@ -193,8 +189,6 @@ The observer forecasts each run's end as its start (or the slot) plus the p90 of
 
 ### Business calendars
 
-> **Status:** `status:in-progress` — the platform resolves, copies and mounts the calendar. Skipping a day that is not a business day needs an adhar-kit runner that reads it.
-
 `schedule.calendar` names a business calendar. On a day that is not a business day, a `schedule`, `dependency` or `backfill` run exits `0` as skipped, with reason `calendar`. A manual run always runs.
 
 A calendar is a ConfigMap labelled `adhar.io/batch-calendar: "true"` with a `calendar.yaml`:
@@ -245,8 +239,6 @@ adhar batch release importer --env prod
 - Argo CD does not revert a hold, because the annotation is not in Git. The Kyverno policy `adhar-batch-hold-only` lets people change only this annotation on a BatchJob.
 
 ### Repairing an execution
-
-> **Status:** `status:in-progress` — the CLI starts the ops Job. The command takes effect once the adhar-kit runner implements it.
 
 Some repairs act on a Spring Batch execution in the job's own JobRepository, which no platform component reads. The CLI never touches the database. It starts an **ops Job** from the deployed run template, named `<job>-ops-<verb>-<executionId>`, and the runner does the work with the job's own credentials:
 
@@ -308,8 +300,6 @@ A run pod requests 1 CPU and 1536Mi of memory by default.
 
 ### Retention
 
-> **Status:** `status:in-progress` — the platform passes the settings to every run; the housekeeping needs an adhar-kit runner that performs it.
-
 The JobRepository grows with every run. `retention` tells the runner what to delete after a completed run: metadata older than `days` (default `90`), keeping the newest `keepLast` job instances (default `30`) and always the newest restartable `FAILED` or `STOPPED` one, so a restart still has something to resume.
 
 ## Capacity and priority
@@ -350,6 +340,79 @@ The `volcano` and `adhar-batch-volcano` packages are on together in the producti
 | Stop / Resume | The Job is suspended or unsuspended | A Volcano `AbortJob` or `ResumeJob` command |
 
 A partitioned job whose pods together need more than the namespace's quota is refused when it is declared, not when it runs. On Volcano, batch runs can preempt each other, but never a service.
+
+## Scaling and data
+
+### A batch node pool
+
+A cluster can give batch a node group of its own, so a nightly backlog never squeezes the platform's pods. Declare it per environment in the platform's `config.yaml`:
+
+```yaml
+environments:
+  prod:
+    batchPool:
+      machineType: c6i.2xlarge   # empty: the provider's worker size
+      minNodes: 1                # at least 1
+      maxNodes: 4
+    autoscaling:
+      enabled: true              # the pool is autoscaled only when this is on
+```
+
+- **Pool nodes** carry the label `adhar.io/node-pool: batch` and the taint `adhar.io/batch=true:NoSchedule`, so nothing else lands there.
+- **Runs move there with no change.** While a pool node exists, the Kyverno policy `adhar-batch-node-pool` gives every run pod the toleration and a *preferred* affinity for the pool. When the pool is full, runs still use a general worker.
+- **The autoscaler grows the pool, never the general workers**, for a waiting run that may buy nodes (`scaleUp: true`, prod only), and retires idle pool nodes down to `minNodes`. Its view is `status.autoscaling.batchPool` on the `AdharPlatform`. The floor is one node, because a run admitted while no pool node exists carries no toleration.
+- **Where it applies.** `batchPool` is refused on `kind` and `custom`, which build no node groups, and on `clusterMode: provided`. On a provided cluster, label and taint the nodes yourself (`adhar.io/node-pool=batch`, `adhar.io/batch=true:NoSchedule`): runs are placed there all the same, but nothing grows or shrinks those nodes.
+
+### A job's bucket
+
+Name a `Bucket` in the job's namespace instead of wiring its Secret yourself:
+
+```yaml
+spec:
+  parameters:
+    job: importJob
+    image: harbor-core.adhar-system.svc.cluster.local/library/importer:1.4.0
+    database: { secretRef: importer-db-app }
+    bucket: inbound          # a Bucket in this namespace
+```
+
+Every run pod, in every role and however it started, gets `ADHAR_S3_ENDPOINT`, `ADHAR_S3_REGION` and `ADHAR_S3_BUCKET` from the Bucket's Secret `<bucket>-bucket`, and `ADHAR_S3_ACCESS_KEY` and `ADHAR_S3_SECRET_KEY` from `<job>-s3`, which the composition projects for it. The kit turns the five into Spring Cloud AWS settings, so the job's [S3 readers and writers](/adhar-kit/modules/batch#read-and-write) need no configuration; anything the application sets under `spring.cloud.aws.*` still wins.
+
+A Bucket that does not exist suspends the schedule with `PrerequisitesReady=False` (`BucketUnavailable`). An `env` entry starting `ADHAR_S3_` beside `bucket` is refused, and a run that points one of the variables at another Secret is refused by run integrity.
+
+### Remote chunking
+
+Partitioning splits the *input*, and each worker reads its own share. Some inputs cannot be split that way: one file, one stream, one query with no key to range over. For those, `mode: chunked` keeps one reader, the manager, and spreads the *processing and writing* over `workers` pods. The manager sends chunks over a RabbitMQ queue, and the workers process and write each chunk and answer on a second queue:
+
+```yaml
+apiVersion: platform.adhar.io/v1alpha1
+kind: Queue                      # one per direction, in the job's namespace
+metadata: { name: importer-chunks }
+---
+apiVersion: platform.adhar.io/v1alpha1
+kind: Queue
+metadata: { name: importer-replies }
+---
+apiVersion: platform.adhar.io/v1alpha1
+kind: BatchJob
+metadata: { name: importer }
+spec:
+  parameters:
+    mode: chunked
+    workers: 2                   # besides the manager
+    chunking:
+      requestQueue: importer-chunks
+      replyQueue: importer-replies
+```
+
+- **The shape is the partitioned one:** one manager plus `workers` pods, a gang on Volcano and an Indexed `Job` without it, with the same quota check when it is declared. `gridSize` does not apply and is refused.
+- **The queues must exist and differ.** A missing `Queue` reports `PrerequisitesReady=False` (`ChunkQueueUnavailable`) and suspends the schedule. One queue for both directions is refused, because a worker would read its own replies as chunks.
+- **Restart is the kit's.** A chunk that was sent and never answered is processed again from the manager's last commit, so writers must be idempotent, as they already must be for a restart.
+- `adhar batch list` and `describe` show the mode with its workers and queues.
+
+### Lineage
+
+`lineage.enabled: true` gives every run pod the OpenLineage client's variables, pointed at the platform's OpenMetadata: `OPENLINEAGE_URL`, `OPENLINEAGE_ENDPOINT`, `OPENLINEAGE_NAMESPACE` (`adhar/<organisation>/<team>[/<project>]/<environment>`) and, from `lineage.credentialsSecretRef`, `OPENLINEAGE_API_KEY`. Set `lineage.url` to send it to another receiver. Lineage works in every mode and is advisory: a receiver that is down never fails a run.
 
 ## Delivery
 
@@ -452,7 +515,20 @@ Each type is prefixed `io.adhar.batch.`. Events are published once per transitio
 adhar batch history importer --env prod --since 7d
 ```
 
-The event bus is Kafka, on in the production profile. Locally there is no bus, so `adhar batch history` has nothing to read, while `dependsOn` still works.
+The event bus is Kafka, on in the production profile. `dependsOn` never needs it.
+
+### Run history beyond 90 days
+
+When a run ends (succeeded, failed, skipped, or lost because it was deleted first), the batch observer also writes its final event to the platform's object store, in the `adhar-batch-archive` bucket:
+
+```text
+s3://adhar-batch-archive/<namespace>/<batchJob>/<businessDate>/<run>.json
+```
+
+- **What it keeps.** The same CloudEvent the bus carried: outcome, exit code, counts, execution, business date, trigger, actor and duration. Sensitive parameters, and any whose name reads as a credential, are masked. A run observed twice overwrites its own object, so the archive holds one answer per run.
+- **Reading it.** `adhar batch history` reads the bus and the archive together, showing an event both hold once and marking archived rows `archive`. Without a bus, as on a local platform, the history is the archive alone. Reading the archive needs read access to `adhar-system/root-creds`; without it you get the bus's history and a note. `--archive=false` skips it, and `--archive-url` reads a store you reach yourself. The Console's **History** view offers **Last 12 months (archive)**.
+- **Only the end of each run.** Requests, stops, holds, missed slots and deadlines stay on the bus only.
+- **Advisory, and kept until you decide.** Archiving never delays a run or a reconcile; a failing store fires `BatchArchiveWritesFailing`. Nothing expires by default: add a lifecycle rule to the bucket in RustFS to set a retention.
 
 ## In the Console
 
@@ -481,7 +557,7 @@ Every action runs as the signed-in user, and the Console hides an action that th
 - **If Kyverno is down, manual runs stop but scheduled runs do not.** The run-integrity policy fails closed for runs created by people and tools. It does not apply to runs the CronJob controller creates.
 - **Run pods** run as non-root, with privilege escalation off, every capability dropped and the default seccomp profile. `/tmp` is a size-limited `emptyDir`.
 
-> **Warning:** A `Bucket`'s connection Secret holds the object store's root credential. A run that mounts it through `envFrom` can read and write every bucket on the platform. Use a bucket for one team only.
+> **Warning:** A `Bucket`'s credential is the object store's root credential, whether a run gets it through `bucket` or `envFrom`. It can read and write every bucket on the platform. Likewise, a `Queue` hands its consumers the broker's admin credential. Use buckets and chunking queues for one team only.
 
 The [reference](/docs/reference/batch-job-api#permissions) lists every role's verbs and every policy.
 
@@ -506,6 +582,7 @@ Four more alerts read series that exist only in Mimir, so they are evaluated by 
 | `BatchDeadLetterGrowing` | A step keeps dead-lettering items for 15 minutes |
 | `BatchDeadlineEndangered` | The forecast end of a business date's run passes `sla.finishBy` |
 | `BatchDeadlineMissed` | `sla.finishBy` passed with no success for that business date |
+| `BatchArchiveWritesFailing` | Run summaries have failed to reach the archive for 30 minutes; critical for prod's runs |
 
 **Dashboards.** Grafana's **Delivery → Batch** dashboard shows active, failed and pending runs and suspended schedules across the platform, from kube-state-metrics, in every profile. Each batch application also has its own `batch-jvm` dashboard: runs, JVM metrics, resources, logs and traces.
 
@@ -521,15 +598,15 @@ Four more alerts read series that exist only in Mimir, so they are evaluated by 
 | `core/volcano` and `core/adhar-batch-volcano` | On in production | The Volcano scheduler and the queue policies that go with it. Enable or disable both together |
 | `application/argo-workflows` | On in production | The workflow engine, with the `adhar-batch-steps` template that starts BatchJob runs |
 | `data/kafka-operator` | On in production | The event bus behind `adhar.batch` events and `adhar batch history` |
+| `data/rustfs` | On everywhere | The object store holding the `adhar-batch-archive` bucket and every job's `bucket` |
 
 ## Limits
 
 | Not provided | What to do instead |
 |---|---|
 | Changing a run's image or resources without a commit | Change the BatchJob in Git |
-| A run history in the cluster beyond the Job's TTL | `adhar batch history` reads 90 days of events; the JobRepository keeps the full record |
-| A NetworkPolicy, bucket or storage per job | Reach buckets and other services through `envFrom` Secrets |
-| Remote chunking, batch node pools, lakehouse I/O | `status:planned` |
+| A NetworkPolicy or persistent storage per job | Reach other services through Secrets; use `bucket` for object storage |
+| Iceberg and Parquet readers and writers, Karmada placement, Kueue | `status:planned` |
 
 ## Next steps
 

@@ -106,6 +106,7 @@ Only the bottom two layers overlap, so precedence comes down to one question: wh
 | `coreServices` | The environment's block per service; the template fills gaps. Recorded, not executed |
 | `addons` | `[ …template addons… , …environment addons… ]`. Printed by `--dry-run`, not installed by `adhar up` |
 | `autoscaling` | The environment's **whole block**, else the template's. No field-by-field merge |
+| `batchPool` | The environment's **whole block**, else the template's |
 
 Check the result instead of guessing:
 
@@ -238,6 +239,18 @@ Two sets of keys do not behave as their names suggest:
 | `scaleUpCooldown` | `"3m"` | Minimum gap between two node additions |
 
 > **Warning:** `autoscaling` does not merge field by field. If the environment declares the block at all, the whole template block is discarded, and fields the environment left out fall back to the built-in defaults, not to the template's values. Wherever you declare the block, declare all of it.
+
+### batchPool
+
+A node group only batch runs use, so a nightly backlog never squeezes the platform's pods. See [Batch Jobs](/docs/core-concepts/batch#a-batch-node-pool).
+
+| Field | Default | Meaning |
+|---|---|---|
+| `machineType` | the provider's worker size | The pool's instance type, VM size or droplet slug |
+| `minNodes` | — | The floor, and the count the pool is created with. At least `1` |
+| `maxNodes` | — | The ceiling, at least `minNodes`. The pool grows only for waiting runs that may buy nodes (`scaleUp: true`, prod), and only while `autoscaling.enabled` is on |
+
+`batchPool` is refused on `kind`, on `custom` and with `clusterMode: provided`.
 
 ### Kubernetes version precedence
 

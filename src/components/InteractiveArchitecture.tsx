@@ -170,10 +170,10 @@ const InteractiveArchitecture = () => {
     { name: 'Cilium', icon: 'https://cdn.jsdelivr.net/gh/cncf/artwork@main/projects/cilium/icon/color/cilium_icon-color.svg', color: 'bg-gradient-to-br from-yellow-100 to-amber-100' },
     { name: 'Kyverno', icon: 'https://cdn.jsdelivr.net/gh/cncf/artwork@main/projects/kyverno/icon/color/kyverno-icon-color.svg', color: 'bg-gradient-to-br from-sky-100 to-blue-100' },
     { name: 'ArgoCD', icon: 'https://cdn.jsdelivr.net/gh/cncf/artwork@main/projects/argo/icon/color/argo-icon-color.svg', color: 'bg-gradient-to-br from-orange-100 to-red-100' },
-    { name: 'Kubernetes', icon: 'https://cdn.jsdelivr.net/gh/devicons/devicon/icons/kubernetes/kubernetes-original.svg', color: 'bg-gradient-to-br from-blue-100 to-indigo-100' },
     { name: 'Crossplane', icon: 'https://cdn.jsdelivr.net/gh/cncf/artwork@main/projects/crossplane/icon/color/crossplane-icon-color.svg', color: 'bg-gradient-to-br from-purple-100 to-violet-100' },
     { name: 'Gitea', icon: 'https://cdn.jsdelivr.net/gh/devicons/devicon/icons/gitea/gitea-original.svg', color: 'bg-gradient-to-br from-green-100 to-teal-100' },
-    { name: 'Keycloak', icon: 'https://cdn.jsdelivr.net/gh/cncf/artwork/projects/keycloak/icon/color/keycloak-icon-color.svg', color: 'bg-gradient-to-br from-cyan-100 to-sky-100' }
+    { name: 'Keycloak', icon: 'https://cdn.jsdelivr.net/gh/cncf/artwork/projects/keycloak/icon/color/keycloak-icon-color.svg', color: 'bg-gradient-to-br from-cyan-100 to-sky-100' },
+    { name: 'Kubernetes', icon: 'https://cdn.jsdelivr.net/gh/devicons/devicon/icons/kubernetes/kubernetes-original.svg', color: 'bg-gradient-to-br from-blue-100 to-indigo-100' }
   ];
 
   return (

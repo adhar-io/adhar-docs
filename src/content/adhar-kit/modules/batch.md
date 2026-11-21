@@ -151,7 +151,7 @@ JdbcBatchItemWriter<Record> writer = PostgresUpsertItemWriterBuilder.<Record>int
         .build();
 ```
 
-**S3 on the platform is RustFS.** When `spring-cloud-aws-starter-s3` is on the classpath, the kit points it at the platform's object store for every key you have not set: the endpoint (`ADHAR_S3_ENDPOINT`, else the in-cluster RustFS service), path-style access, the region (`ADHAR_S3_REGION`, else `us-east-1`) and the credentials (`ADHAR_S3_ACCESS_KEY`, `ADHAR_S3_SECRET_KEY`). A `Bucket`'s connection Secret supplies those variables. An explicit `spring.cloud.aws.*` setting always wins, so an application that talks to AWS sets its own.
+**S3 on the platform is RustFS.** When `spring-cloud-aws-starter-s3` is on the classpath, the kit points it at the platform's object store for every key you have not set: the endpoint (`ADHAR_S3_ENDPOINT`, else the in-cluster RustFS service), path-style access, the region (`ADHAR_S3_REGION`, else `us-east-1`), the bucket (`ADHAR_S3_BUCKET`) and the credentials (`ADHAR_S3_ACCESS_KEY`, `ADHAR_S3_SECRET_KEY`). Set `bucket` on the BatchJob and the platform supplies all five to every run; see [A job's bucket](/docs/core-concepts/batch#a-jobs-bucket). An explicit `spring.cloud.aws.*` setting always wins, so an application that talks to AWS sets its own.
 
 An S3 reader fails the step when the selection is empty, because a missing input is far more often a wrong path than an empty day; set `strict(false)` to allow it.
 
@@ -206,6 +206,8 @@ adhar:
             kind: cron                   # cron | interval | daily
             expression: "0 30 1 ? * *"   # Quartz syntax, seconds first
 ```
+
+With `quartz`, a trigger can name a business calendar (the same `calendar.yaml` the platform mounts into a BatchJob's runs) and never fires on a day it excludes. The service writes its schedules to the ConfigMap `<scheduler-name>-batch-schedules` in its namespace, which `adhar batch schedules` and the Console read.
 
 Both engines identify a slot the same way the platform does, so a job keeps its JobInstances, restart points and run names if it changes engine, or moves to a BatchJob. With `engine: quartz`, `adhar.batch.scheduler.lock` must stay `jdbc`.
 
@@ -290,8 +292,7 @@ It checks that `deploy/base/batchjob.yaml` declares exactly the parameters `@Adh
 | Not provided | What to do instead |
 |---|---|
 | An in-memory JobRepository | Use PostgreSQL; the runner refuses a resourceless repository with exit `2` |
-| Business calendars, JobRepository retention and the `recover`, `abandon` and `dlq-replay` ops commands in the runner | `status:in-progress`. The platform already passes them to the run |
-| Remote chunking, Kafka or AMQP partition channels | `status:planned` |
+| Kafka or AMQP partition channels; Iceberg and Parquet readers and writers | `status:planned` |
 
 ## Next steps
 

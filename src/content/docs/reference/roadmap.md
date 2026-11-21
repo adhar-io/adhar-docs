@@ -117,9 +117,11 @@ do-roadmap-phases
 | [Batch jobs](/docs/core-concepts/batch) | `status:complete` | The `BatchJob` API for Spring Batch: scheduled and on-demand runs, holds, restarts and backfill; the Spring Batch templates; `adhar batch`; the Console page, alerts and policies |
 | Batch chains and deadlines | `status:complete` | `dependsOn` chains keyed on the business date, `sla.finishBy` forecasts and alerts, the smoke-run gate in test, Argo Workflows steps, and `adhar.batch` events with `adhar batch history` |
 | In-service batch jobs | `status:complete` | adhar-kit's Quartz engine: sub-minute and business-hours schedules inside a service, exactly once across replicas |
-| Batch calendars, retention and repair | `status:in-progress` | The platform composes business calendars and JobRepository retention, and `adhar batch recover`, `abandon` and `dlq --replay` start their ops Jobs. Each waits on adhar-kit runner support |
+| Batch calendars, retention and repair | `status:complete` | Business calendars for schedules, dependencies and backfills; JobRepository retention; `adhar batch recover`, `abandon` and `dlq --replay` |
 | Volcano batch scheduling | `status:complete` | Queues, gang scheduling and partitioned jobs, with the partitioned template. On in the production profile, off locally |
-| Team workflows | `status:planned` | Argo Workflows runs the platform's own maintenance tasks today. Workflows that teams write and run themselves come later |
+| Batch at scale | `status:complete` | Batch node pools, remote chunking (`mode: chunked`), a job's `bucket`, OpenLineage variables, and the run-summary archive behind `adhar batch history` |
+| Team workflows | `status:planned` | Argo Workflows runs the platform's own maintenance tasks, and a workflow step can start a BatchJob run. Workflows that teams write and run themselves come later |
+| Workflow builder | `status:planned` | Compose multi-step workflows visually in the Console, from BatchJob runs, Functions and platform actions, and run them on the platform's workflow engine |
 | Scorecards | `status:complete` | Every service graded 0–100 from live signals, shown in the Console |
 | Package marketplace | `status:complete` | Every package carries a validated contract; the Console switches packages on and off |
 | Tenant isolation | `status:complete` | Each team gets its own namespace, RBAC and default-deny ingress |
@@ -127,7 +129,7 @@ do-roadmap-phases
 | Adhar AI | `status:complete` | MCP tools across seven domains, staged autonomy, and writes that only open Gitea pull requests |
 | AI gateway | `status:complete` | agentgateway: one OpenAI-compatible endpoint and one MCP endpoint, with identity, guardrails and budgets |
 | Grounding | `status:complete` | A pgvector knowledge base over the docs, the package catalogue and live cluster state |
-| Self-hosted inference | `status:complete` | `llm-d` routing to vLLM, so `local/*` models are served from inside the cluster |
+| Self-hosted LLMs | `status:complete` | Run open models inside the cluster: vLLM serves an OpenAI-compatible API, and `llm-d` routes requests for `local/*` models to it through the AI gateway, so prompts and data never leave the platform |
 | Kubernetes API server OIDC | `status:in-progress` | Works on Kind; on cloud clusters it is a day-2 step you apply once Keycloak is serving |
 | API server OIDC at provisioning (`oidcAuth`) | `status:blocked` | The API server cannot trust a Keycloak that is not serving yet, so `oidcAuth: "true"` in `clusterConfig` is rejected. Use the day-2 step |
 | GPU inference (`vllm-gpu`) | `status:in-progress` | Needs a run on real GPU nodes |
